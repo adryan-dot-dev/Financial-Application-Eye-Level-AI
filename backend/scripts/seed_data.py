@@ -3,7 +3,7 @@ Seed data script for Cash Flow Management application.
 
 Creates:
 1. Admin user (username: admin, password from .env ADMIN_DEFAULT_PASSWORD)
-2. Default categories in Hebrew
+2. Default categories for the admin user
 
 Usage:
     cd backend
@@ -16,6 +16,13 @@ import os
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from sqlalchemy import select
+
+from app.config import settings
+from app.core.security import hash_password
+from app.db.models import Category, Settings, User
+from app.db.session import async_session
 
 
 DEFAULT_CATEGORIES = [
@@ -36,43 +43,52 @@ DEFAULT_CATEGORIES = [
     {"name": "general", "name_he": "כללי", "type": "expense", "icon": "more-horizontal", "color": "#6B7280", "display_order": 9},
 ]
 
-ADMIN_USER = {
-    "username": "admin",
-    "email": "admin@eyelevel.ai",
-    "is_admin": True,
-}
-
 
 async def seed():
-    """
-    Seed database with initial data.
-    This script will be fully functional once the ORM models are created in Phase 1.
-    For now, it serves as documentation of the seed data structure.
-    """
     print("=" * 50)
     print("Cash Flow Management - Seed Data")
     print("=" * 50)
 
-    print("\nAdmin User:")
-    print(f"  Username: {ADMIN_USER['username']}")
-    print(f"  Email: {ADMIN_USER['email']}")
-    print(f"  Is Admin: {ADMIN_USER['is_admin']}")
-    print(f"  Password: (from .env ADMIN_DEFAULT_PASSWORD)")
+    async with async_session() as db:
+        # 1. Create admin user
+        result = await db.execute(select(User).where(User.username == "admin"))
+        admin = result.scalar_one_or_none()
 
-    print(f"\nDefault Categories ({len(DEFAULT_CATEGORIES)} total):")
-    print("\n  Income:")
-    for cat in DEFAULT_CATEGORIES:
-        if cat["type"] == "income":
-            print(f"    {cat['icon']:20s} {cat['name_he']:15s} ({cat['name']})")
+        if admin:
+            print("\n[SKIP] Admin user already exists")
+        else:
+            admin = User(
+                username="admin",
+                email="admin@eyelevel.ai",
+                password_hash=hash_password(settings.ADMIN_DEFAULT_PASSWORD),
+                is_admin=True,
+            )
+            db.add(admin)
+            await db.flush()
 
-    print("\n  Expenses:")
-    for cat in DEFAULT_CATEGORIES:
-        if cat["type"] == "expense":
-            print(f"    {cat['icon']:20s} {cat['name_he']:15s} ({cat['name']})")
+            # Create settings for admin
+            admin_settings = Settings(user_id=admin.id)
+            db.add(admin_settings)
+            await db.flush()
+
+            print(f"\n[OK] Admin user created (username: admin, password: from .env)")
+
+        # 2. Create default categories for admin
+        result = await db.execute(
+            select(Category).where(Category.user_id == admin.id).limit(1)
+        )
+        if result.scalar_one_or_none():
+            print("[SKIP] Categories already exist for admin")
+        else:
+            for cat_data in DEFAULT_CATEGORIES:
+                category = Category(user_id=admin.id, **cat_data)
+                db.add(category)
+            print(f"[OK] Created {len(DEFAULT_CATEGORIES)} default categories")
+
+        await db.commit()
 
     print("\n" + "=" * 50)
-    print("NOTE: Full seeding will be implemented in Phase 1")
-    print("when ORM models (User, Settings, Category) are ready.")
+    print("Seed completed successfully!")
     print("=" * 50)
 
 

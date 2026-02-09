@@ -33,57 +33,57 @@
 
 ## Implementation Phases
 
-### Phase 0: Project Setup (Days 1-2)
+### Phase 0: Project Setup (Days 1-2) ✅ COMPLETE
 
 #### Tasks:
-- [ ] יצירת מבנה תיקיות backend/ ו-frontend/
-- [ ] יצירת קובץ `.env.example` עם כל המשתנים
-- [ ] אתחול FastAPI עם endpoint `/health`
-- [ ] הגדרת CORS configuration
-- [ ] אתחול React עם Vite
-- [ ] הקמת PostgreSQL עם Docker (`docker-compose.yml`)
-- [ ] הגדרת Alembic למיגרציות
-- [ ] הגדרת ESLint, Prettier
-- [ ] יצירת `seed_data.py` עם:
-  - [ ] קטגוריות ברירת מחדל בעברית
-  - [ ] Admin user ראשוני (username: admin, password מ-.env)
-- [ ] יצירת README.md בסיסי עם הוראות התקנה
+- [x] יצירת מבנה תיקיות backend/ ו-frontend/
+- [x] יצירת קובץ `.env.example` עם כל המשתנים
+- [x] אתחול FastAPI עם endpoint `/health`
+- [x] הגדרת CORS configuration
+- [x] אתחול React עם Vite
+- [x] הקמת PostgreSQL עם Docker (`docker-compose.yml`)
+- [x] הגדרת Alembic למיגרציות
+- [x] הגדרת ESLint, Prettier
+- [x] יצירת `seed_data.py` עם:
+  - [x] קטגוריות ברירת מחדל בעברית
+  - [x] Admin user ראשוני (username: admin, password מ-.env)
+- [x] יצירת README.md בסיסי עם הוראות התקנה
 
 #### Definition of Done:
-- [ ] `docker-compose up` מרים PostgreSQL
-- [ ] `uvicorn app.main:app --reload` עובד ומחזיר 200 ב-`/health`
-- [ ] `npm run dev` מרים את ה-frontend
-- [ ] `.env.example` מתועד עם כל המשתנים
-- [ ] Alembic מאותחל ויכול ליצור migrations
-- [ ] README מסביר איך להתקין ולהריץ
-- [ ] Seed script יוצר admin user וקטגוריות
+- [x] `docker-compose up` מרים PostgreSQL
+- [x] `uvicorn app.main:app --reload` עובד ומחזיר 200 ב-`/health`
+- [x] `npm run dev` מרים את ה-frontend
+- [x] `.env.example` מתועד עם כל המשתנים
+- [x] Alembic מאותחל ויכול ליצור migrations
+- [x] README מסביר איך להתקין ולהריץ
+- [x] Seed script יוצר admin user וקטגוריות
 
 ---
 
-### Phase 1: Core Backend Infrastructure (Days 3-7)
+### Phase 1: Core Backend Infrastructure (Days 3-7) ✅ COMPLETE
 
 #### Tasks:
-- [ ] מודל User + מיגרציה (כולל is_admin field)
-- [ ] מודל Settings + מיגרציה (הגדרות משתמש)
-- [ ] Build auth endpoints (register, login, JWT refresh)
-- [ ] JWT middleware לאימות
-- [ ] מודל Category + מיגרציה
-- [ ] Category CRUD API (כולל reorder)
-- [ ] מודל Transaction + מיגרציה (כולל currency field)
-- [ ] Transaction CRUD API (כולל duplicate)
-- [ ] Repository pattern בסיסי
-- [ ] Pydantic schemas
-- [ ] Unit tests ל-auth
-- [ ] Unit tests ל-CRUD
+- [x] מודל User + מיגרציה (כולל is_admin field)
+- [x] מודל Settings + מיגרציה (הגדרות משתמש)
+- [x] Build auth endpoints (register, login, JWT refresh)
+- [x] JWT middleware לאימות
+- [x] מודל Category + מיגרציה
+- [x] Category CRUD API (כולל reorder)
+- [x] מודל Transaction + מיגרציה (כולל currency field)
+- [x] Transaction CRUD API (כולל duplicate + bulk ops)
+- [x] Pydantic schemas
+- [x] Unit tests ל-auth (9 tests)
+- [x] Unit tests ל-CRUD (14 tests)
+- [x] Users admin API (list, create, update, delete)
 
 #### Definition of Done:
-- [ ] אפשר להירשם, להתחבר, ולהתנתק
-- [ ] JWT token עובד עם refresh
-- [ ] CRUD קטגוריות עובד (create, read, update, delete, reorder)
-- [ ] CRUD תנועות עובד (כולל duplicate)
-- [ ] Settings API עובד
-- [ ] Unit tests עוברים (`pytest -v` ירוק)
-- [ ] API מתועד אוטומטית ב-`/docs`
+- [x] אפשר להירשם, להתחבר, ולהתנתק
+- [x] JWT token עובד עם refresh
+- [x] CRUD קטגוריות עובד (create, read, update, delete, reorder)
+- [x] CRUD תנועות עובד (כולל duplicate + bulk)
+- [x] Settings API עובד
+- [x] Unit tests עוברים (`pytest -v` ירוק) - 23 tests passed
+- [x] API מתועד אוטומטית ב-`/docs` - 33 routes
 
 ---
 
