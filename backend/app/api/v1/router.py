@@ -5,6 +5,7 @@ from app.api.v1.endpoints import (
     auth,
     balance,
     categories,
+    dashboard,
     expected_income,
     fixed,
     forecast,
@@ -28,4 +29,5 @@ api_router.include_router(loans.router)
 api_router.include_router(balance.router)
 api_router.include_router(expected_income.router)
 api_router.include_router(forecast.router)
+api_router.include_router(dashboard.router)
 api_router.include_router(alerts.router)

@@ -164,6 +164,21 @@ export interface ForecastSummary {
   alerts_count: number
 }
 
+// Expected Income
+export interface ExpectedIncome {
+  id: string
+  user_id: string
+  month: string
+  expected_amount: string
+  notes: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface ExpectedIncomeListResponse {
+  items: ExpectedIncome[]
+}
+
 // Alert
 export interface Alert {
   id: string

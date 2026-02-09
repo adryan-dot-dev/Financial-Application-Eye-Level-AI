@@ -1,0 +1,24 @@
+import type { ExpectedIncome, ExpectedIncomeListResponse } from '@/types'
+import apiClient from './client'
+
+export interface SetExpectedIncomeData {
+  expected_amount: number
+  notes?: string
+}
+
+export const expectedIncomeApi = {
+  list: async (): Promise<ExpectedIncomeListResponse> => {
+    const response = await apiClient.get<ExpectedIncomeListResponse>('/expected-income')
+    return response.data
+  },
+
+  set: async (month: string, data: SetExpectedIncomeData): Promise<ExpectedIncome> => {
+    const response = await apiClient.put<ExpectedIncome>(`/expected-income/${month}`, data)
+    return response.data
+  },
+
+  remove: async (month: string): Promise<{ message: string }> => {
+    const response = await apiClient.delete<{ message: string }>(`/expected-income/${month}`)
+    return response.data
+  },
+}

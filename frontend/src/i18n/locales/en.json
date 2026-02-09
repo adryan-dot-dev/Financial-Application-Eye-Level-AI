@@ -160,6 +160,20 @@
     "noWarning": "No warning alerts",
     "noInfo": "No info alerts"
   },
+  "expectedIncome": {
+    "title": "Expected Income",
+    "month": "Month",
+    "expectedAmount": "Expected Amount",
+    "notes": "Notes",
+    "set": "Set Expected Income",
+    "remove": "Remove Expected Income",
+    "noData": "No expected income defined",
+    "noDataDesc": "Set expected income for upcoming months to improve forecast accuracy.",
+    "setSuccess": "Expected income updated successfully",
+    "removeSuccess": "Expected income removed successfully",
+    "removeConfirmTitle": "Remove Expected Income",
+    "removeConfirmMessage": "Are you sure you want to remove the expected income for this month?"
+  },
   "settings": {
     "title": "Settings",
     "general": "General",
