@@ -87,32 +87,32 @@
 
 ---
 
-### Phase 2: Financial Features Backend (Days 8-14)
+### Phase 2: Financial Features Backend (Days 8-14) ✅ COMPLETE
 
 #### Tasks:
-- [ ] Fixed Income/Expenses model + API (כולל currency)
-- [ ] Installments model + חישוב לוח תשלומים (כולל currency)
-- [ ] Loans model + לוח סילוקין (כולל currency)
-- [ ] Bank Balance model + API
-- [ ] Expected Income model + API
-- [ ] **Forecast Service** - חישוב צפי תזרים (חודשי + שבועי)
-- [ ] **Alert Service** - זיהוי תזרים שלילי
-- [ ] Tests לחישובים פיננסיים
+- [x] Fixed Income/Expenses model + API (כולל currency)
+- [x] Installments model + חישוב לוח תשלומים (כולל currency)
+- [x] Loans model + לוח סילוקין (כולל currency)
+- [x] Bank Balance model + API
+- [x] Expected Income model + API
+- [x] **Forecast Service** - חישוב צפי תזרים (חודשי + שבועי)
+- [x] **Alert Service** - זיהוי תזרים שלילי
+- [x] Tests לחישובים פיננסיים (68 tests passing)
 
 #### Edge Cases לטיפול:
-- [ ] פריסה שמתחילה באמצע חודש
-- [ ] הלוואה עם ריבית 0% (לא לחלק באפס)
-- [ ] חודש עם 31 ימים - day_of_month גדול מ-28
-- [ ] תזרים שלילי - יצירת התראה אוטומטית
-- [ ] מחיקת קטגוריה עם תנועות - soft delete בלבד
+- [x] פריסה שמתחילה באמצע חודש
+- [x] הלוואה עם ריבית 0% (לא לחלק באפס)
+- [x] חודש עם 31 ימים - day_of_month גדול מ-28
+- [x] תזרים שלילי - יצירת התראה אוטומטית
+- [x] מחיקת קטגוריה עם תנועות - soft delete בלבד
 
 #### Definition of Done:
-- [ ] כל ה-CRUD APIs עובדים (fixed, installments, loans, balance, expected-income)
-- [ ] `/api/v1/forecast` מחזיר צפי נכון ל-6 חודשים
-- [ ] `/api/v1/forecast/weekly` מחזיר צפי שבועי
-- [ ] התראות נוצרות אוטומטית כשיש תזרים שלילי צפוי
-- [ ] Tests לחישובים פיננסיים עוברים
-- [ ] Edge cases מטופלים ונבדקים
+- [x] כל ה-CRUD APIs עובדים (fixed, installments, loans, balance, expected-income)
+- [x] `/api/v1/forecast` מחזיר צפי נכון ל-6 חודשים
+- [x] `/api/v1/forecast/weekly` מחזיר צפי שבועי
+- [x] התראות נוצרות אוטומטית כשיש תזרים שלילי צפוי
+- [x] Tests לחישובים פיננסיים עוברים
+- [x] Edge cases מטופלים ונבדקים
 
 ---
 
@@ -369,11 +369,11 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 0 | Not Started | |
-| Phase 1 | Not Started | |
-| Phase 2 | Not Started | |
-| Phase 3 | Not Started | |
-| Phase 4 | Not Started | |
-| Phase 5 | Not Started | |
-| Phase 6 | Not Started | |
-| Phase 7 | Not Started | |
+| Phase 0 | ✅ Complete | Project setup, Docker, FastAPI, React init |
+| Phase 1 | ✅ Complete | Auth, Users, Settings, Categories, Transactions - 23 tests |
+| Phase 2 | ✅ Complete | Fixed, Installments, Loans, Balance, Expected Income, Forecast, Alerts - 68 tests |
+| Phase 3 | Not Started | Frontend Foundation |
+| Phase 4 | Not Started | Frontend CRUD Features |
+| Phase 5 | Not Started | Self-Service Features |
+| Phase 6 | Not Started | Dashboard & Reports |
+| Phase 7 | Not Started | Polish & Testing |

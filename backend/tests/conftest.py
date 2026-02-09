@@ -10,7 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import settings
 from app.db.base import Base
-from app.db.models import Category, Settings, Transaction, User  # noqa: F401
+from app.db.models import (  # noqa: F401
+    Alert, BankBalance, Category, ExpectedIncome,
+    FixedIncomeExpense, Installment, Loan,
+    Settings, Transaction, User,
+)
 from app.db.session import get_db
 from app.main import app
 
@@ -27,6 +31,70 @@ def event_loop():
     loop.close()
 
 
+async def _cleanup_test_data():
+    """Clean up all test data, preserving admin user and seed categories."""
+    async with test_session() as session:
+        # Get admin user id
+        admin_result = await session.execute(
+            User.__table__.select().where(User.__table__.c.username == "admin")
+        )
+        admin_rows = admin_result.fetchall()
+        admin_ids = [r[0] for r in admin_rows]
+
+        # Phase 2 tables (no FK dependencies to worry about)
+        await session.execute(Alert.__table__.delete())
+        await session.execute(ExpectedIncome.__table__.delete())
+        await session.execute(BankBalance.__table__.delete())
+        await session.execute(Loan.__table__.delete())
+        await session.execute(Installment.__table__.delete())
+        await session.execute(FixedIncomeExpense.__table__.delete())
+
+        # Phase 1 tables
+        await session.execute(Transaction.__table__.delete())
+
+        # Delete non-seed categories (created by tests)
+        if admin_ids:
+            await session.execute(
+                Category.__table__.delete().where(
+                    Category.user_id.notin_(admin_ids)
+                )
+            )
+            # Also remove test-created categories for admin user (not the seed ones)
+            # Seed categories have specific names: salary, freelance, etc.
+            seed_names = [
+                "salary", "freelance", "investments", "other_income",
+                "rent", "software", "car", "restaurants", "insurance",
+                "marketing", "salaries", "office", "general",
+            ]
+            await session.execute(
+                Category.__table__.delete().where(
+                    Category.user_id.in_(admin_ids),
+                    Category.name.notin_(seed_names),
+                )
+            )
+
+        # Delete non-admin settings and users
+        if admin_ids:
+            await session.execute(
+                Settings.__table__.delete().where(
+                    Settings.user_id.notin_(admin_ids)
+                )
+            )
+        await session.execute(
+            User.__table__.delete().where(User.__table__.c.username != "admin")
+        )
+        await session.commit()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup():
+    """Auto-cleanup before each test to ensure test isolation."""
+    await _cleanup_test_data()
+    yield
+    # Cleanup after test too
+    await _cleanup_test_data()
+
+
 @pytest_asyncio.fixture
 async def db() -> AsyncGenerator[AsyncSession, None]:
     async with engine.begin() as conn:
@@ -34,29 +102,6 @@ async def db() -> AsyncGenerator[AsyncSession, None]:
 
     async with test_session() as session:
         yield session
-
-    # Cleanup: delete test data (transactions first due to FK)
-    async with test_session() as session:
-        await session.execute(Transaction.__table__.delete())
-        await session.execute(Category.__table__.delete().where(
-            Category.user_id.notin_(
-                # Keep admin categories
-                [r[0] for r in (await session.execute(
-                    User.__table__.select().where(User.__table__.c.username == "admin")
-                )).fetchall()]
-            )
-        ))
-        await session.execute(Settings.__table__.delete().where(
-            Settings.user_id.notin_(
-                [r[0] for r in (await session.execute(
-                    User.__table__.select().where(User.__table__.c.username == "admin")
-                )).fetchall()]
-            )
-        ))
-        await session.execute(User.__table__.delete().where(
-            User.__table__.c.username != "admin"
-        ))
-        await session.commit()
 
 
 async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
