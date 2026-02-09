@@ -1,0 +1,123 @@
+# ========================================
+# Multi-Agent Project .gitignore Template
+# ========================================
+# This file will be renamed to .gitignore when creating a new project
+
+# ============= General =============
+.DS_Store
+*.log
+*.swp
+*.swo
+*~
+.env
+.env.local
+.env.*.local
+
+# ============= IDEs =============
+# VSCode
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# ============= Python =============
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+env/
+ENV/
+.venv
+
+# ============= Node.js =============
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.pnpm-debug.log*
+
+# ============= Build Output =============
+dist/
+build/
+out/
+*.d.ts
+*.js.map
+
+# ============= Testing =============
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+*.cover
+.hypothesis/
+
+# ============= Database =============
+*.sqlite
+*.sqlite3
+*.db
+
+# ============= Logs =============
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============= OS =============
+Thumbs.db
+Desktop.ini
+
+# ============= Agent Working Files =============
+# Note: We track structure but ignore frequent status updates
+# agents/status/*.md will be tracked but changes during work are ignored
+# Uncomment the lines below if you want to ignore status changes:
+# agents/status/implement.md
+# agents/status/test.md
+# agents/status/review.md
+# agents/status/docs.md
+# agents/shared/blockers.md
+
+# ============= Temporary Files =============
+*.tmp
+*.temp
+.cache/
+.temp/
+
+# ============= Secrets (CRITICAL - NEVER COMMIT) =============
+secrets.json
+credentials.json
+*.key
+*.pem
+*.cert
+.env.production
+config/secrets.yaml
