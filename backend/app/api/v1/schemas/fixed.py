@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class FixedCreate(BaseModel):
@@ -16,7 +16,13 @@ class FixedCreate(BaseModel):
     day_of_month: int = Field(..., ge=1, le=31)
     start_date: date
     end_date: date | None = None
-    description: str | None = None
+    description: str | None = Field(None, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        if self.end_date and self.end_date < self.start_date:
+            raise ValueError("end_date must be >= start_date")
+        return self
 
 
 class FixedUpdate(BaseModel):
@@ -28,7 +34,7 @@ class FixedUpdate(BaseModel):
     day_of_month: int | None = Field(None, ge=1, le=31)
     start_date: date | None = None
     end_date: date | None = None
-    description: str | None = None
+    description: str | None = Field(None, max_length=1000)
 
 
 class FixedResponse(BaseModel):

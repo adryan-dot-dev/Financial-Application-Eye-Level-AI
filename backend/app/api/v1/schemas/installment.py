@@ -17,13 +17,13 @@ class InstallmentCreate(BaseModel):
     category_id: UUID | None = None
     start_date: date
     day_of_month: int = Field(..., ge=1, le=31)
-    description: str | None = None
+    description: str | None = Field(None, max_length=1000)
 
 
 class InstallmentUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     category_id: UUID | None = None
-    description: str | None = None
+    description: str | None = Field(None, max_length=1000)
 
 
 class InstallmentResponse(BaseModel):

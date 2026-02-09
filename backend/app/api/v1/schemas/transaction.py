@@ -12,11 +12,11 @@ class TransactionCreate(BaseModel):
     currency: str = Field(default="ILS", max_length=3)
     type: str = Field(..., pattern="^(income|expense)$")
     category_id: UUID | None = None
-    description: str | None = None
+    description: str | None = Field(None, max_length=500)
     date: date
     entry_pattern: str = Field(default="one_time", pattern="^(one_time|recurring|installment)$")
-    notes: str | None = None
-    tags: list[str] | None = None
+    notes: str | None = Field(None, max_length=2000)
+    tags: list[str] | None = Field(None, max_length=20)
 
 
 class TransactionUpdate(BaseModel):
@@ -24,11 +24,11 @@ class TransactionUpdate(BaseModel):
     currency: str | None = Field(None, max_length=3)
     type: str | None = Field(None, pattern="^(income|expense)$")
     category_id: UUID | None = None
-    description: str | None = None
+    description: str | None = Field(None, max_length=500)
     date: date | None = None
     entry_pattern: str | None = Field(None, pattern="^(one_time|recurring|installment)$")
-    notes: str | None = None
-    tags: list[str] | None = None
+    notes: str | None = Field(None, max_length=2000)
+    tags: list[str] | None = Field(None, max_length=20)
 
 
 class TransactionResponse(BaseModel):
@@ -60,13 +60,13 @@ class TransactionListResponse(BaseModel):
 
 
 class TransactionBulkCreate(BaseModel):
-    transactions: list[TransactionCreate]
+    transactions: list[TransactionCreate] = Field(..., max_length=500)
 
 
 class TransactionBulkDelete(BaseModel):
-    ids: list[UUID]
+    ids: list[UUID] = Field(..., max_length=1000)
 
 
 class TransactionBulkUpdateCategory(BaseModel):
-    ids: list[UUID]
+    ids: list[UUID] = Field(..., max_length=1000)
     category_id: UUID

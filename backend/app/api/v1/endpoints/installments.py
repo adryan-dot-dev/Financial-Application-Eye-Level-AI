@@ -27,6 +27,8 @@ router = APIRouter(prefix="/installments", tags=["Installments"])
 
 
 def _calc_monthly_amount(total: Decimal, num_payments: int) -> Decimal:
+    if num_payments <= 0:
+        raise ValueError("number_of_payments must be > 0")
     return (total / num_payments).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 

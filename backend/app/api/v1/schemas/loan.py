@@ -18,7 +18,7 @@ class LoanCreate(BaseModel):
     start_date: date
     day_of_month: int = Field(..., ge=1, le=31)
     total_payments: int = Field(..., ge=1, le=600)
-    description: str | None = None
+    description: str | None = Field(None, max_length=1000)
 
 
 class LoanUpdate(BaseModel):
@@ -26,7 +26,7 @@ class LoanUpdate(BaseModel):
     monthly_payment: Decimal | None = Field(None, gt=0, max_digits=15, decimal_places=2)
     category_id: UUID | None = None
     status: str | None = Field(None, pattern="^(active|completed|paused)$")
-    description: str | None = None
+    description: str | None = Field(None, max_length=1000)
 
 
 class LoanResponse(BaseModel):

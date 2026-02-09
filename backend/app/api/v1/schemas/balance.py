@@ -11,13 +11,13 @@ from pydantic import BaseModel, Field
 class BalanceCreate(BaseModel):
     balance: Decimal = Field(..., max_digits=15, decimal_places=2)
     effective_date: date
-    notes: str | None = None
+    notes: str | None = Field(None, max_length=1000)
 
 
 class BalanceUpdate(BaseModel):
     balance: Decimal = Field(..., max_digits=15, decimal_places=2)
     effective_date: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(None, max_length=1000)
 
 
 class BalanceResponse(BaseModel):

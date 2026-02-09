@@ -11,12 +11,12 @@ from pydantic import BaseModel, Field
 class ExpectedIncomeCreate(BaseModel):
     month: date  # First day of the month
     expected_amount: Decimal = Field(..., gt=0, max_digits=15, decimal_places=2)
-    notes: str | None = None
+    notes: str | None = Field(None, max_length=1000)
 
 
 class ExpectedIncomeUpdate(BaseModel):
     expected_amount: Decimal = Field(..., gt=0, max_digits=15, decimal_places=2)
-    notes: str | None = None
+    notes: str | None = Field(None, max_length=1000)
 
 
 class ExpectedIncomeResponse(BaseModel):

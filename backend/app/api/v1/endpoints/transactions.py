@@ -38,7 +38,7 @@ async def list_transactions(
     type: Optional[str] = Query(None, pattern="^(income|expense)$"),
     min_amount: Optional[Decimal] = None,
     max_amount: Optional[Decimal] = None,
-    search: Optional[str] = None,
+    search: Optional[str] = Query(None, max_length=200),
     sort_by: str = Query("date", pattern="^(date|amount|created_at)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     current_user: User = Depends(get_current_user),
