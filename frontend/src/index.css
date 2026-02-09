@@ -1,5 +1,96 @@
 @import "tailwindcss";
 
+/* ============================================
+   Eye Level AI - Design System
+   ============================================ */
+
+/* Brand Colors */
+@theme {
+  --color-brand-50: #EFF6FF;
+  --color-brand-100: #DBEAFE;
+  --color-brand-200: #BFDBFE;
+  --color-brand-300: #93C5FD;
+  --color-brand-400: #60A5FA;
+  --color-brand-500: #3B82F6;
+  --color-brand-600: #2563EB;
+  --color-brand-700: #1D4ED8;
+  --color-brand-800: #1E40AF;
+  --color-brand-900: #1E3A8A;
+
+  --color-accent-cyan: #06B6D4;
+  --color-accent-purple: #8B5CF6;
+  --color-accent-magenta: #EC4899;
+
+  --color-income: #10B981;
+  --color-expense: #EF4444;
+
+  /* Sidebar width */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 72px;
+}
+
+/* Light Mode (default) */
+:root {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8FAFC;
+  --bg-tertiary: #F1F5F9;
+  --bg-sidebar: #0F172A;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F1F5F9;
+  --bg-input: #FFFFFF;
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #94A3B8;
+  --text-sidebar: #CBD5E1;
+  --text-sidebar-active: #FFFFFF;
+
+  --border-primary: #E2E8F0;
+  --border-focus: #2563EB;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+
+  color-scheme: light;
+}
+
+/* Dark Mode */
+.dark {
+  --bg-primary: #0F172A;
+  --bg-secondary: #1E293B;
+  --bg-tertiary: #334155;
+  --bg-sidebar: #020617;
+  --bg-card: #1E293B;
+  --bg-hover: #334155;
+  --bg-input: #1E293B;
+
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-tertiary: #64748B;
+  --text-sidebar: #94A3B8;
+  --text-sidebar-active: #FFFFFF;
+
+  --border-primary: #334155;
+  --border-focus: #3B82F6;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+
+  color-scheme: dark;
+}
+
+/* Global Styles */
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
 /* RTL Support */
 [dir="rtl"] {
   direction: rtl;
@@ -12,8 +103,45 @@
   unicode-bidi: embed;
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: system-ui, -apple-system, sans-serif;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: ease;
+  transition-duration: 0.15s;
+}
+
+/* Brand gradient */
+.brand-gradient {
+  background: linear-gradient(135deg, #06B6D4, #2563EB, #8B5CF6, #EC4899);
+}
+
+.brand-gradient-text {
+  background: linear-gradient(135deg, #06B6D4, #2563EB, #8B5CF6, #EC4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
