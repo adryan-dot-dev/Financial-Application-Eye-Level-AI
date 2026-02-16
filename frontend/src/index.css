@@ -32,17 +32,18 @@
   /* Border Radius System */
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
   --radius-full: 9999px;
 
   /* Transition System */
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 150ms;
-  --duration-normal: 200ms;
-  --duration-slow: 300ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
 }
 
 /* ============================================
@@ -97,6 +98,10 @@
   --border-success: rgba(16, 185, 129, 0.2);
   --border-warning: rgba(245, 158, 11, 0.2);
   --border-info: rgba(59, 130, 246, 0.2);
+
+  /* Brand Gradient */
+  --gradient-brand: linear-gradient(135deg, #06B6D4, #3B82F6, #8B5CF6, #EC4899);
+  --gradient-brand-subtle: linear-gradient(135deg, rgba(6, 182, 212, 0.06), rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.06));
 
   color-scheme: light;
 }
@@ -225,13 +230,18 @@ body {
 *:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.dark *:focus-visible {
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.12);
 }
 
 /* ============================================
    Brand Styles
    ============================================ */
 .brand-gradient {
-  background: var(--color-brand-600);
+  background: var(--gradient-brand);
 }
 
 .brand-gradient-text {
@@ -271,12 +281,14 @@ body {
 
 .card-hover {
   transition: box-shadow var(--duration-normal) var(--ease-smooth),
-              border-color var(--duration-normal) var(--ease-smooth);
+              border-color var(--duration-normal) var(--ease-smooth),
+              transform var(--duration-normal) var(--ease-smooth);
 }
 
 .card-hover:hover {
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   border-color: var(--border-primary);
+  transform: translateY(-2px);
 }
 
 /* ============================================
@@ -310,27 +322,70 @@ button, [role="button"] {
 }
 
 .btn-primary {
-  background: var(--color-brand-600);
+  background: var(--gradient-brand);
+  background-size: 200% 200%;
   color: white;
   font-weight: 600;
+  border-radius: var(--radius-lg);
+  transition: all var(--duration-normal) var(--ease-smooth);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-position: 100% 50%;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.2);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dark .btn-primary {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.dark .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  transition: all var(--duration-normal) var(--ease-smooth);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
+}
+
+.btn-secondary:active:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+/* Ghost Button */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
   border-radius: var(--radius-lg);
   transition: all var(--duration-fast) var(--ease-smooth);
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-brand-700);
-}
-
-.btn-primary:active:not(:disabled) {
-  background: var(--color-brand-800);
-}
-
-.dark .btn-primary {
-  background: var(--color-brand-500);
-}
-
-.dark .btn-primary:hover:not(:disabled) {
-  background: var(--color-brand-600);
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* ============================================
@@ -342,12 +397,13 @@ button, [role="button"] {
 }
 
 @keyframes modalIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .modal-backdrop {
   animation: backdropIn var(--duration-normal) var(--ease-smooth);
+  backdrop-filter: blur(8px);
 }
 
 .modal-panel {
@@ -371,26 +427,35 @@ button, [role="button"] {
   100% { background-position: 200% 0; }
 }
 
+@keyframes shimmerPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 .skeleton {
   background: linear-gradient(
-    90deg,
-    var(--bg-hover) 25%,
+    100deg,
+    var(--bg-hover) 0%,
+    var(--bg-hover) 30%,
     var(--bg-tertiary) 50%,
-    var(--bg-hover) 75%
+    var(--bg-hover) 70%,
+    var(--bg-hover) 100%
   );
-  background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
-  border-radius: 6px;
+  background-size: 250% 100%;
+  animation: shimmer 2s ease-in-out infinite, shimmerPulse 2s ease-in-out infinite;
+  border-radius: var(--radius-md);
 }
 
 .dark .skeleton {
   background: linear-gradient(
-    90deg,
-    var(--bg-tertiary) 25%,
-    rgba(255, 255, 255, 0.04) 50%,
-    var(--bg-tertiary) 75%
+    100deg,
+    var(--bg-tertiary) 0%,
+    var(--bg-tertiary) 30%,
+    rgba(255, 255, 255, 0.06) 50%,
+    var(--bg-tertiary) 70%,
+    var(--bg-tertiary) 100%
   );
-  background-size: 200% 100%;
+  background-size: 250% 100%;
 }
 
 /* ============================================
@@ -523,13 +588,19 @@ button, [role="button"] {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.03), transparent 70%);
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(139, 92, 246, 0.04) 0%, transparent 50%),
+    linear-gradient(135deg, rgba(37, 99, 235, 0.03), transparent 70%);
   border-radius: inherit;
   pointer-events: none;
 }
 
 .dark .hero-balance-card::before {
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.05), transparent 70%);
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+    linear-gradient(135deg, rgba(96, 165, 250, 0.05), transparent 70%);
 }
 
 /* ============================================
@@ -591,6 +662,80 @@ button, [role="button"] {
   border-color: rgba(239, 68, 68, 0.2);
 }
 
+/* Status Badges - Fretnex style pills */
+.badge-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background-color: var(--color-brand-600);
+  color: white;
+}
+
+.dark .badge-active {
+  background-color: var(--color-brand-500);
+}
+
+.badge-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+}
+
+.badge-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.badge-paused {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background-color: var(--bg-warning);
+  color: var(--text-warning);
+  border: 1px solid var(--border-warning);
+}
+
+/* Metadata pill - Fretnex style gray rounded tags */
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+}
+
 /* ============================================
    Input Enhancements
    ============================================ */
@@ -612,6 +757,36 @@ input::placeholder,
 textarea::placeholder {
   color: var(--text-tertiary);
   opacity: 0.7;
+}
+
+/* Premium Input */
+.input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: border-color var(--duration-fast) var(--ease-smooth),
+              box-shadow var(--duration-fast) var(--ease-smooth);
+}
+
+.input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  outline: none;
+}
+
+.input-error {
+  border-color: var(--color-danger) !important;
+  background-color: var(--bg-danger-subtle);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  background-color: var(--bg-tertiary);
+  cursor: not-allowed;
 }
 
 select {
@@ -755,7 +930,7 @@ select {
   content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 50%;
+  inset-inline-start: 50%;
   transform: translateX(-50%) translateY(4px);
   background-color: var(--text-primary);
   color: var(--bg-primary);
@@ -778,7 +953,7 @@ select {
   content: '';
   position: absolute;
   bottom: calc(100% + 2px);
-  left: 50%;
+  inset-inline-start: 50%;
   transform: translateX(-50%);
   border: 4px solid transparent;
   border-top-color: var(--text-primary);
@@ -941,11 +1116,29 @@ select {
    Login / Register Page
    ============================================ */
 .auth-brand-bg {
-  background: var(--color-brand-600);
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.4) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.2) 0%, transparent 50%),
+    linear-gradient(135deg, #1E3A8A, #1D4ED8, #2563EB);
+  background-size: 200% 200%;
+  animation: authBgShift 8s ease infinite;
 }
 
 .dark .auth-brand-bg {
-  background: linear-gradient(135deg, #1E3A8A, #1E293B);
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.2) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.1) 0%, transparent 50%),
+    linear-gradient(135deg, #0F172A, #1E293B, #1E3A8A);
+  background-size: 200% 200%;
+  animation: authBgShift 8s ease infinite;
+}
+
+@keyframes authBgShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .auth-glass-card {
@@ -1004,7 +1197,7 @@ select {
 .onboarding-bg-decoration {
   position: fixed;
   top: -50%;
-  left: -25%;
+  inset-inline-start: -25%;
   width: 150%;
   height: 150%;
   background: radial-gradient(
@@ -1188,6 +1381,160 @@ select {
   top: -10px;
   border-radius: 2px;
   animation: confettiFall 3.5s ease-in-out forwards;
+}
+
+/* ============================================
+   Financial Numbers (Fretnex-inspired bold numbers)
+   ============================================ */
+.fin-number {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-number-lg {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 800;
+  font-size: 2rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-number-xl {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 800;
+  font-size: 2.75rem;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Income/Expense amount coloring */
+.amount-income {
+  color: var(--color-success);
+}
+
+.amount-expense {
+  color: var(--color-danger);
+}
+
+/* ============================================
+   Trend Indicator (Fretnex-style up/down arrow with %)
+   ============================================ */
+.trend-up {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-success);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.trend-down {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-danger);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* ============================================
+   Progress Bar (multi-color, Fretnex-inspired)
+   ============================================ */
+.progress-bar {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--gradient-brand);
+  transition: width var(--duration-slow) var(--ease-smooth);
+}
+
+.progress-fill-success {
+  background: var(--color-success);
+}
+
+.progress-fill-warning {
+  background: var(--color-warning);
+}
+
+.progress-fill-danger {
+  background: var(--color-danger);
+}
+
+/* ============================================
+   Alert Severity Borders
+   ============================================ */
+.severity-info {
+  border-inline-start: 4px solid var(--color-info);
+}
+
+.severity-warning {
+  border-inline-start: 4px solid var(--color-warning);
+}
+
+.severity-critical {
+  border-inline-start: 4px solid var(--color-danger);
+}
+
+/* ============================================
+   Icon Circle (Rentax-inspired pastel background icons)
+   ============================================ */
+.icon-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  flex-shrink: 0;
+}
+
+.icon-circle-sm {
+  width: 32px;
+  height: 32px;
+}
+
+.icon-circle-md {
+  width: 40px;
+  height: 40px;
+}
+
+.icon-circle-lg {
+  width: 48px;
+  height: 48px;
+}
+
+/* ============================================
+   Accordion / Expandable (Fretnex-style)
+   ============================================ */
+@keyframes accordionOpen {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 500px; }
+}
+
+@keyframes accordionClose {
+  from { opacity: 1; max-height: 500px; }
+  to { opacity: 0; max-height: 0; }
+}
+
+.accordion-content {
+  overflow: hidden;
+  animation: accordionOpen var(--duration-slow) var(--ease-smooth) forwards;
+}
+
+.accordion-chevron {
+  transition: transform var(--duration-normal) var(--ease-smooth);
+}
+
+.accordion-chevron-open {
+  transform: rotate(180deg);
 }
 
 /* ============================================

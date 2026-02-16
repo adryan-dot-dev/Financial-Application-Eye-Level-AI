@@ -131,3 +131,16 @@ backups/*.sql
 
 # Application Logs
 backend/logs/
+
+# Binary assets
+*.jpeg
+*.jpg
+*.png
+*.pdf
+
+# Claude Code config
+.claude/
+
+# Keep the logo (it's in frontend/public which is essential)
+!frontend/public/*.jpeg
+!frontend/public/*.png
