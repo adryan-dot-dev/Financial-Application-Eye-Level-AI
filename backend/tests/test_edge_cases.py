@@ -36,7 +36,7 @@ class TestAuthEdgeCases:
         """Login with wrong password returns 401."""
         response = await client.post("/api/v1/auth/login", json={
             "username": "admin",
-            "password": "totally_wrong_password",
+            "password": "WrongPass9",
         })
         assert response.status_code == 401
 
@@ -45,7 +45,7 @@ class TestAuthEdgeCases:
         """Login with a non-existent username returns 401."""
         response = await client.post("/api/v1/auth/login", json={
             "username": "user_does_not_exist_xyz",
-            "password": "some_password",
+            "password": "SomePass1",
         })
         assert response.status_code == 401
 
@@ -76,7 +76,7 @@ class TestAuthEdgeCases:
         response = await client.post("/api/v1/auth/register", json={
             "username": "admin",
             "email": "another@example.com",
-            "password": "longpassword",
+            "password": "TestPass1",
         })
         assert response.status_code == 409
 
@@ -87,19 +87,19 @@ class TestAuthEdgeCases:
         await client.post("/api/v1/auth/register", json={
             "username": "emailtest1",
             "email": "unique@example.com",
-            "password": "password123",
+            "password": "TestPass1",
         })
         # Try to register another user with same email
         response = await client.post("/api/v1/auth/register", json={
             "username": "emailtest2",
             "email": "unique@example.com",
-            "password": "password456",
+            "password": "TestPass1",
         })
         assert response.status_code == 409
 
     @pytest.mark.asyncio
     async def test_register_short_password(self, client: AsyncClient):
-        """Registering with a password shorter than min_length (6) returns 422."""
+        """Registering with a password shorter than min_length (8) returns 422."""
         response = await client.post("/api/v1/auth/register", json={
             "username": "shortpass",
             "email": "shortpass@example.com",
@@ -113,7 +113,7 @@ class TestAuthEdgeCases:
         response = await client.post("/api/v1/auth/register", json={
             "username": "ab",
             "email": "shortuser@example.com",
-            "password": "validpassword",
+            "password": "TestPass1",
         })
         assert response.status_code == 422
 
@@ -124,7 +124,7 @@ class TestAuthEdgeCases:
         response = await client.post("/api/v1/auth/register", json={
             "username": long_name,
             "email": "longuser@example.com",
-            "password": "validpassword",
+            "password": "TestPass1",
         })
         assert response.status_code == 422
 
@@ -134,7 +134,7 @@ class TestAuthEdgeCases:
         response = await client.post("/api/v1/auth/register", json={
             "username": "invalidemail",
             "email": "not-an-email",
-            "password": "validpassword",
+            "password": "TestPass1",
         })
         assert response.status_code == 422
 
@@ -151,7 +151,7 @@ class TestAuthEdgeCases:
         """Using an access token as refresh token returns 401 (wrong type)."""
         login_resp = await client.post("/api/v1/auth/login", json={
             "username": "admin",
-            "password": "admin123",
+            "password": "Admin2026!",
         })
         access_token = login_resp.json()["access_token"]
         response = await client.post("/api/v1/auth/refresh", json={
@@ -163,8 +163,8 @@ class TestAuthEdgeCases:
     async def test_change_password_wrong_current(self, client: AsyncClient, auth_headers: dict):
         """Change password with wrong current password returns 401."""
         response = await client.put("/api/v1/auth/password", json={
-            "current_password": "wrongcurrentpassword",
-            "new_password": "newpass123",
+            "current_password": "WrongCurrent1",
+            "new_password": "NewPass1",
         }, headers=auth_headers)
         assert response.status_code == 401
 
@@ -320,8 +320,7 @@ class TestLoanEdgeCases:
 
     @pytest.mark.asyncio
     async def test_loan_payment_on_completed_loan(self, client: AsyncClient, auth_headers: dict):
-        """Recording a payment on a completed loan should still work
-        (the endpoint increments payments_made; status is already completed)."""
+        """Recording a payment on a completed loan should be rejected."""
         create_resp = await client.post("/api/v1/loans", json={
             "name": "Will Complete",
             "original_amount": 1000,
@@ -342,15 +341,14 @@ class TestLoanEdgeCases:
         )
         assert pay1.json()["status"] == "completed"
 
-        # Another payment on the already-completed loan
+        # Another payment on the already-completed loan should be rejected
         pay2 = await client.post(
             f"/api/v1/loans/{lid}/payment",
             json={"amount": 500},
             headers=auth_headers,
         )
-        # The endpoint does not reject it; payments_made increments
-        assert pay2.status_code == 200
-        assert pay2.json()["remaining_balance"] == "0.00"
+        assert pay2.status_code == 400
+        assert "completed" in pay2.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_loan(self, client: AsyncClient, auth_headers: dict):
@@ -706,7 +704,7 @@ class TestIDORPrevention:
 
         # Register user 2
         user2_headers = await _register_and_login(
-            client, "user2_idor", "user2_idor@example.com", "password123",
+            client, "user2_idor", "user2_idor@example.com", "TestPass1",
         )
 
         # User 2 tries to read admin's transaction
@@ -726,7 +724,7 @@ class TestIDORPrevention:
         txn_id = create_resp.json()["id"]
 
         user2_headers = await _register_and_login(
-            client, "user2_upd", "user2_upd@example.com", "password123",
+            client, "user2_upd", "user2_upd@example.com", "TestPass1",
         )
 
         response = await client.put(
@@ -747,7 +745,7 @@ class TestIDORPrevention:
         txn_id = create_resp.json()["id"]
 
         user2_headers = await _register_and_login(
-            client, "user2_del", "user2_del@example.com", "password123",
+            client, "user2_del", "user2_del@example.com", "TestPass1",
         )
 
         response = await client.delete(
@@ -768,7 +766,7 @@ class TestIDORPrevention:
         cat_id = create_resp.json()["id"]
 
         user2_headers = await _register_and_login(
-            client, "user2_cat", "user2_cat@example.com", "password123",
+            client, "user2_cat", "user2_cat@example.com", "TestPass1",
         )
 
         # Try to GET admin's category
@@ -800,7 +798,7 @@ class TestIDORPrevention:
         lid = create_resp.json()["id"]
 
         user2_headers = await _register_and_login(
-            client, "user2_loan", "user2_loan@example.com", "password123",
+            client, "user2_loan", "user2_loan@example.com", "TestPass1",
         )
 
         response = await client.get(f"/api/v1/loans/{lid}", headers=user2_headers)
@@ -821,7 +819,7 @@ class TestIDORPrevention:
         iid = create_resp.json()["id"]
 
         user2_headers = await _register_and_login(
-            client, "user2_inst", "user2_inst@example.com", "password123",
+            client, "user2_inst", "user2_inst@example.com", "TestPass1",
         )
 
         response = await client.get(
@@ -843,7 +841,7 @@ class TestIDORPrevention:
         fid = create_resp.json()["id"]
 
         user2_headers = await _register_and_login(
-            client, "user2_fixed", "user2_fixed@example.com", "password123",
+            client, "user2_fixed", "user2_fixed@example.com", "TestPass1",
         )
 
         response = await client.get(f"/api/v1/fixed/{fid}", headers=user2_headers)
@@ -864,7 +862,7 @@ class TestIDORPrevention:
         lid = create_resp.json()["id"]
 
         user2_headers = await _register_and_login(
-            client, "user2_pay", "user2_pay@example.com", "password123",
+            client, "user2_pay", "user2_pay@example.com", "TestPass1",
         )
 
         response = await client.post(

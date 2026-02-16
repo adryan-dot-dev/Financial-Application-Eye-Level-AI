@@ -127,9 +127,9 @@ async def test_forecast_with_installments(client: AsyncClient, auth_headers: dic
 
     response = await client.get("/api/v1/forecast?months=3", headers=auth_headers)
     data = response.json()
-    # Each month should include installment payment of 300
+    # Each month should include installment expense of 300
     for month in data["months"]:
-        assert float(month["installment_payments"]) >= 0
+        assert float(month["installment_expenses"]) >= 0
 
 
 @pytest.mark.asyncio

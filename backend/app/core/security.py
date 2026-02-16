@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
-from uuid import UUID
+from typing import Any, Dict, Optional, Union
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -20,21 +20,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str | UUID, extra: dict[str, Any] | None = None) -> str:
+def create_access_token(subject: Union[str, "UUID"], extra: Optional[Dict[str, Any]] = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = {"sub": str(subject), "exp": expire, "type": "access"}
+    to_encode = {"sub": str(subject), "exp": expire, "type": "access", "jti": str(uuid.uuid4())}
     if extra:
         to_encode.update(extra)
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_refresh_token(subject: str | UUID) -> str:
+def create_refresh_token(subject: Union[str, "UUID"]) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode = {"sub": str(subject), "exp": expire, "type": "refresh"}
+    to_encode = {"sub": str(subject), "exp": expire, "type": "refresh", "jti": str(uuid.uuid4())}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def decode_token(token: str) -> dict[str, Any] | None:
+def decode_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload

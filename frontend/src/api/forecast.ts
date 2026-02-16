@@ -4,11 +4,10 @@ import apiClient from './client'
 export interface WeeklyForecastWeek {
   week_start: string
   week_end: string
-  opening_balance: string
   income: string
   expenses: string
   net_change: string
-  closing_balance: string
+  running_balance: string
 }
 
 export interface WeeklyForecastResponse {
@@ -18,17 +17,27 @@ export interface WeeklyForecastResponse {
 
 export const forecastApi = {
   monthly: async (months?: number): Promise<ForecastResponse> => {
-    const response = await apiClient.get<ForecastResponse>('/forecast', {
+    const response = await apiClient.get('/forecast', {
       params: months !== undefined ? { months } : undefined,
     })
-    return response.data
+    const data = response.data
+    // Defensive: ensure months is always an array
+    if (data && !Array.isArray(data.months)) {
+      data.months = []
+    }
+    return data as ForecastResponse
   },
 
   weekly: async (weeks?: number): Promise<WeeklyForecastResponse> => {
-    const response = await apiClient.get<WeeklyForecastResponse>('/forecast/weekly', {
+    const response = await apiClient.get('/forecast/weekly', {
       params: weeks !== undefined ? { weeks } : undefined,
     })
-    return response.data
+    const data = response.data
+    // Defensive: ensure weeks is always an array
+    if (data && !Array.isArray(data.weeks)) {
+      data.weeks = []
+    }
+    return data as WeeklyForecastResponse
   },
 
   summary: async (months?: number): Promise<ForecastSummary> => {

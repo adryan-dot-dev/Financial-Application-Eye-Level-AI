@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -15,8 +16,12 @@ from app.db.models import (  # noqa: F401
     FixedIncomeExpense, Installment, Loan,
     Settings, Transaction, User,
 )
+from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.main import app
+
+# Disable rate limiting during tests
+limiter.enabled = False
 
 
 # Use the same DB but with a test schema or just use the same DB for tests
@@ -72,6 +77,28 @@ async def _cleanup_test_data():
                     Category.name.notin_(seed_names),
                 )
             )
+            # Un-archive seed categories in case a test archived them
+            await session.execute(
+                update(Category).where(
+                    Category.user_id.in_(admin_ids),
+                    Category.name.in_(seed_names),
+                ).values(is_archived=False)
+            )
+
+        # Reset admin settings to defaults
+        if admin_ids:
+            await session.execute(
+                update(Settings).where(
+                    Settings.user_id.in_(admin_ids)
+                ).values(
+                    currency="ILS",
+                    language="he",
+                    theme="light",
+                    forecast_months_default=6,
+                    notifications_enabled=True,
+                    onboarding_completed=False,
+                )
+            )
 
         # Delete non-admin settings and users
         if admin_ids:
@@ -124,7 +151,7 @@ async def auth_headers(client: AsyncClient) -> dict:
     """Login as admin and return auth headers."""
     response = await client.post("/api/v1/auth/login", json={
         "username": "admin",
-        "password": "admin123",
+        "password": "Admin2026!",
     })
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

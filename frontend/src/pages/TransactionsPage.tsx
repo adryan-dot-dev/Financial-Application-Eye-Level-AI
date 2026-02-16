@@ -1,7 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useModalA11y } from '@/hooks/useModalA11y'
 import {
   Plus,
   Search,
@@ -12,22 +13,31 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   ArrowUpDown,
   TrendingUp,
   TrendingDown,
   Loader2,
+  Receipt,
+  Calendar,
+  AlertTriangle,
 } from 'lucide-react'
 import type { Transaction, Category } from '@/types'
 import { transactionsApi } from '@/api/transactions'
 import type { TransactionListParams, CreateTransactionData } from '@/api/transactions'
 import { categoriesApi } from '@/api/categories'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { CategoryBadge } from '@/components/ui/CategoryIcon'
+import { queryKeys } from '@/lib/queryKeys'
+import { useToast } from '@/contexts/ToastContext'
+import { getApiErrorMessage } from '@/api/client'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type SortField = 'date' | 'amount' | 'description' | 'type'
+type SortField = 'date' | 'amount'
 type SortOrder = 'asc' | 'desc'
 
 interface Filters {
@@ -79,47 +89,41 @@ const PAGE_SIZE = 15
 function Skeleton({ className }: { className?: string }) {
   return (
     <div
-      className={cn('animate-pulse rounded', className)}
-      style={{ backgroundColor: 'var(--bg-tertiary)' }}
+      className={cn('skeleton rounded', className)}
     />
   )
 }
 
 function TableSkeleton() {
   return (
-    <div className="space-y-3 p-4">
+    <div className="space-y-4 p-6">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-4 flex-1" />
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-4 w-20" />
+        <div key={i} className="flex items-center gap-4" style={{ animationDelay: `${i * 50}ms` }}>
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-5 flex-1" />
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-5 w-20" />
+          <Skeleton className="h-5 w-20" />
+          <Skeleton className="h-5 w-20" />
         </div>
       ))}
     </div>
   )
 }
 
-function CategoryBadge({
+function CategoryBadgeWrapper({
   category,
   label,
 }: {
   category: Category | undefined
   label: string
 }) {
-  const bgColor = category?.color ? `${category.color}20` : 'var(--bg-tertiary)'
-  const textColor = category?.color ?? 'var(--text-secondary)'
-
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-      style={{ backgroundColor: bgColor, color: textColor }}
-    >
-      {category?.icon && <span className="text-sm leading-none">{category.icon}</span>}
-      {label}
-    </span>
+    <CategoryBadge
+      icon={category?.icon}
+      color={category?.color}
+      label={label}
+    />
   )
 }
 
@@ -130,7 +134,12 @@ function CategoryBadge({
 export default function TransactionsPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const isRtl = i18n.language === 'he'
+
+  useEffect(() => {
+    document.title = t('pageTitle.transactions')
+  }, [t])
 
   // ---- State ----
   const [page, setPage] = useState(1)
@@ -195,12 +204,12 @@ export default function TransactionsPage() {
     isLoading: txLoading,
     isError: txError,
   } = useQuery({
-    queryKey: ['transactions', buildParams()],
+    queryKey: queryKeys.transactions.list(buildParams() as Record<string, unknown>),
     queryFn: () => transactionsApi.list(buildParams()),
   })
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
+    queryKey: queryKeys.categories.all,
     queryFn: () => categoriesApi.list(),
   })
 
@@ -208,13 +217,17 @@ export default function TransactionsPage() {
 
   // ---- Mutations ----
   const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all })
 
   const createMutation = useMutation({
     mutationFn: (data: CreateTransactionData) => transactionsApi.create(data),
     onSuccess: () => {
       invalidate()
       closeModal()
+      toast.success(t('toast.createSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
@@ -224,6 +237,10 @@ export default function TransactionsPage() {
     onSuccess: () => {
       invalidate()
       closeModal()
+      toast.success(t('toast.updateSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
@@ -232,12 +249,22 @@ export default function TransactionsPage() {
     onSuccess: () => {
       invalidate()
       setDeleteTarget(null)
+      toast.success(t('toast.deleteSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
   const duplicateMutation = useMutation({
     mutationFn: (id: string) => transactionsApi.duplicate(id),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('toast.duplicateSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
+    },
   })
 
   // ---- Sorting ----
@@ -273,12 +300,18 @@ export default function TransactionsPage() {
     setModalOpen(true)
   }
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setModalOpen(false)
     setEditingTransaction(null)
     setFormData(EMPTY_FORM)
     setFormErrors({})
-  }
+  }, [])
+
+  const closeDeleteDialog = useCallback(() => setDeleteTarget(null), [])
+
+  // Modal accessibility (Escape key, focus trap, aria)
+  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: deletePanelRef } = useModalA11y(!!deleteTarget, closeDeleteDialog)
 
   // ---- Form validation & submit ----
   const validateForm = (): boolean => {
@@ -317,13 +350,18 @@ export default function TransactionsPage() {
   const isMutating = createMutation.isPending || updateMutation.isPending
 
   // ---- Filter helpers ----
-  const hasActiveFilters =
-    filters.type !== '' ||
-    filters.category_id !== '' ||
-    filters.start_date !== '' ||
-    filters.end_date !== '' ||
-    filters.min_amount !== '' ||
-    filters.max_amount !== ''
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (filters.type !== '') count++
+    if (filters.category_id !== '') count++
+    if (filters.start_date !== '') count++
+    if (filters.end_date !== '') count++
+    if (filters.min_amount !== '') count++
+    if (filters.max_amount !== '') count++
+    return count
+  }, [filters])
+
+  const hasActiveFilters = activeFilterCount > 0
 
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS)
@@ -355,23 +393,46 @@ export default function TransactionsPage() {
     field: SortField
     label: string
     className?: string
-  }) => (
-    <th
-      className={cn('cursor-pointer select-none px-4 py-3 text-xs font-semibold uppercase tracking-wider', className)}
-      style={{ color: 'var(--text-secondary)' }}
-      onClick={() => handleSort(field)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        <ArrowUpDown
-          className={cn(
-            'h-3 w-3 transition-colors',
-            sortBy === field ? 'opacity-100' : 'opacity-30',
-          )}
-        />
-      </span>
-    </th>
-  )
+  }) => {
+    const isActive = sortBy === field
+    const SortIcon = isActive
+      ? (sortOrder === 'asc' ? ChevronUp : ChevronDown)
+      : ArrowUpDown
+
+    return (
+      <th
+        scope="col"
+        role="button"
+        tabIndex={0}
+        className={cn(
+          'cursor-pointer select-none px-5 py-4 text-[11px] font-semibold uppercase tracking-widest',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-inset',
+          className,
+        )}
+        style={{
+          color: isActive ? 'var(--border-focus)' : 'var(--text-tertiary)',
+        }}
+        onClick={() => handleSort(field)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            handleSort(field)
+          }
+        }}
+        aria-sort={isActive ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}
+      >
+        <span className="inline-flex items-center gap-1.5">
+          {label}
+          <SortIcon
+            className={cn(
+              'h-3.5 w-3.5 sort-arrow',
+              isActive ? 'opacity-100' : 'opacity-40',
+            )}
+          />
+        </span>
+      </th>
+    )
+  }
 
   // ===========================================================================
   // RENDER
@@ -380,7 +441,7 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-6">
       {/* ---- Page header ---- */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1
             className="text-2xl font-bold tracking-tight"
@@ -390,15 +451,14 @@ export default function TransactionsPage() {
           </h1>
           {!txLoading && (
             <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              {t('transactions.total')}: {totalCount}
+              {t('transactions.total')}: <span className="font-medium ltr-nums" style={{ color: 'var(--text-secondary)' }}>{totalCount}</span>
             </p>
           )}
         </div>
 
         <button
           onClick={openCreateModal}
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90"
-          style={{ backgroundColor: 'var(--border-focus)' }}
+          className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
         >
           <Plus className="h-4 w-4" />
           {t('transactions.add')}
@@ -406,22 +466,12 @@ export default function TransactionsPage() {
       </div>
 
       {/* ---- Search + filter toggle row ---- */}
-      <div
-        className="rounded-xl border p-4"
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          borderColor: 'var(--border-primary)',
-          boxShadow: 'var(--shadow-sm)',
-        }}
-      >
+      <div className="animate-fade-in-up stagger-2 card p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {/* Search input */}
           <div className="relative flex-1">
             <Search
-              className={cn(
-                'pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2',
-                isRtl ? 'right-3' : 'left-3',
-              )}
+              className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 start-3"
               style={{ color: 'var(--text-tertiary)' }}
             />
             <input
@@ -429,10 +479,10 @@ export default function TransactionsPage() {
               value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={t('transactions.searchPlaceholder')}
+              aria-label={t('transactions.search')}
               className={cn(
-                'w-full rounded-lg border py-2 text-sm outline-none transition-colors',
-                'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                isRtl ? 'pr-9 pl-3' : 'pl-9 pr-3',
+                'w-full rounded-xl border py-2.5 ps-10 pe-4 text-sm outline-none transition-all',
+                'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
               )}
               style={{
                 backgroundColor: 'var(--bg-input)',
@@ -443,56 +493,67 @@ export default function TransactionsPage() {
           </div>
 
           {/* Type quick-filter */}
-          <div className="flex rounded-lg border" style={{ borderColor: 'var(--border-primary)' }}>
-            {(['', 'income', 'expense'] as const).map((typeVal) => {
-              const active = filters.type === typeVal
-              const label =
-                typeVal === ''
-                  ? t('transactions.all')
-                  : typeVal === 'income'
-                    ? t('transactions.income')
-                    : t('transactions.expense')
-              return (
-                <button
-                  key={typeVal}
-                  onClick={() => {
-                    setFilters((prev) => ({ ...prev, type: typeVal, category_id: '' }))
-                    setPage(1)
-                  }}
-                  className={cn(
-                    'px-3 py-2 text-xs font-medium transition-colors first:rounded-s-lg last:rounded-e-lg',
-                  )}
-                  style={{
-                    backgroundColor: active ? 'var(--border-focus)' : 'var(--bg-input)',
-                    color: active ? '#fff' : 'var(--text-secondary)',
-                  }}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
+          <fieldset>
+            <legend className="sr-only">{t('transactions.type')}</legend>
+            <div
+              className="flex overflow-hidden rounded-xl border"
+              style={{ borderColor: 'var(--border-primary)' }}
+            >
+              {(['', 'income', 'expense'] as const).map((typeVal) => {
+                const active = filters.type === typeVal
+                const label =
+                  typeVal === ''
+                    ? t('transactions.all')
+                    : typeVal === 'income'
+                      ? t('transactions.income')
+                      : t('transactions.expense')
+                return (
+                  <button
+                    key={typeVal}
+                    onClick={() => {
+                      setFilters((prev) => ({ ...prev, type: typeVal, category_id: '' }))
+                      setPage(1)
+                    }}
+                    className={cn(
+                      'px-4 py-2 text-xs font-semibold tracking-wide transition-all',
+                      'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
+                      active && 'shadow-sm',
+                    )}
+                    style={{
+                      backgroundColor: active ? 'var(--border-focus)' : 'var(--bg-input)',
+                      color: active ? '#fff' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </fieldset>
 
           {/* Filter toggle */}
           <button
             onClick={() => setShowFilters((v) => !v)}
+            aria-expanded={showFilters}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+              'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold tracking-wide transition-all',
+              'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
+              hasActiveFilters && 'shadow-sm',
             )}
             style={{
               borderColor: hasActiveFilters ? 'var(--border-focus)' : 'var(--border-primary)',
               color: hasActiveFilters ? 'var(--border-focus)' : 'var(--text-secondary)',
-              backgroundColor: 'var(--bg-input)',
+              backgroundColor: hasActiveFilters ? 'rgba(59, 130, 246, 0.06)' : 'var(--bg-input)',
             }}
           >
             <Filter className="h-3.5 w-3.5" />
             {t('transactions.filter')}
             {hasActiveFilters && (
               <span
-                className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
                 style={{ backgroundColor: 'var(--border-focus)' }}
               >
-                !
+                {activeFilterCount}
               </span>
             )}
           </button>
@@ -501,14 +562,14 @@ export default function TransactionsPage() {
         {/* ---- Expanded filter panel ---- */}
         {showFilters && (
           <div
-            className="mt-4 grid grid-cols-1 gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4"
+            className="filter-reveal mt-5 grid grid-cols-1 gap-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-4"
             style={{ borderColor: 'var(--border-primary)' }}
           >
             {/* Category */}
             <div>
               <label
-                className="mb-1 block text-xs font-medium"
-                style={{ color: 'var(--text-secondary)' }}
+                className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--text-tertiary)' }}
               >
                 {t('transactions.category')}
               </label>
@@ -518,7 +579,7 @@ export default function TransactionsPage() {
                   setFilters((prev) => ({ ...prev, category_id: e.target.value }))
                   setPage(1)
                 }}
-                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
                 style={{
                   backgroundColor: 'var(--bg-input)',
                   borderColor: 'var(--border-primary)',
@@ -537,8 +598,8 @@ export default function TransactionsPage() {
             {/* Date from */}
             <div>
               <label
-                className="mb-1 block text-xs font-medium"
-                style={{ color: 'var(--text-secondary)' }}
+                className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--text-tertiary)' }}
               >
                 {t('transactions.from')}
               </label>
@@ -549,7 +610,7 @@ export default function TransactionsPage() {
                   setFilters((prev) => ({ ...prev, start_date: e.target.value }))
                   setPage(1)
                 }}
-                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
                 style={{
                   backgroundColor: 'var(--bg-input)',
                   borderColor: 'var(--border-primary)',
@@ -561,8 +622,8 @@ export default function TransactionsPage() {
             {/* Date to */}
             <div>
               <label
-                className="mb-1 block text-xs font-medium"
-                style={{ color: 'var(--text-secondary)' }}
+                className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--text-tertiary)' }}
               >
                 {t('transactions.to')}
               </label>
@@ -573,7 +634,7 @@ export default function TransactionsPage() {
                   setFilters((prev) => ({ ...prev, end_date: e.target.value }))
                   setPage(1)
                 }}
-                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
                 style={{
                   backgroundColor: 'var(--bg-input)',
                   borderColor: 'var(--border-primary)',
@@ -586,8 +647,8 @@ export default function TransactionsPage() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label
-                  className="mb-1 block text-xs font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
+                  className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: 'var(--text-tertiary)' }}
                 >
                   {t('transactions.minAmount')}
                 </label>
@@ -600,7 +661,7 @@ export default function TransactionsPage() {
                     setFilters((prev) => ({ ...prev, min_amount: e.target.value }))
                     setPage(1)
                   }}
-                  className="w-full rounded-lg border px-3 py-2 text-sm outline-none ltr-nums"
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none ltr-nums transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
                   style={{
                     backgroundColor: 'var(--bg-input)',
                     borderColor: 'var(--border-primary)',
@@ -610,8 +671,8 @@ export default function TransactionsPage() {
               </div>
               <div>
                 <label
-                  className="mb-1 block text-xs font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
+                  className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: 'var(--text-tertiary)' }}
                 >
                   {t('transactions.maxAmount')}
                 </label>
@@ -624,7 +685,7 @@ export default function TransactionsPage() {
                     setFilters((prev) => ({ ...prev, max_amount: e.target.value }))
                     setPage(1)
                   }}
-                  className="w-full rounded-lg border px-3 py-2 text-sm outline-none ltr-nums"
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none ltr-nums transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
                   style={{
                     backgroundColor: 'var(--bg-input)',
                     borderColor: 'var(--border-primary)',
@@ -639,8 +700,8 @@ export default function TransactionsPage() {
               <div className="flex items-end sm:col-span-2 lg:col-span-4">
                 <button
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium transition-colors hover:opacity-80"
-                  style={{ color: 'var(--border-focus)' }}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                  style={{ color: 'var(--border-focus)', backgroundColor: 'rgba(59, 130, 246, 0.06)' }}
                 >
                   <X className="h-3 w-3" />
                   {t('transactions.clearFilters')}
@@ -652,47 +713,48 @@ export default function TransactionsPage() {
       </div>
 
       {/* ---- Table card ---- */}
-      <div
-        className="overflow-hidden rounded-xl border"
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          borderColor: 'var(--border-primary)',
-          boxShadow: 'var(--shadow-sm)',
-        }}
-      >
+      <div className="animate-fade-in-up stagger-3 card overflow-hidden">
         {txLoading ? (
           <TableSkeleton />
         ) : txError ? (
-          <div className="flex items-center justify-center p-12">
+          <div className="flex flex-col items-center justify-center px-6 py-16">
+            <div
+              className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+              style={{ backgroundColor: 'var(--bg-danger)' }}
+            >
+              <AlertTriangle className="h-6 w-6" style={{ color: 'var(--color-expense)' }} />
+            </div>
             <p className="text-sm font-medium" style={{ color: 'var(--color-expense)' }}>
               {t('common.error')}
             </p>
           </div>
         ) : transactions.length === 0 ? (
           /* ---- Empty state ---- */
-          <div className="flex flex-col items-center justify-center px-6 py-16">
+          <div className="flex flex-col items-center justify-center px-6 py-20">
             <div
-              className="mb-4 flex h-16 w-16 items-center justify-center rounded-full"
-              style={{ backgroundColor: 'var(--bg-tertiary)' }}
+              className="empty-float mb-6 flex h-20 w-20 items-center justify-center rounded-3xl"
+              style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.1)',
+              }}
             >
-              <TrendingUp className="h-7 w-7" style={{ color: 'var(--text-tertiary)' }} />
+              <Receipt className="h-9 w-9" style={{ color: 'var(--border-focus)' }} />
             </div>
             <h3
-              className="mb-1 text-base font-semibold"
+              className="mb-2 text-lg font-semibold"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('transactions.noTransactions')}
             </h3>
             <p
-              className="mb-6 max-w-xs text-center text-sm"
+              className="mb-8 max-w-sm text-center text-sm leading-relaxed"
               style={{ color: 'var(--text-tertiary)' }}
             >
               {t('transactions.noTransactionsDesc')}
             </p>
             <button
               onClick={openCreateModal}
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
-              style={{ backgroundColor: 'var(--border-focus)' }}
+              className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
             >
               <Plus className="h-4 w-4" />
               {t('transactions.add')}
@@ -701,32 +763,53 @@ export default function TransactionsPage() {
         ) : (
           /* ---- Data table ---- */
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="tx-table w-full text-sm">
               <thead>
                 <tr
-                  className="border-b"
-                  style={{ borderColor: 'var(--border-primary)' }}
+                  className="border-b-2"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    backgroundColor: 'var(--bg-secondary)',
+                  }}
                 >
                   <SortHeader field="date" label={t('transactions.date')} />
-                  <SortHeader field="description" label={t('transactions.description')} />
                   <th
-                    className="px-4 py-3 text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: 'var(--text-secondary)' }}
+                    scope="col"
+                    className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.description')}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
+                    style={{ color: 'var(--text-tertiary)' }}
                   >
                     {t('transactions.category')}
                   </th>
-                  <SortHeader field="amount" label={t('transactions.amount')} />
-                  <SortHeader field="type" label={t('transactions.type')} />
+                  <SortHeader
+                    field="amount"
+                    label={t('transactions.amount')}
+                    className="text-end"
+                  />
                   <th
-                    className="px-4 py-3 text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: 'var(--text-secondary)' }}
+                    scope="col"
+                    className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.type')}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-5 py-4 text-center text-[11px] font-semibold uppercase tracking-widest"
+                    style={{ color: 'var(--text-tertiary)' }}
                   >
                     {t('transactions.actions')}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx) => {
+                {transactions.map((tx, index) => {
                   const cat = tx.category_id ? categoryMap.get(tx.category_id) : undefined
                   const catLabel = cat
                     ? (isRtl ? cat.name_he : cat.name)
@@ -736,100 +819,92 @@ export default function TransactionsPage() {
                   return (
                     <tr
                       key={tx.id}
-                      className="border-b transition-colors"
+                      className={cn(
+                        'row-animate border-b transition-colors',
+                        isIncome ? 'row-income' : 'row-expense',
+                      )}
                       style={{
                         borderColor: 'var(--border-primary)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = ''
+                        animationDelay: `${index * 30}ms`,
                       }}
                     >
                       {/* Date */}
                       <td
-                        className="whitespace-nowrap px-4 py-3 ltr-nums"
+                        className="whitespace-nowrap px-5 py-4 ltr-nums text-[13px]"
                         style={{ color: 'var(--text-secondary)' }}
                       >
-                        {formatDate(tx.date, isRtl ? 'he-IL' : 'en-US')}
+                        <span className="inline-flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 opacity-40" />
+                          {formatDate(tx.date, isRtl ? 'he-IL' : 'en-US')}
+                        </span>
                       </td>
 
                       {/* Description */}
-                      <td className="max-w-[200px] truncate px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
+                      <td
+                        className="max-w-[240px] overflow-hidden truncate px-5 py-4 text-[13px] font-medium"
+                        style={{ color: 'var(--text-primary)' }}
+                        title={tx.description || undefined}
+                      >
                         {tx.description || '\u2014'}
                       </td>
 
                       {/* Category */}
-                      <td className="px-4 py-3">
-                        <CategoryBadge category={cat} label={catLabel} />
+                      <td className="px-5 py-4">
+                        <CategoryBadgeWrapper category={cat} label={catLabel} />
                       </td>
 
                       {/* Amount */}
                       <td
-                        className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums ltr-nums"
+                        className="whitespace-nowrap px-5 py-4 text-end text-[14px] font-bold tabular-nums ltr-nums"
                         style={{ color: isIncome ? 'var(--color-income)' : 'var(--color-expense)' }}
                       >
-                        {isIncome ? '+' : '-'}{formatCurrency(tx.amount, tx.currency)}
+                        {isIncome ? '+' : '\u2212'}{formatCurrency(tx.amount, tx.currency)}
                       </td>
 
                       {/* Type */}
-                      <td className="px-4 py-3">
+                      <td className="px-5 py-4">
                         <span
-                          className="inline-flex items-center gap-1 text-xs font-medium"
-                          style={{ color: isIncome ? 'var(--color-income)' : 'var(--color-expense)' }}
+                          className={cn(
+                            'type-pill',
+                            isIncome ? 'type-pill-income' : 'type-pill-expense',
+                          )}
                         >
                           {isIncome ? (
-                            <TrendingUp className="h-3.5 w-3.5" />
+                            <TrendingUp className="h-3 w-3" />
                           ) : (
-                            <TrendingDown className="h-3.5 w-3.5" />
+                            <TrendingDown className="h-3 w-3" />
                           )}
                           {isIncome ? t('transactions.income') : t('transactions.expense')}
                         </span>
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => openEditModal(tx)}
-                            className="rounded-md p-1.5 transition-colors hover:opacity-80"
-                            style={{ color: 'var(--text-secondary)' }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = ''
-                            }}
-                            title={t('transactions.edit')}
+                            className="action-btn action-btn-edit rounded-lg p-2 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                            style={{ color: 'var(--text-tertiary)' }}
+                            data-tooltip={t('transactions.edit')}
+                            aria-label={t('transactions.edit')}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => duplicateMutation.mutate(tx.id)}
-                            className="rounded-md p-1.5 transition-colors hover:opacity-80"
-                            style={{ color: 'var(--text-secondary)' }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = ''
-                            }}
-                            title={t('transactions.duplicate')}
+                            className="action-btn action-btn-duplicate rounded-lg p-2 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                            style={{ color: 'var(--text-tertiary)' }}
+                            data-tooltip={t('transactions.duplicate')}
+                            aria-label={t('transactions.duplicate')}
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => setDeleteTarget(tx)}
-                            className="rounded-md p-1.5 transition-colors hover:opacity-80"
-                            style={{ color: 'var(--color-expense)' }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = ''
-                            }}
-                            title={t('transactions.delete')}
+                            className="action-btn action-btn-delete rounded-lg p-2 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                            style={{ color: 'var(--text-tertiary)' }}
+                            data-tooltip={t('transactions.delete')}
+                            aria-label={t('transactions.delete')}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -846,25 +921,19 @@ export default function TransactionsPage() {
         {/* ---- Pagination ---- */}
         {!txLoading && transactions.length > 0 && totalPages > 1 && (
           <div
-            className="flex items-center justify-between border-t px-4 py-3"
+            className="flex items-center justify-between border-t px-5 py-4"
             style={{ borderColor: 'var(--border-primary)' }}
           >
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="text-xs font-medium ltr-nums" style={{ color: 'var(--text-tertiary)' }}>
               {t('common.page')} {page} {t('common.of')} {totalPages}
             </p>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="rounded-md p-1.5 transition-colors disabled:opacity-30"
+                className="rounded-lg p-2 transition-all disabled:opacity-30 hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                 style={{ color: 'var(--text-secondary)' }}
-                onMouseEnter={(e) => {
-                  if (!e.currentTarget.disabled)
-                    e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ''
-                }}
+                aria-label={t('common.previousPage')}
               >
                 {isRtl ? (
                   <ChevronRight className="h-4 w-4" />
@@ -885,25 +954,23 @@ export default function TransactionsPage() {
                 } else {
                   pageNum = page - 2 + i
                 }
+                const isCurrentPage = page === pageNum
                 return (
                   <button
                     key={pageNum}
                     onClick={() => setPage(pageNum)}
                     className={cn(
-                      'flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium transition-colors',
+                      'flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-all',
+                      'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
+                      !isCurrentPage && 'hover:bg-[var(--bg-hover)]',
+                      isCurrentPage && 'page-btn-active',
                     )}
                     style={{
-                      backgroundColor:
-                        page === pageNum ? 'var(--border-focus)' : 'transparent',
-                      color: page === pageNum ? '#fff' : 'var(--text-secondary)',
+                      backgroundColor: isCurrentPage ? 'var(--border-focus)' : 'transparent',
+                      color: isCurrentPage ? '#fff' : 'var(--text-secondary)',
                     }}
-                    onMouseEnter={(e) => {
-                      if (page !== pageNum)
-                        e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                    }}
-                    onMouseLeave={(e) => {
-                      if (page !== pageNum) e.currentTarget.style.backgroundColor = ''
-                    }}
+                    aria-label={t('common.goToPage', { page: pageNum })}
+                    aria-current={isCurrentPage ? 'page' : undefined}
                   >
                     {pageNum}
                   </button>
@@ -913,15 +980,9 @@ export default function TransactionsPage() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="rounded-md p-1.5 transition-colors disabled:opacity-30"
+                className="rounded-lg p-2 transition-all disabled:opacity-30 hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                 style={{ color: 'var(--text-secondary)' }}
-                onMouseEnter={(e) => {
-                  if (!e.currentTarget.disabled)
-                    e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ''
-                }}
+                aria-label={t('common.nextPage')}
               >
                 {isRtl ? (
                   <ChevronLeft className="h-4 w-4" />
@@ -940,272 +1001,292 @@ export default function TransactionsPage() {
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tx-modal-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeModal()
           }}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
           {/* Panel */}
           <div
-            className="relative z-10 w-full max-w-lg rounded-xl border p-6"
+            ref={modalPanelRef}
+            className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-lg)',
+              boxShadow: 'var(--shadow-xl)',
             }}
           >
-            {/* Header */}
-            <div className="mb-6 flex items-center justify-between">
-              <h2
-                className="text-lg font-semibold"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {editingTransaction
-                  ? t('transactions.editTransaction')
-                  : t('transactions.add')}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="rounded-md p-1.5 transition-colors"
-                style={{ color: 'var(--text-tertiary)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ''
-                }}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+            {/* Colored accent bar */}
+            <div
+              className="h-1"
+              style={{
+                background: formData.type === 'income'
+                  ? 'linear-gradient(90deg, #34D399, #10B981)'
+                  : 'linear-gradient(90deg, #F87171, #EF4444)',
+              }}
+            />
 
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              {/* Type toggle */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
+            <div className="p-6">
+              {/* Header */}
+              <div className="mb-6 flex items-center justify-between">
+                <h2
+                  id="tx-modal-title"
+                  className="text-lg font-bold"
+                  style={{ color: 'var(--text-primary)' }}
                 >
-                  {t('transactions.type')}
-                </label>
-                <div
-                  className="flex rounded-lg border"
-                  style={{ borderColor: 'var(--border-primary)' }}
-                >
-                  {(['income', 'expense'] as const).map((typeVal) => {
-                    const active = formData.type === typeVal
-                    const colorVar =
-                      typeVal === 'income' ? 'var(--color-income)' : 'var(--color-expense)'
-                    return (
-                      <button
-                        key={typeVal}
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            type: typeVal,
-                            category_id: '',
-                          }))
-                        }
-                        className="flex flex-1 items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors first:rounded-s-lg last:rounded-e-lg"
-                        style={{
-                          backgroundColor: active ? colorVar : 'var(--bg-input)',
-                          color: active ? '#fff' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {typeVal === 'income' ? (
-                          <TrendingUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <TrendingDown className="h-3.5 w-3.5" />
-                        )}
-                        {typeVal === 'income'
-                          ? t('transactions.income')
-                          : t('transactions.expense')}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Amount + Date row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {t('transactions.amount')} *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, amount: e.target.value }))
-                    }
-                    className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none ltr-nums',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                      formErrors.amount && 'border-red-400',
-                    )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.amount
-                        ? undefined
-                        : 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                    placeholder="0.00"
-                  />
-                  {formErrors.amount && (
-                    <p className="mt-1 text-xs" style={{ color: 'var(--color-expense)' }}>
-                      {formErrors.amount}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {t('transactions.date')} *
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, date: e.target.value }))
-                    }
-                    className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                      formErrors.date && 'border-red-400',
-                    )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.date
-                        ? undefined
-                        : 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('transactions.description')}
-                </label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, description: e.target.value }))
-                  }
-                  className={cn(
-                    'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  placeholder={t('transactions.description')}
-                />
-              </div>
-
-              {/* Category */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('transactions.category')}
-                </label>
-                <select
-                  value={formData.category_id}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, category_id: e.target.value }))
-                  }
-                  className={cn(
-                    'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  <option value="">{t('transactions.selectCategory')}</option>
-                  {formCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {isRtl ? cat.name_he : cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('transactions.notes')}
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, notes: e.target.value }))
-                  }
-                  rows={3}
-                  className={cn(
-                    'w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  placeholder={t('transactions.notes')}
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-2">
+                  {editingTransaction
+                    ? t('transactions.editTransaction')
+                    : t('transactions.add')}
+                </h2>
                 <button
-                  type="button"
                   onClick={closeModal}
-                  className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-secondary)',
-                    backgroundColor: 'var(--bg-input)',
-                  }}
+                  className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  aria-label={t('common.cancel')}
                 >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isMutating}
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                  style={{ backgroundColor: 'var(--border-focus)' }}
-                >
-                  {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {t('common.save')}
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleFormSubmit} className="space-y-5">
+                {/* Type toggle */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.type')}
+                  </label>
+                  <div
+                    className="flex overflow-hidden rounded-xl border"
+                    style={{ borderColor: 'var(--border-primary)' }}
+                  >
+                    {(['income', 'expense'] as const).map((typeVal) => {
+                      const active = formData.type === typeVal
+                      const colorVar =
+                        typeVal === 'income' ? 'var(--color-income)' : 'var(--color-expense)'
+                      return (
+                        <button
+                          key={typeVal}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              type: typeVal,
+                              category_id: '',
+                            }))
+                          }
+                          className="flex flex-1 items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-all"
+                          style={{
+                            backgroundColor: active ? colorVar : 'var(--bg-input)',
+                            color: active ? '#fff' : 'var(--text-secondary)',
+                          }}
+                        >
+                          {typeVal === 'income' ? (
+                            <TrendingUp className="h-4 w-4" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4" />
+                          )}
+                          {typeVal === 'income'
+                            ? t('transactions.income')
+                            : t('transactions.expense')}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Amount + Date row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('transactions.amount')} *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.amount}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, amount: e.target.value }))
+                      }
+                      className={cn(
+                        'amount-input w-full rounded-xl border px-4 py-3 outline-none ltr-nums transition-all',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                        formErrors.amount && 'border-red-400',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: formErrors.amount
+                          ? undefined
+                          : 'var(--border-primary)',
+                        color: formData.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
+                      }}
+                      placeholder="0.00"
+                      aria-describedby={formErrors.amount ? 'tx-amount-error' : undefined}
+                      aria-invalid={!!formErrors.amount}
+                    />
+                    {formErrors.amount && (
+                      <p id="tx-amount-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
+                        {formErrors.amount}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('transactions.date')} *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, date: e.target.value }))
+                      }
+                      className={cn(
+                        'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                        formErrors.date && 'border-red-400',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: formErrors.date
+                          ? undefined
+                          : 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                      aria-describedby={formErrors.date ? 'tx-date-error' : undefined}
+                      aria-invalid={!!formErrors.date}
+                    />
+                    {formErrors.date && (
+                      <p id="tx-date-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
+                        {formErrors.date}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.description')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder={t('transactions.description')}
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.category')}
+                  </label>
+                  <select
+                    value={formData.category_id}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, category_id: e.target.value }))
+                    }
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <option value="">{t('transactions.selectCategory')}</option>
+                    {formCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.icon} {isRtl ? cat.name_he : cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.notes')}
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                    }
+                    rows={3}
+                    className={cn(
+                      'w-full resize-none rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder={t('transactions.notes')}
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                    style={{
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'var(--bg-input)',
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isMutating}
+                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t('common.save')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -1216,64 +1297,100 @@ export default function TransactionsPage() {
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tx-delete-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) setDeleteTarget(null)
           }}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
           {/* Panel */}
           <div
-            className="relative z-10 w-full max-w-sm rounded-xl border p-6"
+            ref={deletePanelRef}
+            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-lg)',
+              boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div className="mb-4 flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full"
-                style={{ backgroundColor: '#EF444420' }}
-              >
-                <Trash2 className="h-5 w-5" style={{ color: 'var(--color-expense)' }} />
-              </div>
-              <h3
-                className="text-base font-semibold"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {t('transactions.deleteConfirmTitle')}
-              </h3>
-            </div>
+            {/* Red accent bar */}
+            <div
+              className="h-1"
+              style={{ background: 'linear-gradient(90deg, #F87171, #EF4444, #DC2626)' }}
+            />
 
-            <p className="mb-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {t('transactions.deleteConfirmMessage')}
-            </p>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
-                style={{
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-secondary)',
-                  backgroundColor: 'var(--bg-input)',
-                }}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => deleteMutation.mutate(deleteTarget.id)}
-                disabled={deleteMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                style={{ backgroundColor: 'var(--color-expense)' }}
-              >
-                {deleteMutation.isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+            <div className="p-6">
+              <div className="mb-5 flex flex-col items-center text-center">
+                <div
+                  className="warning-pulse mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+                  style={{ backgroundColor: 'var(--bg-danger)' }}
+                >
+                  <Trash2 className="h-6 w-6" style={{ color: 'var(--color-expense)' }} />
+                </div>
+                <h3
+                  id="tx-delete-title"
+                  className="mb-2 text-lg font-bold"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {t('transactions.deleteConfirmTitle')}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {t('transactions.deleteConfirmMessage')}
+                </p>
+                {deleteTarget.description && (
+                  <p
+                    className="mt-2 rounded-lg px-3 py-1.5 text-sm font-medium"
+                    style={{
+                      backgroundColor: 'var(--bg-tertiary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    &ldquo;{deleteTarget.description}&rdquo;
+                  </p>
                 )}
-                {t('common.delete')}
-              </button>
+                {deleteTarget.amount && (
+                  <p
+                    className="mt-2 text-base font-bold tabular-nums ltr-nums"
+                    style={{
+                      color: deleteTarget.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
+                    }}
+                  >
+                    {formatCurrency(deleteTarget.amount, deleteTarget.currency)}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-secondary)',
+                    backgroundColor: 'var(--bg-input)',
+                  }}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                  disabled={deleteMutation.isPending}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
+                  style={{
+                    background: 'linear-gradient(135deg, #F87171, #EF4444)',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                  }}
+                >
+                  {deleteMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  {t('common.delete')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -7,7 +7,7 @@ from typing import List
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,8 +20,8 @@ from app.api.v1.schemas.loan import (
     LoanResponse,
     LoanUpdate,
 )
-from app.core.exceptions import NotFoundException
-from app.db.models import Loan, User
+from app.core.exceptions import CashFlowException, NotFoundException
+from app.db.models import Category, Loan, User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
@@ -94,6 +94,11 @@ async def create_loan(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if data.category_id:
+        cat = await db.get(Category, data.category_id)
+        if not cat or cat.user_id != current_user.id:
+            raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+
     loan = Loan(
         user_id=current_user.id,
         remaining_balance=data.original_amount,
@@ -148,6 +153,26 @@ async def update_loan(
         raise NotFoundException("Loan not found")
 
     update_data = data.model_dump(exclude_unset=True)
+
+    if "category_id" in update_data and update_data["category_id"]:
+        cat = await db.get(Category, update_data["category_id"])
+        if not cat or cat.user_id != current_user.id:
+            raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+
+    # Business logic: prevent invalid status transitions
+    if "status" in update_data:
+        new_status = update_data["status"]
+        if new_status == "completed" and loan.payments_made < loan.total_payments:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot mark loan as completed: not all payments have been made"
+            )
+        if loan.status == "completed" and new_status == "active":
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot reactivate a completed loan"
+            )
+
     for key, value in update_data.items():
         setattr(loan, key, value)
     await db.commit()
@@ -186,11 +211,23 @@ async def record_payment(
         select(Loan).where(
             Loan.id == loan_id,
             Loan.user_id == current_user.id,
-        )
+        ).with_for_update()
     )
     loan = result.scalar_one_or_none()
     if not loan:
         raise NotFoundException("Loan not found")
+
+    if loan.status == "completed":
+        raise CashFlowException("Loan is already completed, cannot record payment")
+    if loan.payments_made >= loan.total_payments:
+        raise CashFlowException("All payments have already been made")
+
+    # Validate payment amount does not exceed remaining balance
+    if data.amount > loan.remaining_balance:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Payment amount ({data.amount}) exceeds remaining balance ({loan.remaining_balance})"
+        )
 
     loan.payments_made += 1
     loan.remaining_balance = max(

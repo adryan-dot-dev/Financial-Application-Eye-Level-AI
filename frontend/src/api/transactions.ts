@@ -30,8 +30,17 @@ export type UpdateTransactionData = Partial<CreateTransactionData>
 
 export const transactionsApi = {
   list: async (params?: TransactionListParams): Promise<TransactionListResponse> => {
-    const response = await apiClient.get<TransactionListResponse>('/transactions', { params })
-    return response.data
+    const response = await apiClient.get('/transactions', { params })
+    const data = response.data
+    // Defensive: ensure items is always an array even if response shape changes
+    if (data && Array.isArray(data.items)) {
+      return data as TransactionListResponse
+    }
+    // Fallback: if somehow a plain array is returned, wrap it
+    if (Array.isArray(data)) {
+      return { items: data as Transaction[], total: data.length, page: 1, page_size: data.length, pages: 1 }
+    }
+    return { items: [], total: 0, page: 1, page_size: 20, pages: 0 }
   },
 
   get: async (id: string): Promise<Transaction> => {

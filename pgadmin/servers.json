@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "CashFlow DB",
+      "Group": "Production",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "cashflow",
+      "Username": "cashflow",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}

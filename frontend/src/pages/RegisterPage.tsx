@@ -1,8 +1,21 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Sun, Moon, Monitor, Globe, Loader2, User, Mail, Lock } from 'lucide-react'
+import {
+  Eye,
+  EyeOff,
+  Sun,
+  Moon,
+  Monitor,
+  Globe,
+  Loader2,
+  User,
+  Mail,
+  Lock,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { cn } from '@/lib/utils'
@@ -14,6 +27,26 @@ interface FieldErrors {
   confirmPassword?: string
 }
 
+function getPasswordStrength(password: string): {
+  score: number
+  labelKey: string
+  color: string
+  bgColor: string
+} {
+  let score = 0
+  if (password.length >= 4) score++
+  if (password.length >= 8) score++
+  if (/[A-Z]/.test(password)) score++
+  if (/[0-9]/.test(password)) score++
+  if (/[^A-Za-z0-9]/.test(password)) score++
+
+  if (score <= 1) return { score, labelKey: 'validation.strengthWeak', color: 'text-red-500', bgColor: 'bg-red-500' }
+  if (score <= 2) return { score, labelKey: 'validation.strengthFair', color: 'text-orange-500', bgColor: 'bg-orange-500' }
+  if (score <= 3) return { score, labelKey: 'validation.strengthGood', color: 'text-yellow-500', bgColor: 'bg-yellow-500' }
+  if (score <= 4) return { score, labelKey: 'validation.strengthStrong', color: 'text-emerald-500', bgColor: 'bg-emerald-500' }
+  return { score, labelKey: 'validation.strengthExcellent', color: 'text-cyan-500', bgColor: 'bg-cyan-500' }
+}
+
 export default function RegisterPage() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -21,6 +54,10 @@ export default function RegisterPage() {
   const { theme, setTheme } = useTheme()
 
   const isRtl = i18n.language === 'he'
+
+  useEffect(() => {
+    document.title = t('pageTitle.register')
+  }, [t])
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -36,6 +73,7 @@ export default function RegisterPage() {
     const newLang = i18n.language === 'he' ? 'en' : 'he'
     i18n.changeLanguage(newLang)
     document.documentElement.dir = newLang === 'he' ? 'rtl' : 'ltr'
+    document.documentElement.lang = newLang
   }
 
   const cycleTheme = () => {
@@ -57,32 +95,29 @@ export default function RegisterPage() {
       ? t('settings.dark')
       : t('settings.system')
 
+  const passwordStrength = useMemo(() => getPasswordStrength(password), [password])
+
+  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
+  const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword
+
   const validate = (): boolean => {
     const errors: FieldErrors = {}
 
     if (username.trim().length < 4) {
-      errors.username = isRtl
-        ? 'שם משתמש חייב להיות לפחות 4 תווים'
-        : 'Username must be at least 4 characters'
+      errors.username = t('validation.usernameMinLength')
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      errors.email = isRtl
-        ? 'כתובת אימייל לא תקינה'
-        : 'Invalid email address'
+      errors.email = t('validation.invalidEmail')
     }
 
     if (password.length < 4) {
-      errors.password = isRtl
-        ? 'סיסמה חייבת להיות לפחות 4 תווים'
-        : 'Password must be at least 4 characters'
+      errors.password = t('validation.passwordMinLength')
     }
 
     if (password !== confirmPassword) {
-      errors.confirmPassword = isRtl
-        ? 'הסיסמאות אינן תואמות'
-        : 'Passwords do not match'
+      errors.confirmPassword = t('validation.passwordsMismatch')
     }
 
     setFieldErrors(errors)
@@ -112,20 +147,21 @@ export default function RegisterPage() {
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="flex min-h-screen"
+      className="page-reveal flex min-h-screen"
       style={{ backgroundColor: 'var(--bg-primary)' }}
     >
       {/* Top controls */}
       <div className={cn(
-        'fixed top-4 z-10 flex items-center gap-2',
-        isRtl ? 'left-4' : 'right-4'
+        'fixed top-5 z-50 flex items-center gap-2',
+        'end-5'
       )}>
         <button
           onClick={toggleLanguage}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:opacity-80"
+          className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium tracking-wide backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
           style={{
-            backgroundColor: 'var(--bg-tertiary)',
             color: 'var(--text-secondary)',
+            backgroundColor: 'var(--bg-secondary)',
+            borderColor: 'var(--border-primary)',
           }}
           title={t('settings.language')}
         >
@@ -134,10 +170,11 @@ export default function RegisterPage() {
         </button>
         <button
           onClick={cycleTheme}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:opacity-80"
+          className="flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
           style={{
-            backgroundColor: 'var(--bg-tertiary)',
             color: 'var(--text-secondary)',
+            backgroundColor: 'var(--bg-secondary)',
+            borderColor: 'var(--border-primary)',
           }}
           title={themeLabel}
         >
@@ -145,55 +182,62 @@ export default function RegisterPage() {
         </button>
       </div>
 
-      {/* Brand / decorative side */}
+      {/* Left side - Brand panel */}
       <div className={cn(
-        'brand-gradient relative hidden w-1/2 items-center justify-center lg:flex',
+        'relative hidden w-1/2 items-center justify-center overflow-hidden lg:flex',
         isRtl ? 'order-2' : 'order-1'
       )}>
-        {/* Decorative overlay blobs */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -left-20 -top-20 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-20 -right-20 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute left-1/3 top-1/2 h-52 w-52 -translate-y-1/2 rounded-full bg-white/5 blur-2xl" />
-        </div>
+        {/* Solid brand background */}
+        <div className="auth-brand-bg absolute inset-0" />
 
-        <div className="relative z-10 flex flex-col items-center px-10 text-center text-white">
-          <div className="mb-8 overflow-hidden rounded-2xl shadow-2xl ring-4 ring-white/20">
+        <div className="relative z-10 flex flex-col items-center px-12 text-center">
+          {/* Logo */}
+          <div className="mb-8 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/20">
             <img
               src="/logo.jpeg"
               alt={t('app.company')}
-              className="h-32 w-32 object-cover"
+              className="h-24 w-24 object-cover"
             />
           </div>
-          <h1 className="mb-3 text-4xl font-bold tracking-tight">
+
+          {/* Title */}
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-white">
             {t('app.name')}
           </h1>
-          <p className="text-lg font-medium opacity-90">
+          <p className="text-base font-medium text-white/80">
             {t('app.company')}
           </p>
-          <div className="mt-8 h-px w-24 bg-white/30" />
-          <p className="mt-6 max-w-xs text-sm leading-relaxed opacity-75">
+
+          {/* Divider */}
+          <div className="my-7 h-px w-20 bg-white/25" />
+
+          {/* Subtitle */}
+          <p className="max-w-[280px] text-sm leading-relaxed text-white/65">
             {t('auth.registerSubtitle')}
           </p>
         </div>
       </div>
 
-      {/* Form side */}
+      {/* Right side - Registration form */}
       <div className={cn(
-        'flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2',
+        'relative flex w-full flex-col items-center justify-center px-6 py-10 lg:w-1/2',
         isRtl ? 'order-1' : 'order-2'
-      )}>
-        <div className="w-full max-w-md">
+      )}
+        style={{ backgroundColor: 'var(--bg-primary)' }}
+      >
+        <div className="auth-stagger w-full max-w-md">
           {/* Mobile logo */}
           <div className="mb-8 flex flex-col items-center lg:hidden">
-            <div className="mb-4 overflow-hidden rounded-xl shadow-lg">
+            <div className="mb-4 overflow-hidden rounded-xl shadow-md"
+              style={{ border: '1px solid var(--border-primary)' }}
+            >
               <img
                 src="/logo.jpeg"
                 alt={t('app.company')}
                 className="h-20 w-20 object-cover"
               />
             </div>
-            <h2 className="brand-gradient-text text-xl font-bold">
+            <h2 className="auth-gradient-text text-xl font-bold">
               {t('app.name')}
             </h2>
           </div>
@@ -201,13 +245,13 @@ export default function RegisterPage() {
           {/* Heading */}
           <div className="mb-8">
             <h2
-              className="text-2xl font-bold tracking-tight"
+              className="text-3xl font-bold tracking-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('auth.createAccount')}
             </h2>
             <p
-              className="mt-2 text-sm"
+              className="mt-2 text-sm leading-relaxed"
               style={{ color: 'var(--text-secondary)' }}
             >
               {t('auth.registerSubtitle')}
@@ -217,20 +261,26 @@ export default function RegisterPage() {
           {/* Error message */}
           {error && (
             <div
-              className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+              className="auth-error-animate mb-6 flex items-center gap-2.5 rounded-xl border px-4 py-3.5 text-sm"
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.06)',
+                borderColor: 'rgba(239, 68, 68, 0.15)',
+                color: '#EF4444',
+              }}
               role="alert"
             >
-              {error}
+              <XCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Username */}
+            {/* Username field */}
             <div>
               <label
                 htmlFor="register-username"
-                className="mb-1.5 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.username')}
@@ -239,7 +289,7 @@ export default function RegisterPage() {
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
-                    isRtl ? 'right-3' : 'left-3'
+                    'start-4'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
@@ -258,10 +308,10 @@ export default function RegisterPage() {
                   required
                   autoComplete="username"
                   className={cn(
-                    'w-full rounded-lg border py-2.5 text-sm outline-none transition-colors',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
+                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
                     fieldErrors.username ? 'border-red-400' : '',
-                    isRtl ? 'pr-10 pl-3' : 'pl-10 pr-3'
+                    'ps-11 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -272,15 +322,18 @@ export default function RegisterPage() {
                 />
               </div>
               {fieldErrors.username && (
-                <p className="mt-1.5 text-xs text-red-500">{fieldErrors.username}</p>
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                  <XCircle className="h-3 w-3" />
+                  {fieldErrors.username}
+                </p>
               )}
             </div>
 
-            {/* Email */}
+            {/* Email field */}
             <div>
               <label
                 htmlFor="register-email"
-                className="mb-1.5 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.email')}
@@ -289,7 +342,7 @@ export default function RegisterPage() {
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
-                    isRtl ? 'right-3' : 'left-3'
+                    'start-4'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
@@ -308,10 +361,10 @@ export default function RegisterPage() {
                   required
                   autoComplete="email"
                   className={cn(
-                    'w-full rounded-lg border py-2.5 text-sm outline-none transition-colors',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
+                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
                     fieldErrors.email ? 'border-red-400' : '',
-                    isRtl ? 'pr-10 pl-3' : 'pl-10 pr-3'
+                    'ps-11 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -322,15 +375,18 @@ export default function RegisterPage() {
                 />
               </div>
               {fieldErrors.email && (
-                <p className="mt-1.5 text-xs text-red-500">{fieldErrors.email}</p>
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                  <XCircle className="h-3 w-3" />
+                  {fieldErrors.email}
+                </p>
               )}
             </div>
 
-            {/* Password */}
+            {/* Password field */}
             <div>
               <label
                 htmlFor="register-password"
-                className="mb-1.5 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.password')}
@@ -339,7 +395,7 @@ export default function RegisterPage() {
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
-                    isRtl ? 'right-3' : 'left-3'
+                    'start-4'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
@@ -358,10 +414,10 @@ export default function RegisterPage() {
                   required
                   autoComplete="new-password"
                   className={cn(
-                    'w-full rounded-lg border py-2.5 text-sm outline-none transition-colors',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
+                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
                     fieldErrors.password ? 'border-red-400' : '',
-                    isRtl ? 'pr-10 pl-10' : 'pl-10 pr-10'
+                    'ps-11 pe-11'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -374,12 +430,12 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className={cn(
-                    'absolute top-1/2 -translate-y-1/2 transition-colors hover:opacity-70',
-                    isRtl ? 'left-3' : 'right-3'
+                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1 transition-all hover:opacity-70',
+                    'end-3'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                   tabIndex={-1}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword
                     ? <EyeOff className="h-[18px] w-[18px]" />
@@ -388,15 +444,48 @@ export default function RegisterPage() {
                 </button>
               </div>
               {fieldErrors.password && (
-                <p className="mt-1.5 text-xs text-red-500">{fieldErrors.password}</p>
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                  <XCircle className="h-3 w-3" />
+                  {fieldErrors.password}
+                </p>
+              )}
+
+              {/* Password strength indicator */}
+              {password.length > 0 && (
+                <div className="mt-2.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span
+                      className="text-[11px] font-medium"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('validation.passwordStrength')}
+                    </span>
+                    <span className={cn('text-[11px] font-semibold', passwordStrength.color)}>
+                      {t(passwordStrength.labelKey)}
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <div
+                        key={level}
+                        className={cn(
+                          'h-1 flex-1 rounded-full transition-all duration-300',
+                          passwordStrength.score >= level
+                            ? passwordStrength.bgColor
+                            : 'bg-gray-200 dark:bg-gray-700'
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Confirm Password */}
+            {/* Confirm Password field */}
             <div>
               <label
                 htmlFor="register-confirm-password"
-                className="mb-1.5 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.confirmPassword')}
@@ -405,7 +494,7 @@ export default function RegisterPage() {
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
-                    isRtl ? 'right-3' : 'left-3'
+                    'start-4'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
@@ -424,14 +513,22 @@ export default function RegisterPage() {
                   required
                   autoComplete="new-password"
                   className={cn(
-                    'w-full rounded-lg border py-2.5 text-sm outline-none transition-colors',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                    fieldErrors.confirmPassword ? 'border-red-400' : '',
-                    isRtl ? 'pr-10 pl-10' : 'pl-10 pr-10'
+                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    fieldErrors.confirmPassword
+                      ? 'border-red-400'
+                      : passwordsMatch
+                        ? 'border-emerald-400'
+                        : '',
+                    'ps-11 pe-11'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
-                    borderColor: fieldErrors.confirmPassword ? undefined : 'var(--border-primary)',
+                    borderColor: fieldErrors.confirmPassword
+                      ? undefined
+                      : passwordsMatch
+                        ? undefined
+                        : 'var(--border-primary)',
                     color: 'var(--text-primary)',
                   }}
                   placeholder={t('auth.confirmPassword')}
@@ -440,12 +537,12 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className={cn(
-                    'absolute top-1/2 -translate-y-1/2 transition-colors hover:opacity-70',
-                    isRtl ? 'left-3' : 'right-3'
+                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1 transition-all hover:opacity-70',
+                    'end-3'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                   tabIndex={-1}
-                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showConfirmPassword
                     ? <EyeOff className="h-[18px] w-[18px]" />
@@ -453,32 +550,70 @@ export default function RegisterPage() {
                   }
                 </button>
               </div>
+
+              {/* Password match indicator */}
+              {passwordsMatch && (
+                <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-500">
+                  <CheckCircle2 className="h-3 w-3" />
+                  {t('validation.passwordsMatch')}
+                </p>
+              )}
+              {passwordsMismatch && !fieldErrors.confirmPassword && (
+                <p className="mt-1.5 flex items-center gap-1 text-xs text-amber-500">
+                  <XCircle className="h-3 w-3" />
+                  {t('validation.passwordsMismatch')}
+                </p>
+              )}
               {fieldErrors.confirmPassword && (
-                <p className="mt-1.5 text-xs text-red-500">{fieldErrors.confirmPassword}</p>
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                  <XCircle className="h-3 w-3" />
+                  {fieldErrors.confirmPassword}
+                </p>
               )}
             </div>
 
-            {/* Submit */}
+            {/* Submit button */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="brand-gradient flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+              className={cn(
+                'flex w-full items-center justify-center gap-2.5 rounded-xl px-4 py-3.5',
+                'text-sm font-semibold text-white',
+                'transition-all duration-200',
+                'hover:opacity-90',
+                'active:scale-[0.98]',
+                'disabled:cursor-not-allowed disabled:opacity-60'
+              )}
+              style={{
+                background: 'var(--color-brand-600)',
+              }}
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('auth.registerButton')}
             </button>
           </form>
 
+          {/* Divider */}
+          <div className="my-8 flex items-center gap-4">
+            <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-primary)' }} />
+            <span
+              className="text-xs font-medium"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {t('auth.or')}
+            </span>
+            <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-primary)' }} />
+          </div>
+
           {/* Login link */}
           <p
-            className="mt-8 text-center text-sm"
+            className="text-center text-sm"
             style={{ color: 'var(--text-secondary)' }}
           >
             {t('auth.hasAccount')}{' '}
             <Link
               to="/login"
-              className="font-semibold transition-colors hover:opacity-80"
-              style={{ color: 'var(--border-focus)' }}
+              className="auth-gradient-text font-semibold transition-opacity duration-200 hover:opacity-75"
             >
               {t('auth.login')}
             </Link>

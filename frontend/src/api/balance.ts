@@ -30,7 +30,8 @@ export const balanceApi = {
   },
 
   history: async (): Promise<BankBalance[]> => {
-    const response = await apiClient.get<BankBalance[]>('/balance/history')
-    return response.data
+    const response = await apiClient.get<{ items: BankBalance[] } | BankBalance[]>('/balance/history')
+    const data = response.data
+    return Array.isArray(data) ? data : data.items ?? []
   },
 }

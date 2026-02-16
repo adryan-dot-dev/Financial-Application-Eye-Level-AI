@@ -15,19 +15,20 @@ export interface CreateInstallmentData {
 export type UpdateInstallmentData = Partial<CreateInstallmentData>
 
 export interface InstallmentPayment {
-  id: string
-  installment_id: string
   payment_number: number
+  date: string
   amount: string
-  due_date: string
-  is_paid: boolean
-  paid_date: string | null
+  status: 'completed' | 'upcoming' | 'future'
 }
 
 export const installmentsApi = {
   list: async (): Promise<Installment[]> => {
-    const response = await apiClient.get<Installment[]>('/installments')
-    return response.data
+    const response = await apiClient.get('/installments')
+    const data = response.data
+    // Defensive: handle both plain array and { items: [...] } response formats
+    if (Array.isArray(data)) return data as Installment[]
+    if (data && Array.isArray(data.items)) return data.items as Installment[]
+    return []
   },
 
   get: async (id: string): Promise<Installment> => {
@@ -50,7 +51,16 @@ export const installmentsApi = {
   },
 
   payments: async (id: string): Promise<InstallmentPayment[]> => {
-    const response = await apiClient.get<InstallmentPayment[]>(`/installments/${id}/payments`)
+    const response = await apiClient.get(`/installments/${id}/payments`)
+    const data = response.data
+    // Defensive: handle both plain array and { items: [...] } response formats
+    if (Array.isArray(data)) return data as InstallmentPayment[]
+    if (data && Array.isArray(data.items)) return data.items as InstallmentPayment[]
+    return []
+  },
+
+  markPaid: async (id: string): Promise<Installment> => {
+    const response = await apiClient.post<Installment>(`/installments/${id}/mark-paid`)
     return response.data
   },
 }

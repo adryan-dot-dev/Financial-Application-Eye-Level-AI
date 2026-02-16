@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     alerts,
     auth,
+    automation,
     balance,
     categories,
     dashboard,
@@ -31,3 +34,4 @@ api_router.include_router(expected_income.router)
 api_router.include_router(forecast.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(alerts.router)
+api_router.include_router(automation.router)

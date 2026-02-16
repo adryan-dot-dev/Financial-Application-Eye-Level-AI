@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useModalA11y } from '@/hooks/useModalA11y'
 import {
   Plus,
   Pencil,
@@ -20,6 +21,10 @@ import { fixedApi } from '@/api/fixed'
 import type { CreateFixedData } from '@/api/fixed'
 import { categoriesApi } from '@/api/categories'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { CategoryBadge as SharedCategoryBadge } from '@/components/ui/CategoryIcon'
+import { queryKeys } from '@/lib/queryKeys'
+import { useToast } from '@/contexts/ToastContext'
+import { getApiErrorMessage } from '@/api/client'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,8 +63,7 @@ const EMPTY_FORM: FormData = {
 function Skeleton({ className }: { className?: string }) {
   return (
     <div
-      className={cn('animate-pulse rounded', className)}
-      style={{ backgroundColor: 'var(--bg-tertiary)' }}
+      className={cn('skeleton rounded', className)}
     />
   )
 }
@@ -70,11 +74,7 @@ function CardSkeleton() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border p-5"
-          style={{
-            backgroundColor: 'var(--bg-card)',
-            borderColor: 'var(--border-primary)',
-          }}
+          className="card p-5"
         >
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -106,18 +106,14 @@ function CategoryBadge({
   isRtl: boolean
 }) {
   if (!category) return null
-  const bgColor = category.color ? `${category.color}20` : 'var(--bg-tertiary)'
-  const textColor = category.color ?? 'var(--text-secondary)'
   const label = isRtl ? category.name_he : category.name
 
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-      style={{ backgroundColor: bgColor, color: textColor }}
-    >
-      {category.icon && <span className="text-sm leading-none">{category.icon}</span>}
-      {label}
-    </span>
+    <SharedCategoryBadge
+      icon={category.icon}
+      color={category.color}
+      label={label}
+    />
   )
 }
 
@@ -128,7 +124,12 @@ function CategoryBadge({
 export default function FixedPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const isRtl = i18n.language === 'he'
+
+  useEffect(() => {
+    document.title = t('pageTitle.fixed')
+  }, [t])
 
   // ---- State ----
   const [filterType, setFilterType] = useState<FilterType>('')
@@ -144,25 +145,29 @@ export default function FixedPage() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ['fixed', filterType ? { type: filterType } : undefined],
+    queryKey: queryKeys.fixed.list(filterType ? { type: filterType } : undefined),
     queryFn: () => fixedApi.list(filterType ? { type: filterType } : undefined),
   })
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
+    queryKey: queryKeys.categories.all,
     queryFn: () => categoriesApi.list(),
   })
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]))
 
   // ---- Mutations ----
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['fixed'] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.fixed.all })
 
   const createMutation = useMutation({
     mutationFn: (data: CreateFixedData) => fixedApi.create(data),
     onSuccess: () => {
       invalidate()
       closeModal()
+      toast.success(t('toast.createSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
@@ -172,6 +177,10 @@ export default function FixedPage() {
     onSuccess: () => {
       invalidate()
       closeModal()
+      toast.success(t('toast.updateSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
@@ -180,17 +189,33 @@ export default function FixedPage() {
     onSuccess: () => {
       invalidate()
       setDeleteTarget(null)
+      toast.success(t('toast.deleteSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
   const pauseMutation = useMutation({
     mutationFn: (id: string) => fixedApi.pause(id),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('toast.pauseSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
+    },
   })
 
   const resumeMutation = useMutation({
     mutationFn: (id: string) => fixedApi.resume(id),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('toast.resumeSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
+    },
   })
 
   // ---- Modal helpers ----
@@ -217,12 +242,18 @@ export default function FixedPage() {
     setModalOpen(true)
   }
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setModalOpen(false)
     setEditingEntry(null)
     setFormData(EMPTY_FORM)
     setFormErrors({})
-  }
+  }, [])
+
+  const closeDeleteDialog = useCallback(() => setDeleteTarget(null), [])
+
+  // Modal accessibility (Escape key, focus trap, aria)
+  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: deletePanelRef } = useModalA11y(!!deleteTarget, closeDeleteDialog)
 
   // ---- Form validation & submit ----
   const validateForm = (): boolean => {
@@ -273,7 +304,7 @@ export default function FixedPage() {
   return (
     <div className="space-y-6">
       {/* ---- Page header ---- */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1
             className="text-2xl font-bold tracking-tight"
@@ -283,15 +314,14 @@ export default function FixedPage() {
           </h1>
           {!isLoading && (
             <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              {entries.length} {t('transactions.total').toLowerCase()}
+              {t('transactions.total')}: <span className="font-medium ltr-nums" style={{ color: 'var(--text-secondary)' }}>{entries.length}</span>
             </p>
           )}
         </div>
 
         <button
           onClick={openCreateModal}
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90"
-          style={{ backgroundColor: 'var(--border-focus)' }}
+          className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
         >
           <Plus className="h-4 w-4" />
           {t('fixed.add')}
@@ -299,278 +329,276 @@ export default function FixedPage() {
       </div>
 
       {/* ---- Filter tabs ---- */}
-      <div
-        className="rounded-xl border p-4"
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          borderColor: 'var(--border-primary)',
-          boxShadow: 'var(--shadow-sm)',
-        }}
-      >
-        <div className="flex rounded-lg border" style={{ borderColor: 'var(--border-primary)' }}>
-          {(['' as FilterType, 'income' as FilterType, 'expense' as FilterType]).map((typeVal) => {
-            const active = filterType === typeVal
-            const label =
-              typeVal === ''
-                ? t('transactions.all')
-                : typeVal === 'income'
-                  ? t('transactions.income')
-                  : t('transactions.expense')
-            return (
-              <button
-                key={typeVal}
-                onClick={() => setFilterType(typeVal)}
-                className="flex-1 px-4 py-2 text-sm font-medium transition-colors first:rounded-s-lg last:rounded-e-lg"
-                style={{
-                  backgroundColor: active ? 'var(--border-focus)' : 'var(--bg-input)',
-                  color: active ? '#fff' : 'var(--text-secondary)',
-                }}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
+      <div className="animate-fade-in-up stagger-2 card p-5">
+        <fieldset>
+          <legend className="sr-only">{t('transactions.type')}</legend>
+          <div
+            className="flex overflow-hidden rounded-xl border"
+            style={{ borderColor: 'var(--border-primary)' }}
+          >
+            {(['' as FilterType, 'income' as FilterType, 'expense' as FilterType]).map((typeVal) => {
+              const active = filterType === typeVal
+              const label =
+                typeVal === ''
+                  ? t('transactions.all')
+                  : typeVal === 'income'
+                    ? t('transactions.income')
+                    : t('transactions.expense')
+              return (
+                <button
+                  key={typeVal}
+                  onClick={() => setFilterType(typeVal)}
+                  className={cn(
+                    'flex-1 px-4 py-2.5 text-xs font-semibold tracking-wide transition-all',
+                    'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
+                    active && 'shadow-sm',
+                  )}
+                  style={{
+                    backgroundColor: active ? 'var(--border-focus)' : 'var(--bg-input)',
+                    color: active ? '#fff' : 'var(--text-secondary)',
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </fieldset>
       </div>
 
       {/* ---- Cards grid ---- */}
       {isLoading ? (
         <CardSkeleton />
       ) : isError ? (
-        <div
-          className="flex items-center justify-center rounded-xl border p-12"
-          style={{
-            backgroundColor: 'var(--bg-card)',
-            borderColor: 'var(--border-primary)',
-          }}
-        >
+        <div className="animate-fade-in-up stagger-3 card flex flex-col items-center justify-center px-6 py-16">
+          <div
+            className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: 'var(--bg-danger)' }}
+          >
+            <Repeat className="h-6 w-6" style={{ color: 'var(--color-expense)' }} />
+          </div>
           <p className="text-sm font-medium" style={{ color: 'var(--color-expense)' }}>
             {t('common.error')}
           </p>
         </div>
       ) : entries.length === 0 ? (
         /* ---- Empty state ---- */
-        <div
-          className="flex flex-col items-center justify-center rounded-xl border px-6 py-16"
-          style={{
-            backgroundColor: 'var(--bg-card)',
-            borderColor: 'var(--border-primary)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-        >
+        <div className="animate-fade-in-up stagger-3 card flex flex-col items-center justify-center px-6 py-20">
           <div
-            className="mb-4 flex h-16 w-16 items-center justify-center rounded-full"
-            style={{ backgroundColor: 'var(--bg-tertiary)' }}
+            className="empty-float mb-6 flex h-20 w-20 items-center justify-center rounded-3xl"
+            style={{
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.1)',
+            }}
           >
-            <Repeat className="h-7 w-7" style={{ color: 'var(--text-tertiary)' }} />
+            <Repeat className="h-9 w-9" style={{ color: 'var(--border-focus)' }} />
           </div>
           <h3
-            className="mb-1 text-base font-semibold"
+            className="mb-2 text-lg font-semibold"
             style={{ color: 'var(--text-primary)' }}
           >
             {t('common.noData')}
           </h3>
           <p
-            className="mb-6 max-w-xs text-center text-sm"
+            className="mb-8 max-w-sm text-center text-sm leading-relaxed"
             style={{ color: 'var(--text-tertiary)' }}
           >
             {t('fixed.title')}
           </p>
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
-            style={{ backgroundColor: 'var(--border-focus)' }}
+            className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
           >
             <Plus className="h-4 w-4" />
             {t('fixed.add')}
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {entries.map((entry) => {
+        <div className="animate-fade-in-up stagger-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {entries.map((entry, index) => {
             const isIncome = entry.type === 'income'
             const cat = entry.category_id ? categoryMap.get(entry.category_id) : undefined
 
             return (
               <div
                 key={entry.id}
-                className="group rounded-xl border p-5 transition-shadow"
+                className="card card-hover overflow-hidden"
                 style={{
-                  backgroundColor: 'var(--bg-card)',
-                  borderColor: 'var(--border-primary)',
-                  boxShadow: 'var(--shadow-sm)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = 'var(--shadow-md)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
+                  animationDelay: `${index * 40}ms`,
+                  borderInlineStartWidth: '3px',
+                  borderInlineStartColor: isIncome ? '#10B981' : '#EF4444',
                 }}
               >
-                {/* Card header */}
-                <div className="mb-3 flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h3
-                      className="truncate text-sm font-semibold"
-                      style={{ color: 'var(--text-primary)' }}
+                <div className="p-5">
+                  {/* Card header */}
+                  <div className="mb-3 flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <h3
+                        className="truncate text-sm font-bold"
+                        style={{ color: 'var(--text-primary)' }}
+                        title={entry.name}
+                      >
+                        {entry.name}
+                      </h3>
+                      {cat && (
+                        <div className="mt-1.5">
+                          <CategoryBadge category={cat} isRtl={isRtl} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status badge */}
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                      style={{
+                        backgroundColor: entry.is_active ? 'var(--bg-success)' : 'var(--bg-warning)',
+                        color: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
+                      }}
                     >
-                      {entry.name}
-                    </h3>
-                    {cat && (
-                      <div className="mt-1">
-                        <CategoryBadge category={cat} isRtl={isRtl} />
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{
+                          backgroundColor: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
+                        }}
+                      />
+                      {entry.is_active ? t('fixed.active') : t('fixed.paused')}
+                    </span>
+                  </div>
+
+                  {/* Amount */}
+                  <p
+                    className="mb-1 text-2xl font-bold tabular-nums ltr-nums"
+                    style={{
+                      color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
+                    }}
+                  >
+                    {isIncome ? '+' : '\u2212'}{formatCurrency(entry.amount, entry.currency)}
+                  </p>
+
+                  {/* Type badge (small) */}
+                  <div className="mb-3">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                      style={{
+                        backgroundColor: isIncome ? '#10B98110' : '#EF444410',
+                        color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
+                      }}
+                    >
+                      {isIncome ? (
+                        <TrendingUp className="h-3 w-3" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3" />
+                      )}
+                      {isIncome ? t('transactions.income') : t('transactions.expense')}
+                    </span>
+                  </div>
+
+                  {/* Details grid */}
+                  <div
+                    className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                        {t('fixed.dayOfMonth')}
+                      </span>
+                      <span className="mt-0.5 inline-flex items-center gap-1 font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
+                        <CalendarDays className="h-3 w-3" style={{ color: 'var(--border-focus)' }} />
+                        {entry.day_of_month}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                        {t('fixed.startDate')}
+                      </span>
+                      <span className="mt-0.5 font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
+                        {formatDate(entry.start_date, isRtl ? 'he-IL' : 'en-US')}
+                      </span>
+                    </div>
+                    {entry.end_date && (
+                      <div className="flex flex-col col-span-2">
+                        <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                          {t('fixed.endDate')}
+                        </span>
+                        <span className="mt-0.5 font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
+                          {formatDate(entry.end_date, isRtl ? 'he-IL' : 'en-US')}
+                        </span>
                       </div>
                     )}
                   </div>
 
-                  {/* Type badge */}
-                  <span
-                    className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium"
-                    style={{
-                      backgroundColor: isIncome ? '#10B98120' : '#EF444420',
-                      color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
-                    }}
-                  >
-                    {isIncome ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" />
-                    )}
-                    {isIncome ? t('transactions.income') : t('transactions.expense')}
-                  </span>
-                </div>
-
-                {/* Amount */}
-                <p
-                  className="mb-3 text-xl font-bold tabular-nums ltr-nums"
-                  style={{
-                    color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
-                  }}
-                >
-                  {isIncome ? '+' : '-'}{formatCurrency(entry.amount, entry.currency)}
-                </p>
-
-                {/* Details */}
-                <div
-                  className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    <CalendarDays className="h-3 w-3" />
-                    {t('fixed.dayOfMonth')}: <span className="font-medium ltr-nums">{entry.day_of_month}</span>
-                  </span>
-                  <span className="ltr-nums">
-                    {t('fixed.startDate')}: {formatDate(entry.start_date, isRtl ? 'he-IL' : 'en-US')}
-                  </span>
-                  {entry.end_date && (
-                    <span className="ltr-nums">
-                      {t('fixed.endDate')}: {formatDate(entry.end_date, isRtl ? 'he-IL' : 'en-US')}
-                    </span>
+                  {/* Description */}
+                  {entry.description && (
+                    <p
+                      className="mb-4 truncate text-xs leading-relaxed"
+                      style={{ color: 'var(--text-tertiary)' }}
+                      title={entry.description}
+                    >
+                      {entry.description}
+                    </p>
                   )}
-                </div>
 
-                {/* Status + Actions */}
-                <div
-                  className="flex items-center justify-between border-t pt-3"
-                  style={{ borderColor: 'var(--border-primary)' }}
-                >
-                  {/* Status badge */}
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                    style={{
-                      backgroundColor: entry.is_active ? '#10B98115' : '#F59E0B15',
-                      color: entry.is_active ? '#10B981' : '#F59E0B',
-                    }}
+                  {/* Actions */}
+                  <div
+                    className="flex items-center justify-between border-t pt-3"
+                    style={{ borderColor: 'var(--border-primary)' }}
                   >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{
-                        backgroundColor: entry.is_active ? '#10B981' : '#F59E0B',
-                      }}
-                    />
-                    {entry.is_active ? t('fixed.active') : t('fixed.paused')}
-                  </span>
-
-                  {/* Action buttons */}
-                  <div className="flex items-center gap-1">
                     {/* Pause / Resume */}
                     {entry.is_active ? (
                       <button
                         onClick={() => pauseMutation.mutate(entry.id)}
                         disabled={pauseMutation.isPending}
-                        className="rounded-md p-1.5 transition-colors"
-                        style={{ color: '#F59E0B' }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = ''
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        style={{
+                          backgroundColor: 'var(--bg-warning)',
+                          color: 'var(--color-warning)',
                         }}
                         title={t('fixed.pause')}
+                        aria-label={t('fixed.pause')}
                       >
-                        <Pause className="h-3.5 w-3.5" />
+                        {pauseMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                        {t('fixed.pause')}
                       </button>
                     ) : (
                       <button
                         onClick={() => resumeMutation.mutate(entry.id)}
                         disabled={resumeMutation.isPending}
-                        className="rounded-md p-1.5 transition-colors"
-                        style={{ color: 'var(--color-income)' }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = ''
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        style={{
+                          backgroundColor: 'var(--bg-success)',
+                          color: 'var(--color-success)',
                         }}
                         title={t('fixed.resume')}
+                        aria-label={t('fixed.resume')}
                       >
-                        <Play className="h-3.5 w-3.5" />
+                        {resumeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                        {t('fixed.resume')}
                       </button>
                     )}
 
-                    {/* Edit */}
-                    <button
-                      onClick={() => openEditModal(entry)}
-                      className="rounded-md p-1.5 transition-colors"
-                      style={{ color: 'var(--text-secondary)' }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = ''
-                      }}
-                      title={t('common.edit')}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-
-                    {/* Delete */}
-                    <button
-                      onClick={() => setDeleteTarget(entry)}
-                      className="rounded-md p-1.5 transition-colors"
-                      style={{ color: 'var(--color-expense)' }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = ''
-                      }}
-                      title={t('common.delete')}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {/* Edit / Delete */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openEditModal(entry)}
+                        className="action-btn action-btn-edit rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        style={{ color: 'var(--text-tertiary)' }}
+                        title={t('common.edit')}
+                        aria-label={t('common.edit')}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(entry)}
+                        className="action-btn action-btn-delete rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        style={{ color: 'var(--text-tertiary)' }}
+                        title={t('common.delete')}
+                        aria-label={t('common.delete')}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                {/* Description */}
-                {entry.description && (
-                  <p
-                    className="mt-2 truncate text-xs"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    {entry.description}
-                  </p>
-                )}
               </div>
             )
           })}
@@ -583,317 +611,356 @@ export default function FixedPage() {
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fixed-modal-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeModal()
           }}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
           {/* Panel */}
           <div
-            className="relative z-10 w-full max-w-lg rounded-xl border p-6"
+            ref={modalPanelRef}
+            className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-lg)',
+              boxShadow: 'var(--shadow-xl)',
             }}
           >
-            {/* Header */}
-            <div className="mb-6 flex items-center justify-between">
-              <h2
-                className="text-lg font-semibold"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {editingEntry ? t('common.edit') : t('fixed.add')}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="rounded-md p-1.5 transition-colors"
-                style={{ color: 'var(--text-tertiary)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ''
-                }}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+            {/* Colored accent bar */}
+            <div
+              className="h-1"
+              style={{
+                background: formData.type === 'income'
+                  ? 'linear-gradient(90deg, #34D399, #10B981)'
+                  : 'linear-gradient(90deg, #F87171, #EF4444)',
+              }}
+            />
 
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              {/* Type toggle */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
+            <div className="p-6">
+              {/* Header */}
+              <div className="mb-6 flex items-center justify-between">
+                <h2
+                  id="fixed-modal-title"
+                  className="text-lg font-bold"
+                  style={{ color: 'var(--text-primary)' }}
                 >
-                  {t('transactions.type')}
-                </label>
-                <div
-                  className="flex rounded-lg border"
-                  style={{ borderColor: 'var(--border-primary)' }}
+                  {editingEntry ? t('common.edit') : t('fixed.add')}
+                </h2>
+                <button
+                  onClick={closeModal}
+                  className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  aria-label={t('common.cancel')}
                 >
-                  {(['income', 'expense'] as const).map((typeVal) => {
-                    const active = formData.type === typeVal
-                    const colorVar =
-                      typeVal === 'income' ? 'var(--color-income)' : 'var(--color-expense)'
-                    return (
-                      <button
-                        key={typeVal}
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            type: typeVal,
-                            category_id: '',
-                          }))
-                        }
-                        className="flex flex-1 items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors first:rounded-s-lg last:rounded-e-lg"
-                        style={{
-                          backgroundColor: active ? colorVar : 'var(--bg-input)',
-                          color: active ? '#fff' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {typeVal === 'income' ? (
-                          <TrendingUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <TrendingDown className="h-3.5 w-3.5" />
-                        )}
-                        {typeVal === 'income'
-                          ? t('transactions.income')
-                          : t('transactions.expense')}
-                      </button>
-                    )
-                  })}
-                </div>
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
-              {/* Name */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('fixed.name')} *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, name: e.target.value }))
-                  }
-                  className={cn(
-                    'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                    formErrors.name && 'border-red-400',
+              <form onSubmit={handleFormSubmit} className="space-y-5">
+                {/* Type toggle */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.type')}
+                  </label>
+                  <div
+                    className="flex overflow-hidden rounded-xl border"
+                    style={{ borderColor: 'var(--border-primary)' }}
+                  >
+                    {(['income', 'expense'] as const).map((typeVal) => {
+                      const active = formData.type === typeVal
+                      const colorVar =
+                        typeVal === 'income' ? 'var(--color-income)' : 'var(--color-expense)'
+                      return (
+                        <button
+                          key={typeVal}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              type: typeVal,
+                              category_id: '',
+                            }))
+                          }
+                          className="flex flex-1 items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-all"
+                          style={{
+                            backgroundColor: active ? colorVar : 'var(--bg-input)',
+                            color: active ? '#fff' : 'var(--text-secondary)',
+                          }}
+                        >
+                          {typeVal === 'income' ? (
+                            <TrendingUp className="h-4 w-4" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4" />
+                          )}
+                          {typeVal === 'income'
+                            ? t('transactions.income')
+                            : t('transactions.expense')}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Name */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('fixed.name')} *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                      formErrors.name && 'border-red-400',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: formErrors.name ? undefined : 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder={t('fixed.name')}
+                    aria-describedby={formErrors.name ? 'fixed-name-error' : undefined}
+                    aria-invalid={!!formErrors.name}
+                  />
+                  {formErrors.name && (
+                    <p id="fixed-name-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
+                      {formErrors.name}
+                    </p>
                   )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: formErrors.name ? undefined : 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  placeholder={t('fixed.name')}
-                />
-              </div>
+                </div>
 
-              {/* Amount + Day of month row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {t('transactions.amount')} *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, amount: e.target.value }))
-                    }
-                    className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none ltr-nums',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                      formErrors.amount && 'border-red-400',
+                {/* Amount + Day of month row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('transactions.amount')} *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.amount}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, amount: e.target.value }))
+                      }
+                      className={cn(
+                        'amount-input w-full rounded-xl border px-4 py-3 outline-none ltr-nums transition-all',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                        formErrors.amount && 'border-red-400',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: formErrors.amount ? undefined : 'var(--border-primary)',
+                        color: formData.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
+                      }}
+                      placeholder="0.00"
+                      aria-describedby={formErrors.amount ? 'fixed-amount-error' : undefined}
+                      aria-invalid={!!formErrors.amount}
+                    />
+                    {formErrors.amount && (
+                      <p id="fixed-amount-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
+                        {formErrors.amount}
+                      </p>
                     )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.amount ? undefined : 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {t('fixed.dayOfMonth')} *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={formData.day_of_month}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, day_of_month: e.target.value }))
-                    }
-                    className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none ltr-nums',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                      formErrors.day_of_month && 'border-red-400',
+                  </div>
+                  <div>
+                    <label
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('fixed.dayOfMonth')} *
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={formData.day_of_month}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, day_of_month: e.target.value }))
+                      }
+                      className={cn(
+                        'w-full rounded-xl border px-4 py-3 text-sm outline-none ltr-nums transition-all',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                        formErrors.day_of_month && 'border-red-400',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: formErrors.day_of_month ? undefined : 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                      aria-describedby={formErrors.day_of_month ? 'fixed-day-error' : undefined}
+                      aria-invalid={!!formErrors.day_of_month}
+                    />
+                    {formErrors.day_of_month && (
+                      <p id="fixed-day-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
+                        {formErrors.day_of_month}
+                      </p>
                     )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.day_of_month ? undefined : 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
+                  </div>
                 </div>
-              </div>
 
-              {/* Start date + End date row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {t('fixed.startDate')} *
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.start_date}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, start_date: e.target.value }))
-                    }
-                    className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                      formErrors.start_date && 'border-red-400',
+                {/* Start date + End date row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('fixed.startDate')} *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.start_date}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, start_date: e.target.value }))
+                      }
+                      className={cn(
+                        'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                        formErrors.start_date && 'border-red-400',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: formErrors.start_date ? undefined : 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                      aria-describedby={formErrors.start_date ? 'fixed-start-date-error' : undefined}
+                      aria-invalid={!!formErrors.start_date}
+                    />
+                    {formErrors.start_date && (
+                      <p id="fixed-start-date-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
+                        {formErrors.start_date}
+                      </p>
                     )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.start_date ? undefined : 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
+                  </div>
+                  <div>
+                    <label
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('fixed.endDate')}
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.end_date}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, end_date: e.target.value }))
+                      }
+                      className={cn(
+                        'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                    />
+                  </div>
                 </div>
+
+                {/* Category */}
                 <div>
                   <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
                   >
-                    {t('fixed.endDate')}
+                    {t('transactions.category')}
                   </label>
-                  <input
-                    type="date"
-                    value={formData.end_date}
+                  <select
+                    value={formData.category_id}
                     onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, end_date: e.target.value }))
+                      setFormData((prev) => ({ ...prev, category_id: e.target.value }))
                     }
                     className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
                     )}
                     style={{
                       backgroundColor: 'var(--bg-input)',
                       borderColor: 'var(--border-primary)',
                       color: 'var(--text-primary)',
                     }}
+                  >
+                    <option value="">{t('transactions.selectCategory')}</option>
+                    {formCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.icon} {isRtl ? cat.name_he : cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.description')}
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    rows={2}
+                    className={cn(
+                      'w-full resize-none rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder={t('transactions.description')}
                   />
                 </div>
-              </div>
 
-              {/* Category */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('transactions.category')}
-                </label>
-                <select
-                  value={formData.category_id}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, category_id: e.target.value }))
-                  }
-                  className={cn(
-                    'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  <option value="">{t('transactions.selectCategory')}</option>
-                  {formCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {isRtl ? cat.name_he : cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('transactions.description')}
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, description: e.target.value }))
-                  }
-                  rows={2}
-                  className={cn(
-                    'w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  placeholder={t('transactions.description')}
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-secondary)',
-                    backgroundColor: 'var(--bg-input)',
-                  }}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isMutating}
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                  style={{ backgroundColor: 'var(--border-focus)' }}
-                >
-                  {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {t('common.save')}
-                </button>
-              </div>
-            </form>
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                    style={{
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'var(--bg-input)',
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isMutating}
+                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t('common.save')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -904,64 +971,98 @@ export default function FixedPage() {
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fixed-delete-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) setDeleteTarget(null)
           }}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
           {/* Panel */}
           <div
-            className="relative z-10 w-full max-w-sm rounded-xl border p-6"
+            ref={deletePanelRef}
+            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-lg)',
+              boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div className="mb-4 flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full"
-                style={{ backgroundColor: '#EF444420' }}
-              >
-                <Trash2 className="h-5 w-5" style={{ color: 'var(--color-expense)' }} />
-              </div>
-              <h3
-                className="text-base font-semibold"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {t('common.delete')}
-              </h3>
-            </div>
+            {/* Red accent bar */}
+            <div
+              className="h-1"
+              style={{ background: 'linear-gradient(90deg, #F87171, #EF4444, #DC2626)' }}
+            />
 
-            <p className="mb-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {t('transactions.deleteConfirmMessage')}
-            </p>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
-                style={{
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-secondary)',
-                  backgroundColor: 'var(--bg-input)',
-                }}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => deleteMutation.mutate(deleteTarget.id)}
-                disabled={deleteMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                style={{ backgroundColor: 'var(--color-expense)' }}
-              >
-                {deleteMutation.isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+            <div className="p-6">
+              <div className="mb-5 flex flex-col items-center text-center">
+                <div
+                  className="warning-pulse mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+                  style={{ backgroundColor: 'var(--bg-danger)' }}
+                >
+                  <Trash2 className="h-6 w-6" style={{ color: 'var(--color-expense)' }} />
+                </div>
+                <h3
+                  id="fixed-delete-title"
+                  className="mb-2 text-lg font-bold"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {t('common.delete')}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {t('transactions.deleteConfirmMessage')}
+                </p>
+                {deleteTarget.name && (
+                  <p
+                    className="mt-2 rounded-lg px-3 py-1.5 text-sm font-medium"
+                    style={{
+                      backgroundColor: 'var(--bg-tertiary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    &ldquo;{deleteTarget.name}&rdquo;
+                  </p>
                 )}
-                {t('common.delete')}
-              </button>
+                <p
+                  className="mt-2 text-base font-bold tabular-nums ltr-nums"
+                  style={{
+                    color: deleteTarget.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
+                  }}
+                >
+                  {formatCurrency(deleteTarget.amount, deleteTarget.currency)}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-secondary)',
+                    backgroundColor: 'var(--bg-input)',
+                  }}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                  disabled={deleteMutation.isPending}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
+                  style={{
+                    background: 'linear-gradient(135deg, #F87171, #EF4444)',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                  }}
+                >
+                  {deleteMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  {t('common.delete')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -3,7 +3,10 @@ export interface User {
   id: string
   username: string
   email: string
+  full_name: string | null
+  phone_number: string | null
   is_admin: boolean
+  is_active: boolean
   created_at: string
   last_login_at: string | null
 }
@@ -34,6 +37,7 @@ export interface Settings {
   notifications_enabled: boolean
   forecast_months_default: number
   week_start_day: number
+  onboarding_completed: boolean
 }
 
 // Category types
@@ -100,6 +104,14 @@ export interface Installment {
   day_of_month: number
   payments_completed: number
   description: string | null
+  // Computed fields - auto-synced with current date
+  status: 'pending' | 'active' | 'completed' | 'overdue'
+  expected_payments_by_now: number
+  is_on_track: boolean
+  next_payment_date: string | null
+  end_date: string | null
+  remaining_amount: string
+  progress_percentage: number
 }
 
 // Loan
@@ -135,7 +147,8 @@ export interface ForecastMonth {
   opening_balance: string
   fixed_income: string
   fixed_expenses: string
-  installment_payments: string
+  installment_income: string
+  installment_expenses: string
   loan_payments: string
   expected_income: string
   one_time_income: string

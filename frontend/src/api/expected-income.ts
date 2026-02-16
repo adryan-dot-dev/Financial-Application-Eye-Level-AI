@@ -8,8 +8,16 @@ export interface SetExpectedIncomeData {
 
 export const expectedIncomeApi = {
   list: async (): Promise<ExpectedIncomeListResponse> => {
-    const response = await apiClient.get<ExpectedIncomeListResponse>('/expected-income')
-    return response.data
+    const response = await apiClient.get('/expected-income')
+    const data = response.data
+    // Defensive: handle both { items: [...] } and plain array response formats
+    if (data && Array.isArray(data.items)) {
+      return data as ExpectedIncomeListResponse
+    }
+    if (Array.isArray(data)) {
+      return { items: data as ExpectedIncome[] }
+    }
+    return { items: [] }
   },
 
   set: async (month: string, data: SetExpectedIncomeData): Promise<ExpectedIncome> => {

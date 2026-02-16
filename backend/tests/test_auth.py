@@ -15,7 +15,7 @@ async def test_health(client: AsyncClient):
 async def test_login_admin(client: AsyncClient):
     response = await client.post("/api/v1/auth/login", json={
         "username": "admin",
-        "password": "admin123",
+        "password": "Admin2026!",
     })
     assert response.status_code == 200
     data = response.json()
@@ -28,7 +28,7 @@ async def test_login_admin(client: AsyncClient):
 async def test_login_wrong_password(client: AsyncClient):
     response = await client.post("/api/v1/auth/login", json={
         "username": "admin",
-        "password": "wrong",
+        "password": "WrongPass9",
     })
     assert response.status_code == 401
 
@@ -39,17 +39,18 @@ async def test_register_and_login(client: AsyncClient):
     response = await client.post("/api/v1/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "test123456",
+        "password": "TestPass1",
     })
     assert response.status_code == 201
     data = response.json()
-    assert data["username"] == "testuser"
-    assert data["is_admin"] is False
+    assert "access_token" in data
+    assert "refresh_token" in data
+    assert data["token_type"] == "bearer"
 
     # Login
     response = await client.post("/api/v1/auth/login", json={
         "username": "testuser",
-        "password": "test123456",
+        "password": "TestPass1",
     })
     assert response.status_code == 200
 
@@ -59,7 +60,7 @@ async def test_register_duplicate_username(client: AsyncClient):
     response = await client.post("/api/v1/auth/register", json={
         "username": "admin",
         "email": "other@example.com",
-        "password": "test123456",
+        "password": "TestPass1",
     })
     assert response.status_code == 409
 
@@ -84,7 +85,7 @@ async def test_refresh_token(client: AsyncClient):
     # Login first
     login_resp = await client.post("/api/v1/auth/login", json={
         "username": "admin",
-        "password": "admin123",
+        "password": "Admin2026!",
     })
     refresh_token = login_resp.json()["refresh_token"]
 
@@ -100,21 +101,21 @@ async def test_refresh_token(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_change_password(client: AsyncClient, auth_headers: dict):
     response = await client.put("/api/v1/auth/password", json={
-        "current_password": "admin123",
-        "new_password": "newpass123",
+        "current_password": "Admin2026!",
+        "new_password": "NewPass1",
     }, headers=auth_headers)
     assert response.status_code == 200
 
     # Login with new password
     response = await client.post("/api/v1/auth/login", json={
         "username": "admin",
-        "password": "newpass123",
+        "password": "NewPass1",
     })
     assert response.status_code == 200
 
     # Restore password for other tests
     token = response.json()["access_token"]
     await client.put("/api/v1/auth/password", json={
-        "current_password": "newpass123",
-        "new_password": "admin123",
+        "current_password": "NewPass1",
+        "new_password": "Admin2026!",
     }, headers={"Authorization": f"Bearer {token}"})

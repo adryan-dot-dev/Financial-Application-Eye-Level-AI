@@ -3,14 +3,14 @@ from __future__ import annotations
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.api.v1.schemas.fixed import FixedCreate, FixedResponse, FixedUpdate
 from app.core.exceptions import NotFoundException
-from app.db.models import FixedIncomeExpense, User
+from app.db.models import Category, FixedIncomeExpense, User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/fixed", tags=["Fixed Income/Expenses"])
@@ -41,6 +41,11 @@ async def create_fixed(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if data.category_id:
+        cat = await db.get(Category, data.category_id)
+        if not cat or cat.user_id != current_user.id:
+            raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+
     fixed = FixedIncomeExpense(
         user_id=current_user.id,
         **data.model_dump(),
@@ -88,8 +93,18 @@ async def update_fixed(
         raise NotFoundException("Fixed income/expense not found")
 
     update_data = data.model_dump(exclude_unset=True)
+    if "category_id" in update_data and update_data["category_id"]:
+        cat = await db.get(Category, update_data["category_id"])
+        if not cat or cat.user_id != current_user.id:
+            raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+
     for key, value in update_data.items():
         setattr(fixed, key, value)
+
+    # Validate date range after applying updates
+    if fixed.end_date and fixed.end_date < fixed.start_date:
+        raise HTTPException(status_code=422, detail="end_date must be >= start_date")
+
     await db.commit()
     await db.refresh(fixed)
     return fixed

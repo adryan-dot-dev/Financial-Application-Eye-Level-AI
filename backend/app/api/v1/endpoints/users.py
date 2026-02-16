@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -87,6 +89,8 @@ async def update_user(
         user.is_active = data.is_active
 
     if data.is_admin is not None:
+        if user_id == _admin.id and not data.is_admin:
+            raise ForbiddenException("Cannot remove your own admin status")
         user.is_admin = data.is_admin
 
     await db.commit()

@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,7 @@ class ExpectedIncome(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "month", name="uq_user_month"),
+        Index("ix_expected_income_user_id", "user_id"),
     )
 
     # Relationships

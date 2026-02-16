@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useModalA11y } from '@/hooks/useModalA11y'
 import {
   Plus,
   Pencil,
@@ -11,11 +12,18 @@ import {
   Tag,
   TrendingUp,
   TrendingDown,
+  Check,
+  Palette,
+  Sparkles,
 } from 'lucide-react'
 import type { Category } from '@/types'
 import { categoriesApi } from '@/api/categories'
 import type { CreateCategoryData } from '@/api/categories'
 import { cn } from '@/lib/utils'
+import { CategoryIcon } from '@/components/ui/CategoryIcon'
+import { queryKeys } from '@/lib/queryKeys'
+import { useToast } from '@/contexts/ToastContext'
+import { getApiErrorMessage } from '@/api/client'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -26,12 +34,18 @@ const PRESET_COLORS = [
   '#10B981', // green
   '#EF4444', // red
   '#F59E0B', // amber
-  '#8B5CF6', // purple
+  '#3B82F6', // blue (brand)
   '#EC4899', // pink
   '#06B6D4', // cyan
   '#F97316', // orange
   '#14B8A6', // teal
-  '#6366F1', // indigo
+  '#2563EB', // blue dark (brand)
+]
+
+const PRESET_ICONS = [
+  '🏠', '🍔', '🚗', '💊', '📚', '🎮', '✈️', '🛒',
+  '💰', '📱', '🎵', '⚡', '🏋️', '🎬', '🐾', '🌿',
+  '💼', '🎁', '📦', '🔧', '🏦', '📊', '💳', '🎯',
 ]
 
 interface CategoryFormData {
@@ -54,27 +68,28 @@ const EMPTY_FORM: CategoryFormData = {
 // Skeleton
 // ---------------------------------------------------------------------------
 
-function Skeleton({ className }: { className?: string }) {
+function CategoryCardSkeleton({ index }: { index: number }) {
   return (
     <div
-      className={cn('animate-pulse rounded', className)}
-      style={{ backgroundColor: 'var(--bg-tertiary)' }}
-    />
+      className={cn('animate-fade-in-up card card-hover p-4', `stagger-${Math.min(index + 1, 8)}`)}
+    >
+      <div className="flex items-center gap-3">
+        <div className="skeleton h-11 w-11 rounded-xl" />
+        <div className="flex-1 space-y-2">
+          <div className="skeleton h-4 w-28 rounded" />
+          <div className="skeleton h-3 w-20 rounded" />
+        </div>
+        <div className="skeleton h-7 w-14 rounded-lg" />
+      </div>
+    </div>
   )
 }
 
 function CategoryListSkeleton() {
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 p-3">
-          <Skeleton className="h-10 w-10 rounded-full" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-20" />
-          </div>
-          <Skeleton className="h-6 w-16 rounded" />
-        </div>
+        <CategoryCardSkeleton key={i} index={i} />
       ))}
     </div>
   )
@@ -89,11 +104,13 @@ function CategoryCard({
   isRtl,
   onEdit,
   onArchive,
+  index,
 }: {
   category: Category
   isRtl: boolean
   onEdit: (cat: Category) => void
   onArchive: (cat: Category) => void
+  index: number
 }) {
   const { t } = useTranslation()
   const displayName = isRtl ? category.name_he : category.name
@@ -101,77 +118,77 @@ function CategoryCard({
 
   return (
     <div
-      className="flex items-center gap-3 rounded-lg border p-3 transition-colors"
+      className={cn(
+        'animate-fade-in-up card card-hover group relative overflow-hidden rounded-xl p-4 transition-all',
+        `stagger-${Math.min(index + 1, 8)}`,
+      )}
       style={{
-        borderColor: 'var(--border-primary)',
-        backgroundColor: 'var(--bg-card)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'var(--bg-card)'
+        background: category.color
+          ? `linear-gradient(135deg, ${category.color}0A, ${category.color}05, var(--bg-card))`
+          : undefined,
       }}
     >
-      {/* Icon circle */}
-      <div
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg"
-        style={{
-          backgroundColor: category.color ? `${category.color}20` : 'var(--bg-tertiary)',
-          color: category.color || 'var(--text-secondary)',
-        }}
-      >
-        {category.icon || <Tag className="h-4 w-4" />}
-      </div>
+      <div className="flex items-center gap-3">
+        {/* Icon circle */}
+        <CategoryIcon
+          icon={category.icon}
+          color={category.color}
+          size="md"
+          className="transition-all duration-300"
+        />
 
-      {/* Name */}
-      <div className="min-w-0 flex-1">
-        <p
-          className="truncate text-sm font-semibold"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          {displayName}
-        </p>
-        {secondaryName && (
+        {/* Name */}
+        <div className="min-w-0 flex-1">
           <p
-            className="truncate text-xs"
-            style={{ color: 'var(--text-tertiary)' }}
+            className="truncate text-sm font-semibold"
+            style={{ color: 'var(--text-primary)' }}
+            title={displayName}
           >
-            {secondaryName}
+            {displayName}
           </p>
-        )}
-      </div>
+          {secondaryName && (
+            <p
+              className="truncate text-xs"
+              style={{ color: 'var(--text-tertiary)' }}
+              title={secondaryName}
+            >
+              {secondaryName}
+            </p>
+          )}
+        </div>
 
-      {/* Actions */}
-      <div className="flex shrink-0 items-center gap-1">
-        <button
-          onClick={() => onEdit(category)}
-          className="rounded-md p-1.5 transition-colors"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = ''
-          }}
-          title={t('common.edit')}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={() => onArchive(category)}
-          className="rounded-md p-1.5 transition-colors"
-          style={{ color: 'var(--color-expense)' }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = ''
-          }}
-          title={t('common.delete')}
-        >
-          <Archive className="h-3.5 w-3.5" />
-        </button>
+        {/* Color dot indicator */}
+        {category.color && (
+          <div
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{
+              backgroundColor: category.color,
+              boxShadow: `0 0 6px ${category.color}40`,
+            }}
+          />
+        )}
+
+        {/* Actions - visible on hover */}
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <button
+            onClick={() => onEdit(category)}
+            className="action-btn action-btn-edit rounded-lg p-2"
+            style={{ color: 'var(--text-secondary)' }}
+            title={t('common.edit')}
+            aria-label={t('common.edit')}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => onArchive(category)}
+            className="action-btn action-btn-delete rounded-lg p-2"
+            style={{ color: 'var(--text-secondary)' }}
+            title={t('common.delete')}
+            aria-label={t('common.delete')}
+          >
+            <Archive className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -186,19 +203,24 @@ function EmptyColumnState({ type }: { type: 'income' | 'expense' }) {
   const isIncome = type === 'income'
 
   return (
-    <div className="flex flex-col items-center justify-center py-10">
+    <div className="flex flex-col items-center justify-center py-12">
       <div
-        className="mb-3 flex h-12 w-12 items-center justify-center rounded-full"
-        style={{ backgroundColor: 'var(--bg-tertiary)' }}
+        className="empty-float mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
+        style={{
+          backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+        }}
       >
         {isIncome ? (
-          <TrendingUp className="h-5 w-5" style={{ color: 'var(--color-income)' }} />
+          <TrendingUp className="h-7 w-7" style={{ color: 'var(--color-income)' }} />
         ) : (
-          <TrendingDown className="h-5 w-5" style={{ color: 'var(--color-expense)' }} />
+          <TrendingDown className="h-7 w-7" style={{ color: 'var(--color-expense)' }} />
         )}
       </div>
-      <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+      <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
         {t('common.noData')}
+      </p>
+      <p className="mt-1 text-xs" style={{ color: 'var(--text-tertiary)', opacity: 0.7 }}>
+        {isIncome ? t('transactions.income') : t('transactions.expense')}
       </p>
     </div>
   )
@@ -211,7 +233,12 @@ function EmptyColumnState({ type }: { type: 'income' | 'expense' }) {
 export default function CategoriesPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const isRtl = i18n.language === 'he'
+
+  useEffect(() => {
+    document.title = t('pageTitle.categories')
+  }, [t])
 
   // State
   const [modalOpen, setModalOpen] = useState(false)
@@ -219,6 +246,7 @@ export default function CategoriesPage() {
   const [formData, setFormData] = useState<CategoryFormData>(EMPTY_FORM)
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof CategoryFormData, string>>>({})
   const [archiveTarget, setArchiveTarget] = useState<Category | null>(null)
+  const [showIconPicker, setShowIconPicker] = useState(false)
 
   // Queries
   const {
@@ -226,7 +254,7 @@ export default function CategoriesPage() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ['categories'],
+    queryKey: queryKeys.categories.all,
     queryFn: () => categoriesApi.list(),
   })
 
@@ -235,13 +263,17 @@ export default function CategoriesPage() {
   const expenseCategories = categories.filter((c) => c.type === 'expense' && !c.is_archived)
 
   // Mutations
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['categories'] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.categories.all })
 
   const createMutation = useMutation({
     mutationFn: (data: CreateCategoryData) => categoriesApi.create(data),
     onSuccess: () => {
       invalidate()
       closeModal()
+      toast.success(t('toast.createSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
@@ -251,6 +283,10 @@ export default function CategoriesPage() {
     onSuccess: () => {
       invalidate()
       closeModal()
+      toast.success(t('toast.updateSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
@@ -259,6 +295,10 @@ export default function CategoriesPage() {
     onSuccess: () => {
       invalidate()
       setArchiveTarget(null)
+      toast.success(t('toast.archiveSuccess'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
     },
   })
 
@@ -267,6 +307,7 @@ export default function CategoriesPage() {
     setEditingCategory(null)
     setFormData({ ...EMPTY_FORM, type })
     setFormErrors({})
+    setShowIconPicker(false)
     setModalOpen(true)
   }
 
@@ -280,15 +321,23 @@ export default function CategoriesPage() {
       color: cat.color,
     })
     setFormErrors({})
+    setShowIconPicker(false)
     setModalOpen(true)
   }
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setModalOpen(false)
     setEditingCategory(null)
     setFormData(EMPTY_FORM)
     setFormErrors({})
-  }
+    setShowIconPicker(false)
+  }, [])
+
+  const closeArchiveDialog = useCallback(() => setArchiveTarget(null), [])
+
+  // Modal accessibility (Escape key, focus trap, aria)
+  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: archivePanelRef } = useModalA11y(!!archiveTarget, closeArchiveDialog)
 
   // Form validation & submit
   const validateForm = (): boolean => {
@@ -329,9 +378,9 @@ export default function CategoriesPage() {
   // =========================================================================
 
   return (
-    <div className="space-y-6">
+    <div className="page-reveal space-y-6">
       {/* Page header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1
             className="text-2xl font-bold tracking-tight"
@@ -348,8 +397,7 @@ export default function CategoriesPage() {
 
         <button
           onClick={() => openCreateModal('expense')}
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90"
-          style={{ backgroundColor: 'var(--border-focus)' }}
+          className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
         >
           <Plus className="h-4 w-4" />
           {t('categories.add')}
@@ -358,13 +406,10 @@ export default function CategoriesPage() {
 
       {/* Error state */}
       {isError && (
-        <div
-          className="rounded-xl border p-6 text-center"
-          style={{
-            backgroundColor: 'var(--bg-card)',
-            borderColor: 'var(--border-primary)',
-          }}
-        >
+        <div className="animate-fade-in-up stagger-2 card p-8 text-center">
+          <div className="empty-float mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl" style={{ backgroundColor: 'var(--bg-danger)' }}>
+            <Tag className="h-7 w-7" style={{ color: 'var(--color-expense)' }} />
+          </div>
           <p className="text-sm font-medium" style={{ color: 'var(--color-expense)' }}>
             {t('common.error')}
           </p>
@@ -375,142 +420,138 @@ export default function CategoriesPage() {
       {!isError && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Income column */}
-          <div
-            className="rounded-xl border"
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-          >
-            {/* Column header */}
-            <div
-              className="flex items-center justify-between border-b px-5 py-4"
-              style={{ borderColor: 'var(--border-primary)' }}
-            >
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" style={{ color: 'var(--color-income)' }} />
-                <h2
-                  className="text-sm font-semibold"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {t('transactions.income')}
-                </h2>
-                <span
-                  className="rounded-full px-2 py-0.5 text-xs font-medium"
+          <div className="animate-fade-in-up stagger-2">
+            <div className="card overflow-hidden">
+              {/* Column header */}
+              <div
+                className="flex items-center justify-between border-b px-5 py-4"
+                style={{ borderColor: 'var(--border-primary)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-lg"
+                    style={{
+                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                      color: 'var(--color-income)',
+                    }}
+                  >
+                    <TrendingUp className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h2
+                      className="text-sm font-bold"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {t('transactions.income')}
+                    </h2>
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      {incomeCategories.length} {t('categories.title').toLowerCase()}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => openCreateModal('income')}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-all hover:opacity-80"
                   style={{
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     color: 'var(--color-income)',
                   }}
+                  title={t('categories.add')}
+                  aria-label={t('categories.add')}
                 >
-                  {incomeCategories.length}
-                </span>
+                  <Plus className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                onClick={() => openCreateModal('income')}
-                className="rounded-md p-1.5 transition-colors"
-                style={{ color: 'var(--color-income)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ''
-                }}
-                title={t('categories.add')}
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
 
-            {/* Income list */}
-            <div className="p-3">
-              {isLoading ? (
-                <CategoryListSkeleton />
-              ) : incomeCategories.length === 0 ? (
-                <EmptyColumnState type="income" />
-              ) : (
-                <div className="space-y-2">
-                  {incomeCategories.map((cat) => (
-                    <CategoryCard
-                      key={cat.id}
-                      category={cat}
-                      isRtl={isRtl}
-                      onEdit={openEditModal}
-                      onArchive={setArchiveTarget}
-                    />
-                  ))}
-                </div>
-              )}
+              {/* Income list */}
+              <div className="p-4">
+                {isLoading ? (
+                  <CategoryListSkeleton />
+                ) : incomeCategories.length === 0 ? (
+                  <EmptyColumnState type="income" />
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    {incomeCategories.map((cat, idx) => (
+                      <CategoryCard
+                        key={cat.id}
+                        category={cat}
+                        isRtl={isRtl}
+                        onEdit={openEditModal}
+                        onArchive={setArchiveTarget}
+                        index={idx}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Expense column */}
-          <div
-            className="rounded-xl border"
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-          >
-            {/* Column header */}
-            <div
-              className="flex items-center justify-between border-b px-5 py-4"
-              style={{ borderColor: 'var(--border-primary)' }}
-            >
-              <div className="flex items-center gap-2">
-                <TrendingDown className="h-4 w-4" style={{ color: 'var(--color-expense)' }} />
-                <h2
-                  className="text-sm font-semibold"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {t('transactions.expense')}
-                </h2>
-                <span
-                  className="rounded-full px-2 py-0.5 text-xs font-medium"
+          <div className="animate-fade-in-up stagger-3">
+            <div className="card overflow-hidden">
+              {/* Column header */}
+              <div
+                className="flex items-center justify-between border-b px-5 py-4"
+                style={{ borderColor: 'var(--border-primary)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-lg"
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      color: 'var(--color-expense)',
+                    }}
+                  >
+                    <TrendingDown className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h2
+                      className="text-sm font-bold"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {t('transactions.expense')}
+                    </h2>
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      {expenseCategories.length} {t('categories.title').toLowerCase()}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => openCreateModal('expense')}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-all hover:opacity-80"
                   style={{
                     backgroundColor: 'rgba(239, 68, 68, 0.1)',
                     color: 'var(--color-expense)',
                   }}
+                  title={t('categories.add')}
+                  aria-label={t('categories.add')}
                 >
-                  {expenseCategories.length}
-                </span>
+                  <Plus className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                onClick={() => openCreateModal('expense')}
-                className="rounded-md p-1.5 transition-colors"
-                style={{ color: 'var(--color-expense)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ''
-                }}
-                title={t('categories.add')}
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
 
-            {/* Expense list */}
-            <div className="p-3">
-              {isLoading ? (
-                <CategoryListSkeleton />
-              ) : expenseCategories.length === 0 ? (
-                <EmptyColumnState type="expense" />
-              ) : (
-                <div className="space-y-2">
-                  {expenseCategories.map((cat) => (
-                    <CategoryCard
-                      key={cat.id}
-                      category={cat}
-                      isRtl={isRtl}
-                      onEdit={openEditModal}
-                      onArchive={setArchiveTarget}
-                    />
-                  ))}
-                </div>
-              )}
+              {/* Expense list */}
+              <div className="p-4">
+                {isLoading ? (
+                  <CategoryListSkeleton />
+                ) : expenseCategories.length === 0 ? (
+                  <EmptyColumnState type="expense" />
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    {expenseCategories.map((cat, idx) => (
+                      <CategoryCard
+                        key={cat.id}
+                        category={cat}
+                        isRtl={isRtl}
+                        onEdit={openEditModal}
+                        onArchive={setArchiveTarget}
+                        index={idx}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -522,274 +563,346 @@ export default function CategoriesPage() {
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cat-modal-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeModal()
           }}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
           {/* Panel */}
           <div
-            className="relative z-10 w-full max-w-lg rounded-xl border p-6"
+            ref={modalPanelRef}
+            className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-lg)',
+              boxShadow: 'var(--shadow-xl)',
             }}
           >
-            {/* Header */}
-            <div className="mb-6 flex items-center justify-between">
-              <h2
-                className="text-lg font-semibold"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {editingCategory ? t('common.edit') : t('categories.add')}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="rounded-md p-1.5 transition-colors"
-                style={{ color: 'var(--text-tertiary)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ''
-                }}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+            {/* Accent bar */}
+            <div
+              className="h-1"
+              style={{
+                background: formData.type === 'income'
+                  ? 'linear-gradient(90deg, #34D399, #10B981)'
+                  : 'linear-gradient(90deg, #F87171, #EF4444)',
+              }}
+            />
 
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              {/* Type toggle */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('transactions.type')}
-                </label>
-                <div
-                  className="flex rounded-lg border"
-                  style={{ borderColor: 'var(--border-primary)' }}
-                >
-                  {(['income', 'expense'] as const).map((typeVal) => {
-                    const active = formData.type === typeVal
-                    const colorVar =
-                      typeVal === 'income' ? 'var(--color-income)' : 'var(--color-expense)'
-                    return (
-                      <button
-                        key={typeVal}
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({ ...prev, type: typeVal }))
-                        }
-                        className="flex flex-1 items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors first:rounded-s-lg last:rounded-e-lg"
-                        style={{
-                          backgroundColor: active ? colorVar : 'var(--bg-input)',
-                          color: active ? '#fff' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {typeVal === 'income' ? (
-                          <TrendingUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <TrendingDown className="h-3.5 w-3.5" />
-                        )}
-                        {typeVal === 'income'
-                          ? t('transactions.income')
-                          : t('transactions.expense')}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Name + Name Hebrew */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {t('categories.name')} *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                      formErrors.name && 'border-red-400',
-                    )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.name ? undefined : 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                    placeholder="Category name"
-                  />
-                  {formErrors.name && (
-                    <p className="mt-1 text-xs" style={{ color: 'var(--color-expense)' }}>
-                      {formErrors.name}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {t('categories.nameHe')} *
-                  </label>
-                  <input
-                    type="text"
-                    dir="rtl"
-                    value={formData.name_he}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, name_he: e.target.value }))
-                    }
-                    className={cn(
-                      'w-full rounded-lg border px-3 py-2 text-sm outline-none',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                      formErrors.name_he && 'border-red-400',
-                    )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.name_he ? undefined : 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                    placeholder="שם קטגוריה"
-                  />
-                  {formErrors.name_he && (
-                    <p className="mt-1 text-xs" style={{ color: 'var(--color-expense)' }}>
-                      {formErrors.name_he}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Icon */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('categories.icon')}
-                </label>
+            <div className="p-6">
+              {/* Header */}
+              <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={formData.icon}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, icon: e.target.value }))
-                    }
-                    className={cn(
-                      'flex-1 rounded-lg border px-3 py-2 text-sm outline-none',
-                      'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                    )}
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                    placeholder="e.g. emoji or icon name"
-                  />
-                  {/* Preview */}
                   <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
                     style={{
-                      backgroundColor: formData.color ? `${formData.color}20` : 'var(--bg-tertiary)',
-                      color: formData.color || 'var(--text-secondary)',
+                      backgroundColor: formData.type === 'income' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      color: formData.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                     }}
                   >
-                    {formData.icon || <Tag className="h-4 w-4" />}
+                    <Tag className="h-5 w-5" />
+                  </div>
+                  <h2
+                    id="cat-modal-title"
+                    className="text-lg font-bold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {editingCategory ? t('common.edit') : t('categories.add')}
+                  </h2>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  aria-label={t('common.cancel')}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleFormSubmit} className="space-y-5">
+                {/* Type toggle - Apple segment control */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('transactions.type')}
+                  </label>
+                  <div className="segment-control w-full">
+                    {(['income', 'expense'] as const).map((typeVal) => {
+                      const active = formData.type === typeVal
+                      return (
+                        <button
+                          key={typeVal}
+                          type="button"
+                          data-active={active}
+                          onClick={() =>
+                            setFormData((prev) => ({ ...prev, type: typeVal }))
+                          }
+                          className="segment-control-btn flex-1 justify-center"
+                        >
+                          {typeVal === 'income' ? (
+                            <TrendingUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <TrendingDown className="h-3.5 w-3.5" />
+                          )}
+                          {typeVal === 'income'
+                            ? t('transactions.income')
+                            : t('transactions.expense')}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
-              </div>
 
-              {/* Color picker */}
-              <div>
-                <label
-                  className="mb-1.5 block text-sm font-medium"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('categories.color')}
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {PRESET_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setFormData((prev) => ({ ...prev, color }))}
+                {/* Name + Name Hebrew */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      className="mb-1.5 block text-sm font-medium"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {t('categories.name')} *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, name: e.target.value }))
+                      }
                       className={cn(
-                        'h-8 w-8 rounded-full transition-all',
-                        formData.color === color
-                          ? 'ring-2 ring-offset-2 scale-110'
-                          : 'hover:scale-105',
+                        'w-full rounded-lg border px-3 py-2.5 text-sm outline-none',
+                        formErrors.name && 'border-red-400',
                       )}
                       style={{
-                        backgroundColor: color,
-                        '--tw-ring-color': color,
-                      } as React.CSSProperties}
-                      title={color}
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: formErrors.name ? undefined : 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                      placeholder={t('categories.namePlaceholder')}
+                      aria-describedby={formErrors.name ? 'cat-name-error' : undefined}
+                      aria-invalid={!!formErrors.name}
                     />
-                  ))}
+                    {formErrors.name && (
+                      <p id="cat-name-error" role="alert" className="mt-1 text-xs" style={{ color: 'var(--color-expense)' }}>
+                        {formErrors.name}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label
+                      className="mb-1.5 block text-sm font-medium"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {t('categories.nameHe')} *
+                    </label>
+                    <input
+                      type="text"
+                      dir="rtl"
+                      value={formData.name_he}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, name_he: e.target.value }))
+                      }
+                      className={cn(
+                        'w-full rounded-lg border px-3 py-2.5 text-sm outline-none',
+                        formErrors.name_he && 'border-red-400',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: formErrors.name_he ? undefined : 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                      placeholder={t('categories.nameHePlaceholder')}
+                      aria-describedby={formErrors.name_he ? 'cat-name-he-error' : undefined}
+                      aria-invalid={!!formErrors.name_he}
+                    />
+                    {formErrors.name_he && (
+                      <p id="cat-name-he-error" role="alert" className="mt-1 text-xs" style={{ color: 'var(--color-expense)' }}>
+                        {formErrors.name_he}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                {/* Custom color input */}
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={formData.color}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, color: e.target.value }))
-                    }
-                    className="h-8 w-8 cursor-pointer rounded border-0"
-                  />
-                  <input
-                    type="text"
-                    value={formData.color}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, color: e.target.value }))
-                    }
-                    className="w-24 rounded-lg border px-2 py-1 text-xs font-mono outline-none"
-                    style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderColor: 'var(--border-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-              </div>
 
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-secondary)',
-                    backgroundColor: 'var(--bg-input)',
-                  }}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isMutating}
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                  style={{ backgroundColor: 'var(--border-focus)' }}
-                >
-                  {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {t('common.save')}
-                </button>
-              </div>
-            </form>
+                {/* Icon */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('categories.icon')}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    {/* Preview circle */}
+                    <CategoryIcon
+                      icon={formData.icon}
+                      color={formData.color}
+                      size="lg"
+                    />
+
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={formData.icon}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, icon: e.target.value }))
+                          }
+                          className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+                          style={{
+                            backgroundColor: 'var(--bg-input)',
+                            borderColor: 'var(--border-primary)',
+                            color: 'var(--text-primary)',
+                          }}
+                          placeholder={t('categories.iconPlaceholder')}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowIconPicker(!showIconPicker)}
+                          className={cn(
+                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-all',
+                            showIconPicker && 'ring-2 ring-[var(--border-focus)]/30',
+                          )}
+                          style={{
+                            backgroundColor: showIconPicker ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-input)',
+                            borderColor: showIconPicker ? 'var(--border-focus)' : 'var(--border-primary)',
+                            color: showIconPicker ? 'var(--border-focus)' : 'var(--text-secondary)',
+                          }}
+                          title="Pick an icon"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {/* Quick icon picker */}
+                      {showIconPicker && (
+                        <div
+                          className="mt-2 grid grid-cols-8 gap-1 rounded-lg border p-2"
+                          style={{
+                            backgroundColor: 'var(--bg-primary)',
+                            borderColor: 'var(--border-primary)',
+                          }}
+                        >
+                          {PRESET_ICONS.map((icon) => (
+                            <button
+                              key={icon}
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({ ...prev, icon }))
+                                setShowIconPicker(false)
+                              }}
+                              className={cn(
+                                'flex h-8 w-8 items-center justify-center rounded-lg text-base transition-all hover:opacity-80',
+                                formData.icon === icon ? 'ring-2 ring-[var(--border-focus)]' : '',
+                              )}
+                              style={{
+                                backgroundColor: formData.icon === icon ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                              }}
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Color picker */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Palette className="h-3.5 w-3.5" />
+                      {t('categories.color')}
+                    </span>
+                  </label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {PRESET_COLORS.map((color) => {
+                      const isSelected = formData.color === color
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, color }))}
+                          className="relative flex h-9 w-9 items-center justify-center rounded-full transition-all hover:opacity-80"
+                          style={{
+                            backgroundColor: color,
+                            boxShadow: isSelected
+                              ? `0 0 0 2px var(--bg-card), 0 0 0 4px ${color}`
+                              : `0 2px 6px ${color}30`,
+                          }}
+                          title={color}
+                        >
+                          {isSelected && (
+                            <Check className="h-4 w-4 text-white drop-shadow-sm" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {/* Custom color input */}
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={formData.color}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, color: e.target.value }))
+                      }
+                      className="h-8 w-8 cursor-pointer rounded-lg border-0"
+                    />
+                    <input
+                      type="text"
+                      value={formData.color}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, color: e.target.value }))
+                      }
+                      className="w-24 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                    />
+                    <div
+                      className="h-6 w-6 rounded-md"
+                      style={{ backgroundColor: formData.color }}
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--bg-hover)]"
+                    style={{
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'transparent',
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isMutating}
+                    className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t('common.save')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -800,64 +913,93 @@ export default function CategoriesPage() {
       {archiveTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cat-archive-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) setArchiveTarget(null)
           }}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
           {/* Panel */}
           <div
-            className="relative z-10 w-full max-w-sm rounded-xl border p-6"
+            ref={archivePanelRef}
+            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
-              boxShadow: 'var(--shadow-lg)',
+              boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div className="mb-4 flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full"
-                style={{ backgroundColor: '#EF444420' }}
-              >
-                <Archive className="h-5 w-5" style={{ color: 'var(--color-expense)' }} />
+            {/* Red accent bar */}
+            <div
+              className="h-1"
+              style={{ background: 'linear-gradient(90deg, #F87171, #EF4444, #DC2626)' }}
+            />
+
+            <div className="p-6">
+              <div className="mb-5 flex items-center gap-3">
+                <div
+                  className="warning-pulse flex h-12 w-12 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: 'var(--bg-danger)' }}
+                >
+                  <Archive className="h-6 w-6" style={{ color: 'var(--color-expense)' }} />
+                </div>
+                <div>
+                  <h3
+                    id="cat-archive-title"
+                    className="text-base font-bold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {t('common.delete')}
+                  </h3>
+                  <p className="mt-0.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {isRtl ? archiveTarget.name_he : archiveTarget.name}
+                  </p>
+                </div>
               </div>
-              <h3
-                className="text-base font-semibold"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {t('common.delete')}
-              </h3>
-            </div>
 
-            <p className="mb-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {isRtl ? archiveTarget.name_he : archiveTarget.name}
-            </p>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setArchiveTarget(null)}
-                className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+              <div
+                className="mb-5 rounded-lg border px-4 py-3"
                 style={{
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-secondary)',
-                  backgroundColor: 'var(--bg-input)',
+                  backgroundColor: 'rgba(239, 68, 68, 0.04)',
+                  borderColor: 'rgba(239, 68, 68, 0.15)',
                 }}
               >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => archiveMutation.mutate(archiveTarget.id)}
-                disabled={archiveMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                style={{ backgroundColor: 'var(--color-expense)' }}
-              >
-                {archiveMutation.isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
-                {t('common.delete')}
-              </button>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {isRtl
+                    ? `"${archiveTarget.name_he}" - ${archiveTarget.name}`
+                    : `"${archiveTarget.name}" - ${archiveTarget.name_he}`
+                  }
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setArchiveTarget(null)}
+                  className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--bg-hover)]"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-secondary)',
+                    backgroundColor: 'transparent',
+                  }}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={() => archiveMutation.mutate(archiveTarget.id)}
+                  disabled={archiveMutation.isPending}
+                  className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
+                  style={{ backgroundColor: '#EF4444', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}
+                >
+                  {archiveMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  {t('common.delete')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

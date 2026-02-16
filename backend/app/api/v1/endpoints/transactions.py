@@ -6,9 +6,10 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select, update
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.api.v1.schemas.transaction import (
@@ -21,6 +22,7 @@ from app.api.v1.schemas.transaction import (
     TransactionUpdate,
 )
 from app.core.exceptions import NotFoundException
+from app.db.models.category import Category
 from app.db.models.transaction import Transaction
 from app.db.models.user import User
 from app.db.session import get_db
@@ -46,6 +48,8 @@ async def list_transactions(
 ):
     query = select(Transaction).where(Transaction.user_id == current_user.id)
 
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="start_date must be <= end_date")
     if start_date:
         query = query.where(Transaction.date >= start_date)
     if end_date:
@@ -59,7 +63,8 @@ async def list_transactions(
     if max_amount is not None:
         query = query.where(Transaction.amount <= max_amount)
     if search:
-        query = query.where(Transaction.description.ilike(f"%{search}%"))
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.where(Transaction.description.ilike(f"%{escaped}%"))
 
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
@@ -72,6 +77,9 @@ async def list_transactions(
         query = query.order_by(sort_column.desc())
     else:
         query = query.order_by(sort_column.asc())
+
+    # Eager load category to avoid N+1 queries
+    query = query.options(selectinload(Transaction.category))
 
     # Paginate
     offset = (page - 1) * page_size
@@ -95,6 +103,21 @@ async def create_transaction(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if data.category_id:
+        cat = await db.get(Category, data.category_id)
+        if not cat or cat.user_id != current_user.id:
+            raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+        if cat.is_archived:
+            raise HTTPException(status_code=422, detail="Cannot assign an archived category")
+        if cat.type != data.type:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Category type '{cat.type}' does not match transaction type '{data.type}'"
+            )
+
+    if data.category_id is None and hasattr(data, 'date') and data.date is not None:
+        pass  # date validation is handled by Pydantic
+
     transaction = Transaction(
         user_id=current_user.id,
         **data.model_dump(),
@@ -139,6 +162,18 @@ async def update_transaction(
         raise NotFoundException("Transaction")
 
     update_data = data.model_dump(exclude_unset=True)
+    if "category_id" in update_data and update_data["category_id"]:
+        cat = await db.get(Category, update_data["category_id"])
+        if not cat or cat.user_id != current_user.id:
+            raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+        # Determine the effective transaction type (updated or existing)
+        effective_type = update_data.get("type", transaction.type)
+        if cat.type != effective_type:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Category type '{cat.type}' does not match transaction type '{effective_type}'"
+            )
+
     for field, value in update_data.items():
         setattr(transaction, field, value)
 
@@ -206,6 +241,20 @@ async def bulk_create_transactions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Validate category ownership for all category_ids
+    category_ids = {item.category_id for item in data.transactions if item.category_id}
+    if category_ids:
+        result = await db.execute(
+            select(Category.id).where(
+                Category.id.in_(category_ids),
+                Category.user_id == current_user.id,
+            )
+        )
+        valid_ids = set(result.scalars().all())
+        invalid_ids = category_ids - valid_ids
+        if invalid_ids:
+            raise HTTPException(status_code=422, detail="One or more categories not found or do not belong to you")
+
     transactions = []
     for item in data.transactions:
         transaction = Transaction(
@@ -227,18 +276,16 @@ async def bulk_delete_transactions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    for tid in data.ids:
-        result = await db.execute(
-            select(Transaction).where(
-                Transaction.id == tid, Transaction.user_id == current_user.id
-            )
+    # Single DELETE query instead of N SELECT + DELETE queries
+    result = await db.execute(
+        delete(Transaction).where(
+            Transaction.id.in_(data.ids),
+            Transaction.user_id == current_user.id,
         )
-        transaction = result.scalar_one_or_none()
-        if transaction:
-            await db.delete(transaction)
-
+    )
     await db.commit()
-    return {"message": f"Deleted {len(data.ids)} transactions"}
+    deleted_count = result.rowcount
+    return {"message": f"Deleted {deleted_count} transactions"}
 
 
 @router.put("/bulk-update")
@@ -247,6 +294,12 @@ async def bulk_update_category(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Validate category ownership
+    if data.category_id:
+        cat = await db.get(Category, data.category_id)
+        if not cat or cat.user_id != current_user.id:
+            raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+
     await db.execute(
         update(Transaction)
         .where(Transaction.id.in_(data.ids), Transaction.user_id == current_user.id)

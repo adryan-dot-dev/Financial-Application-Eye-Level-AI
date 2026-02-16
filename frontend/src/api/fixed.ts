@@ -20,8 +20,12 @@ export type UpdateFixedData = Partial<CreateFixedData>
 
 export const fixedApi = {
   list: async (params?: FixedListParams): Promise<FixedEntry[]> => {
-    const response = await apiClient.get<FixedEntry[]>('/fixed', { params })
-    return response.data
+    const response = await apiClient.get('/fixed', { params })
+    const data = response.data
+    // Defensive: handle both plain array and { items: [...] } response formats
+    if (Array.isArray(data)) return data as FixedEntry[]
+    if (data && Array.isArray(data.items)) return data.items as FixedEntry[]
+    return []
   },
 
   get: async (id: string): Promise<FixedEntry> => {

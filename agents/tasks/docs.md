@@ -1,42 +1,34 @@
-# 📋 Docs Tasks
+# Docs Tasks
 
-> קובץ זה מנוהל ע"י **Orchestrator**. 
+> קובץ זה מנוהל ע"י **Orchestrator**.
 > אל תערוך ידנית אלא אם אתה ה-Orchestrator.
 
 ---
 
 ## הוראות ל-Docs
 
-1. מצא את המשימה העליונה עם `⬜ PENDING`
-2. שנה ל-`⏳ IN PROGRESS`
+1. מצא את המשימה העליונה עם `PENDING`
+2. שנה ל-`IN PROGRESS`
 3. כתוב/עדכן תיעוד
 4. עדכן סטטוס ב-`status/docs.md`
-5. שנה ל-`✅ DONE`
+5. שנה ל-`DONE`
 
 ---
 
 ## משימות
 
-<!-- 
-דוגמה למשימה:
+## Task-D001: Document UI Polish Sprint changes
 
-## Task-001: תעד את ה-API
-
-**Status:** ⬜ PENDING
-**Priority:** LOW
-**Depends on:** Implement Task-001, Test Task-001, Review Task-001
+**Status:** PENDING
+**Priority:** MEDIUM
+**Depends on:** Implement Tasks 001-006, Review Task-R001
 
 ### תיאור
-כתוב תיעוד API למודל User
-
-### קבצים לתיעוד
-- `src/models/user.py`
-- `src/routes/users.py`
+תעד את כל השינויים שבוצעו ב-UI Polish Sprint.
 
 ### מה לתעד
-- [ ] תיאור כל endpoint
-- [ ] פרמטרים
-- [ ] דוגמאות
--->
-
-_אין משימות כרגע. ה-Orchestrator יוסיף משימות כאן._
+- [ ] עדכן PLAN.md - סמן Phase 3 ו-4 כ-Complete, הוסף Phase 5 (Polish)
+- [ ] עדכן CLAUDE.md - סטטוס נוכחי
+- [ ] עדכן agents/shared/decisions.md עם החלטות חדשות (אם יש)
+- [ ] רשימת כל הבעיות שנמצאו ותוקנו
+- [ ] QA results summary

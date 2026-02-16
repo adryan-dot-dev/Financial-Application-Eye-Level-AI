@@ -17,8 +17,12 @@ export type UpdateCategoryData = Partial<CreateCategoryData>
 
 export const categoriesApi = {
   list: async (params?: CategoryListParams): Promise<Category[]> => {
-    const response = await apiClient.get<Category[]>('/categories', { params })
-    return response.data
+    const response = await apiClient.get('/categories', { params })
+    const data = response.data
+    // Defensive: handle both plain array and { items: [...] } response formats
+    if (Array.isArray(data)) return data as Category[]
+    if (data && Array.isArray(data.items)) return data.items as Category[]
+    return []
   },
 
   get: async (id: string): Promise<Category> => {

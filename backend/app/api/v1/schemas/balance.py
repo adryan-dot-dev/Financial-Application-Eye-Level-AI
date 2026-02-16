@@ -5,7 +5,17 @@ from decimal import Decimal
 from typing import List
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _validate_decimal_precision(v: Decimal, max_digits: int = 15) -> Decimal:
+    """Validate that a Decimal value does not exceed max_digits total digits."""
+    if v is not None:
+        s = str(abs(v))
+        digits_only = s.replace('.', '').lstrip('0') or '0'
+        if len(digits_only) > max_digits:
+            raise ValueError(f'Amount exceeds maximum precision ({max_digits} digits)')
+    return v
 
 
 class BalanceCreate(BaseModel):
@@ -13,11 +23,21 @@ class BalanceCreate(BaseModel):
     effective_date: date
     notes: str | None = Field(None, max_length=1000)
 
+    @field_validator('balance')
+    @classmethod
+    def validate_balance_precision(cls, v: Decimal) -> Decimal:
+        return _validate_decimal_precision(v)
+
 
 class BalanceUpdate(BaseModel):
     balance: Decimal = Field(..., max_digits=15, decimal_places=2)
     effective_date: date | None = None
     notes: str | None = Field(None, max_length=1000)
+
+    @field_validator('balance')
+    @classmethod
+    def validate_balance_precision(cls, v: Decimal) -> Decimal:
+        return _validate_decimal_precision(v)
 
 
 class BalanceResponse(BaseModel):

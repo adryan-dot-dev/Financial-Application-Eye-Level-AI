@@ -24,6 +24,11 @@ export const authApi = {
     return response.data
   },
 
+  updateMe: async (data: { full_name?: string; phone_number?: string }): Promise<User> => {
+    const response = await apiClient.put<User>('/auth/me', data)
+    return response.data
+  },
+
   changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
     await apiClient.put('/auth/password', {
       current_password: currentPassword,

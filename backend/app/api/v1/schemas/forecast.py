@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -12,7 +12,8 @@ class ForecastMonthItem(BaseModel):
     opening_balance: Decimal
     fixed_income: Decimal
     fixed_expenses: Decimal
-    installment_payments: Decimal
+    installment_income: Decimal
+    installment_expenses: Decimal
     loan_payments: Decimal
     expected_income: Decimal
     one_time_income: Decimal
@@ -27,7 +28,7 @@ class ForecastResponse(BaseModel):
     current_balance: Decimal
     months: List[ForecastMonthItem]
     has_negative_months: bool
-    first_negative_month: date | None = None
+    first_negative_month: Optional[date] = None
 
 
 class ForecastWeekItem(BaseModel):

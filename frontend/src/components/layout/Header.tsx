@@ -19,23 +19,26 @@ export default function Header({ onMenuClick }: HeaderProps) {
     >
       <button
         onClick={onMenuClick}
-        className="flex h-9 w-9 items-center justify-center rounded-md transition-colors"
+        className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
         style={{ color: 'var(--text-primary)' }}
+        aria-label={t('nav.menu')}
       >
-        <Menu size={22} />
+        <Menu size={20} />
       </button>
 
-      <img
-        src="/logo.jpeg"
-        alt="Eye Level AI"
-        className="h-8 w-auto rounded"
-      />
-
-      <h1
-        className="brand-gradient-text text-sm font-semibold"
-      >
-        {t('app.name')}
-      </h1>
+      <div className="flex items-center gap-2.5">
+        <img
+          src="/logo.jpeg"
+          alt={t('app.company')}
+          className="h-7 w-auto rounded-lg"
+        />
+        <h1
+          className="text-sm font-bold"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {t('app.name')}
+        </h1>
+      </div>
     </header>
   )
 }

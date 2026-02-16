@@ -22,16 +22,21 @@ export interface LoanPaymentData {
 export interface LoanBreakdownEntry {
   payment_number: number
   date: string
+  payment_amount: string
   principal: string
   interest: string
-  total_payment: string
   remaining_balance: string
+  status: 'paid' | 'upcoming' | 'future'
 }
 
 export const loansApi = {
   list: async (): Promise<Loan[]> => {
-    const response = await apiClient.get<Loan[]>('/loans')
-    return response.data
+    const response = await apiClient.get('/loans')
+    const data = response.data
+    // Defensive: handle both plain array and { items: [...] } response formats
+    if (Array.isArray(data)) return data as Loan[]
+    if (data && Array.isArray(data.items)) return data.items as Loan[]
+    return []
   },
 
   get: async (id: string): Promise<Loan> => {
@@ -59,7 +64,11 @@ export const loansApi = {
   },
 
   breakdown: async (id: string): Promise<LoanBreakdownEntry[]> => {
-    const response = await apiClient.get<LoanBreakdownEntry[]>(`/loans/${id}/breakdown`)
-    return response.data
+    const response = await apiClient.get(`/loans/${id}/breakdown`)
+    const data = response.data
+    // Defensive: handle both plain array and { items: [...] } response formats
+    if (Array.isArray(data)) return data as LoanBreakdownEntry[]
+    if (data && Array.isArray(data.items)) return data.items as LoanBreakdownEntry[]
+    return []
   },
 }

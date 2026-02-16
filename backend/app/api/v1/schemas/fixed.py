@@ -4,7 +4,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+def _validate_decimal_precision(v: Decimal, max_digits: int = 15) -> Decimal:
+    """Validate that a Decimal value does not exceed max_digits total digits."""
+    if v is not None:
+        s = str(abs(v))
+        digits_only = s.replace('.', '').lstrip('0') or '0'
+        if len(digits_only) > max_digits:
+            raise ValueError(f'Amount exceeds maximum precision ({max_digits} digits)')
+    return v
 
 
 class FixedCreate(BaseModel):
@@ -17,6 +27,11 @@ class FixedCreate(BaseModel):
     start_date: date
     end_date: date | None = None
     description: str | None = Field(None, max_length=1000)
+
+    @field_validator('amount')
+    @classmethod
+    def validate_amount_precision(cls, v: Decimal) -> Decimal:
+        return _validate_decimal_precision(v)
 
     @model_validator(mode="after")
     def validate_date_range(self):
@@ -35,6 +50,11 @@ class FixedUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     description: str | None = Field(None, max_length=1000)
+
+    @field_validator('amount')
+    @classmethod
+    def validate_amount_precision(cls, v: Decimal) -> Decimal:
+        return _validate_decimal_precision(v)
 
 
 class FixedResponse(BaseModel):

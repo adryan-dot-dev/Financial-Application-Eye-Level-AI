@@ -39,5 +39,13 @@ class CategoryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CategoryListResponse(BaseModel):
+    items: list[CategoryResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
 class CategoryReorder(BaseModel):
     ordered_ids: list[UUID]

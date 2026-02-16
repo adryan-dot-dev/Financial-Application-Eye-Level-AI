@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -14,15 +15,17 @@ class SettingsResponse(BaseModel):
     notifications_enabled: bool
     forecast_months_default: int
     week_start_day: int
+    onboarding_completed: bool
 
     model_config = {"from_attributes": True}
 
 
 class SettingsUpdate(BaseModel):
-    currency: str | None = Field(None, max_length=3)
-    language: str | None = Field(None, max_length=2)
-    date_format: str | None = Field(None, max_length=20)
-    theme: str | None = Field(None, pattern="^(light|dark)$")
-    notifications_enabled: bool | None = None
-    forecast_months_default: int | None = Field(None, ge=1, le=24)
-    week_start_day: int | None = Field(None, ge=0, le=6)
+    currency: Optional[str] = Field(None, max_length=3)
+    language: Optional[str] = Field(None, max_length=2)
+    date_format: Optional[str] = Field(None, max_length=20)
+    theme: Optional[str] = Field(None, pattern="^(light|dark|system)$")
+    notifications_enabled: Optional[bool] = None
+    forecast_months_default: Optional[int] = Field(None, ge=1, le=24)
+    week_start_day: Optional[int] = Field(None, ge=0, le=6)
+    onboarding_completed: Optional[bool] = None

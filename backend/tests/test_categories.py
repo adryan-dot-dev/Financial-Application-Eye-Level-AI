@@ -9,7 +9,9 @@ async def test_list_categories(client: AsyncClient, auth_headers: dict):
     response = await client.get("/api/v1/categories", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 13  # 4 income + 9 expense from seed
+    assert len(data["items"]) == 13  # 4 income + 9 expense from seed
+    assert data["total"] == 13
+    assert data["page"] == 1
 
 
 @pytest.mark.asyncio
@@ -17,8 +19,8 @@ async def test_list_categories_by_type(client: AsyncClient, auth_headers: dict):
     response = await client.get("/api/v1/categories?type=income", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 4
-    assert all(c["type"] == "income" for c in data)
+    assert len(data["items"]) == 4
+    assert all(c["type"] == "income" for c in data["items"])
 
 
 @pytest.mark.asyncio
@@ -74,10 +76,10 @@ async def test_delete_category_soft(client: AsyncClient, auth_headers: dict):
 
     # Should not appear in default listing
     list_resp = await client.get("/api/v1/categories", headers=auth_headers)
-    ids = [c["id"] for c in list_resp.json()]
+    ids = [c["id"] for c in list_resp.json()["items"]]
     assert cat_id not in ids
 
     # Should appear with include_archived
     list_resp = await client.get("/api/v1/categories?include_archived=true", headers=auth_headers)
-    ids = [c["id"] for c in list_resp.json()]
+    ids = [c["id"] for c in list_resp.json()["items"]]
     assert cat_id in ids

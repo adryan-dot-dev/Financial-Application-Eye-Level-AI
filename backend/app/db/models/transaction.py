@@ -10,6 +10,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -65,6 +66,11 @@ class Transaction(Base):
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="positive_amount"),
+        Index("ix_transactions_user_id", "user_id"),
+        Index("ix_transactions_user_date", "user_id", "date"),
+        Index("ix_transactions_user_type", "user_id", "type"),
+        Index("ix_transactions_user_category", "user_id", "category_id"),
+        Index("ix_transactions_user_entry_pattern", "user_id", "entry_pattern"),
     )
 
     # Relationships

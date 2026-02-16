@@ -4,13 +4,16 @@ from typing import Optional
 
 from uuid import UUID
 
+import math
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.api.v1.schemas.category import (
     CategoryCreate,
+    CategoryListResponse,
     CategoryReorder,
     CategoryResponse,
     CategoryUpdate,
@@ -23,10 +26,12 @@ from app.db.session import get_db
 router = APIRouter(prefix="/categories", tags=["Categories"])
 
 
-@router.get("", response_model=list[CategoryResponse])
+@router.get("", response_model=CategoryListResponse)
 async def list_categories(
     type: Optional[str] = Query(None, pattern="^(income|expense)$"),
     include_archived: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -38,9 +43,27 @@ async def list_categories(
     if not include_archived:
         query = query.where(Category.is_archived == False)  # noqa: E712
 
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
     query = query.order_by(Category.display_order, Category.created_at)
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
     result = await db.execute(query)
-    return result.scalars().all()
+    items = result.scalars().all()
+
+    return CategoryListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total > 0 else 0,
+    )
 
 
 @router.post("", response_model=CategoryResponse, status_code=201)
@@ -49,6 +72,18 @@ async def create_category(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.exceptions import AlreadyExistsException
+    existing = await db.execute(
+        select(Category).where(
+            Category.user_id == current_user.id,
+            Category.name == data.name,
+            Category.type == data.type,
+            Category.is_archived == False,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise AlreadyExistsException("Category with this name and type")
+
     category = Category(
         user_id=current_user.id,
         **data.model_dump(),
@@ -128,11 +163,21 @@ async def reorder_categories(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    for index, cat_id in enumerate(data.ordered_ids):
+    # Single UPDATE with CASE expression instead of N separate UPDATE queries
+    if data.ordered_ids:
+        order_mapping = {cat_id: idx for idx, cat_id in enumerate(data.ordered_ids)}
         await db.execute(
             update(Category)
-            .where(Category.id == cat_id, Category.user_id == current_user.id)
-            .values(display_order=index)
+            .where(
+                Category.id.in_(data.ordered_ids),
+                Category.user_id == current_user.id,
+            )
+            .values(
+                display_order=case(
+                    *[(Category.id == cat_id, idx) for cat_id, idx in order_mapping.items()],
+                    else_=Category.display_order,
+                )
+            )
         )
 
     await db.commit()

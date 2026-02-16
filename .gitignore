@@ -120,3 +120,14 @@ credentials.json
 *.cert
 .env.production
 config/secrets.yaml
+
+# ============= Backups =============
+backups/*.dump
+backups/*.sql
+!backups/.gitkeep
+
+# ============= Scripts (always track) =============
+!scripts/
+
+# Application Logs
+backend/logs/

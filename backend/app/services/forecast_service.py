@@ -3,7 +3,7 @@ from __future__ import annotations
 import calendar
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
@@ -38,13 +38,13 @@ async def get_current_balance(db: AsyncSession, user_id: UUID) -> Decimal:
     return balance.balance if balance else Decimal("0")
 
 
-async def compute_monthly_forecast(
-    db: AsyncSession, user_id: UUID, months: int = 6
-) -> dict:
-    """Compute monthly cash flow forecast."""
-    today = date.today()
-    current_balance = await get_current_balance(db, user_id)
+async def _fetch_forecast_data(
+    db: AsyncSession, user_id: UUID
+) -> Tuple[list, list, list, dict]:
+    """Fetch all data needed for forecast in parallel-ready queries.
 
+    Returns (fixed_items, installments, loans, expected_incomes_dict).
+    """
     # Fetch all active fixed income/expenses
     fixed_result = await db.execute(
         select(FixedIncomeExpense).where(
@@ -79,6 +79,67 @@ async def compute_monthly_forecast(
     )
     expected_incomes = {ei.month: ei.expected_amount for ei in ei_result.scalars().all()}
 
+    return fixed_items, installments, loans, expected_incomes
+
+
+async def _fetch_one_time_transactions_by_month(
+    db: AsyncSession, user_id: UUID, start: date, end: date
+) -> Dict[Tuple[int, int], Tuple[Decimal, Decimal]]:
+    """Fetch all one-time transactions in the date range with a single query.
+
+    Returns a dict of {(year, month): (income, expenses)}.
+    """
+    result = await db.execute(
+        select(
+            Transaction.type,
+            Transaction.date,
+            Transaction.amount,
+        )
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.date >= start,
+            Transaction.date <= end,
+            Transaction.entry_pattern == "one_time",
+        )
+    )
+
+    buckets: Dict[Tuple[int, int], Tuple[Decimal, Decimal]] = {}
+    for tx_type, tx_date, tx_amount in result.all():
+        key = (tx_date.year, tx_date.month)
+        income, expenses = buckets.get(key, (Decimal("0"), Decimal("0")))
+        if tx_type == "income":
+            income += tx_amount
+        else:
+            expenses += tx_amount
+        buckets[key] = (income, expenses)
+
+    return buckets
+
+
+async def compute_monthly_forecast(
+    db: AsyncSession, user_id: UUID, months: int = 6
+) -> dict:
+    """Compute monthly cash flow forecast."""
+    today = date.today()
+    current_balance = await get_current_balance(db, user_id)
+
+    fixed_items, installments, loans, expected_incomes = await _fetch_forecast_data(
+        db, user_id
+    )
+
+    # Compute the full date range for the forecast
+    first_month_start = today.replace(day=1)
+    last_month_start = first_month_start + relativedelta(months=months - 1)
+    last_month_year = last_month_start.year
+    last_month_num = last_month_start.month
+    last_day = calendar.monthrange(last_month_year, last_month_num)[1]
+    overall_end = date(last_month_year, last_month_num, last_day)
+
+    # Single query: fetch ALL one-time transactions in the full forecast range
+    tx_buckets = await _fetch_one_time_transactions_by_month(
+        db, user_id, first_month_start, overall_end
+    )
+
     forecast_months = []
     running_balance = current_balance
     has_negative = False
@@ -108,8 +169,9 @@ async def compute_monthly_forecast(
             else:
                 fixed_expenses += f.amount
 
-        # Installment payments for this month
-        installment_payments = Decimal("0")
+        # Installment payments for this month (split by type)
+        installment_income = Decimal("0")
+        installment_expenses = Decimal("0")
         for inst in installments:
             remaining = inst.number_of_payments - inst.payments_completed
             if remaining <= 0:
@@ -122,7 +184,10 @@ async def compute_monthly_forecast(
             if payment_num > inst.number_of_payments:
                 continue
             if payment_num > inst.payments_completed:
-                installment_payments += inst.monthly_amount
+                if inst.type == "income":
+                    installment_income += inst.monthly_amount
+                else:
+                    installment_expenses += inst.monthly_amount
 
         # Loan payments for this month
         loan_payments = Decimal("0")
@@ -143,27 +208,13 @@ async def compute_monthly_forecast(
         month_key = month_start
         ei_amount = expected_incomes.get(month_key, Decimal("0"))
 
-        # One-time transactions already recorded for this month
-        one_time_income = Decimal("0")
-        one_time_expenses = Decimal("0")
-
-        # Only count past/current month one-time transactions
-        tx_result = await db.execute(
-            select(Transaction).where(
-                Transaction.user_id == user_id,
-                Transaction.date >= month_start,
-                Transaction.date <= month_end,
-                Transaction.entry_pattern == "one_time",
-            )
+        # One-time transactions from the pre-fetched bucket
+        one_time_income, one_time_expenses = tx_buckets.get(
+            (month_year, month_num), (Decimal("0"), Decimal("0"))
         )
-        for tx in tx_result.scalars().all():
-            if tx.type == "income":
-                one_time_income += tx.amount
-            else:
-                one_time_expenses += tx.amount
 
-        total_income = fixed_income + ei_amount + one_time_income
-        total_expenses = fixed_expenses + installment_payments + loan_payments + one_time_expenses
+        total_income = fixed_income + ei_amount + one_time_income + installment_income
+        total_expenses = fixed_expenses + installment_expenses + loan_payments + one_time_expenses
         net_change = total_income - total_expenses
         closing_balance = opening_balance + net_change
 
@@ -176,7 +227,8 @@ async def compute_monthly_forecast(
             "opening_balance": opening_balance,
             "fixed_income": fixed_income,
             "fixed_expenses": fixed_expenses,
-            "installment_payments": installment_payments,
+            "installment_income": installment_income,
+            "installment_expenses": installment_expenses,
             "loan_payments": loan_payments,
             "expected_income": ei_amount,
             "one_time_income": one_time_income,
@@ -195,6 +247,39 @@ async def compute_monthly_forecast(
         "has_negative_months": has_negative,
         "first_negative_month": first_negative_month,
     }
+
+
+async def _fetch_one_time_transactions_by_date(
+    db: AsyncSession, user_id: UUID, start: date, end: date
+) -> Dict[date, Tuple[Decimal, Decimal]]:
+    """Fetch all one-time transactions in the date range with a single query.
+
+    Returns a dict of {date: (income, expenses)}.
+    """
+    result = await db.execute(
+        select(
+            Transaction.type,
+            Transaction.date,
+            Transaction.amount,
+        )
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.date >= start,
+            Transaction.date <= end,
+            Transaction.entry_pattern == "one_time",
+        )
+    )
+
+    buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
+    for tx_type, tx_date, tx_amount in result.all():
+        income, expenses = buckets.get(tx_date, (Decimal("0"), Decimal("0")))
+        if tx_type == "income":
+            income += tx_amount
+        else:
+            expenses += tx_amount
+        buckets[tx_date] = (income, expenses)
+
+    return buckets
 
 
 async def compute_weekly_forecast(
@@ -226,9 +311,18 @@ async def compute_weekly_forecast(
     loans = loan_result.scalars().all()
 
     # Calculate start of current week (Sunday)
-    week_start = today - timedelta(days=today.weekday() + 1)  # Go to previous Sunday
-    if week_start > today:
-        week_start -= timedelta(days=7)
+    # Python weekday(): Mon=0, Tue=1, ..., Sun=6
+    # To get previous Sunday: subtract (weekday + 1) % 7
+    days_since_sunday = (today.weekday() + 1) % 7
+    week_start = today - timedelta(days=days_since_sunday)
+
+    overall_start = week_start
+    overall_end = week_start + timedelta(weeks=weeks) - timedelta(days=1)
+
+    # Single query: fetch ALL one-time transactions across the entire forecast range
+    tx_by_date = await _fetch_one_time_transactions_by_date(
+        db, user_id, overall_start, overall_end
+    )
 
     weekly_items = []
     running_balance = current_balance
@@ -259,7 +353,7 @@ async def compute_weekly_forecast(
                         expenses += f.amount
                     break  # Only once per week
 
-        # Installments falling in this week
+        # Installments falling in this week (split by type)
         for inst in installments:
             remaining = inst.number_of_payments - inst.payments_completed
             if remaining <= 0:
@@ -276,7 +370,10 @@ async def compute_weekly_forecast(
                     inst.day_of_month > calendar.monthrange(check_date.year, check_date.month)[1]
                     and check_date.day == calendar.monthrange(check_date.year, check_date.month)[1]
                 ):
-                    expenses += inst.monthly_amount
+                    if inst.type == "income":
+                        income += inst.monthly_amount
+                    else:
+                        expenses += inst.monthly_amount
                     break
 
         # Loans falling in this week
@@ -298,20 +395,13 @@ async def compute_weekly_forecast(
                     expenses += loan.monthly_payment
                     break
 
-        # One-time transactions in this week
-        tx_result = await db.execute(
-            select(Transaction).where(
-                Transaction.user_id == user_id,
-                Transaction.date >= ws,
-                Transaction.date <= we,
-                Transaction.entry_pattern == "one_time",
-            )
-        )
-        for tx in tx_result.scalars().all():
-            if tx.type == "income":
-                income += tx.amount
-            else:
-                expenses += tx.amount
+        # One-time transactions from the pre-fetched bucket (by date)
+        for d in range(7):
+            check_date = ws + timedelta(days=d)
+            if check_date in tx_by_date:
+                day_income, day_expenses = tx_by_date[check_date]
+                income += day_income
+                expenses += day_expenses
 
         net_change = income - expenses
         running_balance = running_balance + net_change

@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Sun, Moon, Monitor, Globe, Loader2, User, Lock } from 'lucide-react'
+import { Eye, EyeOff, Sun, Moon, Monitor, Globe, Loader2, User, Lock, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { cn } from '@/lib/utils'
@@ -15,6 +15,10 @@ export default function LoginPage() {
 
   const isRtl = i18n.language === 'he'
 
+  useEffect(() => {
+    document.title = t('pageTitle.login')
+  }, [t])
+
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -25,6 +29,7 @@ export default function LoginPage() {
     const newLang = i18n.language === 'he' ? 'en' : 'he'
     i18n.changeLanguage(newLang)
     document.documentElement.dir = newLang === 'he' ? 'rtl' : 'ltr'
+    document.documentElement.lang = newLang
   }
 
   const cycleTheme = () => {
@@ -66,20 +71,21 @@ export default function LoginPage() {
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="flex min-h-screen"
+      className="page-reveal flex min-h-screen"
       style={{ backgroundColor: 'var(--bg-primary)' }}
     >
-      {/* Top controls */}
+      {/* Top Controls */}
       <div className={cn(
-        'fixed top-4 z-10 flex items-center gap-2',
-        isRtl ? 'left-4' : 'right-4'
+        'fixed top-5 z-50 flex items-center gap-2.5',
+        'end-5'
       )}>
         <button
           onClick={toggleLanguage}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:opacity-80"
+          className="flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium tracking-wide backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
           style={{
-            backgroundColor: 'var(--bg-tertiary)',
             color: 'var(--text-secondary)',
+            backgroundColor: 'var(--bg-secondary)',
+            borderColor: 'var(--border-primary)',
           }}
           title={t('settings.language')}
         >
@@ -88,10 +94,11 @@ export default function LoginPage() {
         </button>
         <button
           onClick={cycleTheme}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:opacity-80"
+          className="flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
           style={{
-            backgroundColor: 'var(--bg-tertiary)',
             color: 'var(--text-secondary)',
+            backgroundColor: 'var(--bg-secondary)',
+            borderColor: 'var(--border-primary)',
           }}
           title={themeLabel}
         >
@@ -99,92 +106,115 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* Brand / decorative side */}
+      {/* Left Side - Brand Panel */}
       <div className={cn(
-        'brand-gradient relative hidden w-1/2 items-center justify-center lg:flex',
+        'relative hidden w-1/2 items-center justify-center overflow-hidden lg:flex',
         isRtl ? 'order-2' : 'order-1'
       )}>
-        {/* Decorative overlay blobs */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -left-20 -top-20 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-20 -right-20 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute left-1/3 top-1/2 h-52 w-52 -translate-y-1/2 rounded-full bg-white/5 blur-2xl" />
-        </div>
+        {/* Solid brand background */}
+        <div className="auth-brand-bg absolute inset-0" />
 
-        <div className="relative z-10 flex flex-col items-center px-10 text-center text-white">
-          <div className="mb-8 overflow-hidden rounded-2xl shadow-2xl ring-4 ring-white/20">
+        <div className="relative z-10 flex flex-col items-center px-12">
+          {/* Logo */}
+          <div className="mb-8 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/20">
             <img
               src="/logo.jpeg"
               alt={t('app.company')}
-              className="h-32 w-32 object-cover"
+              className="h-24 w-24 object-cover"
             />
           </div>
-          <h1 className="mb-3 text-4xl font-bold tracking-tight">
+
+          {/* App name */}
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-white">
             {t('app.name')}
           </h1>
-          <p className="text-lg font-medium opacity-90">
+
+          {/* Company name */}
+          <p className="text-base font-medium text-white/80">
             {t('app.company')}
           </p>
-          <div className="mt-8 h-px w-24 bg-white/30" />
-          <p className="mt-6 max-w-xs text-sm leading-relaxed opacity-75">
+
+          {/* Divider */}
+          <div className="my-7 h-px w-20 bg-white/25" />
+
+          {/* Subtitle */}
+          <p className="max-w-[260px] text-center text-sm leading-relaxed text-white/65">
             {t('auth.loginSubtitle')}
           </p>
         </div>
       </div>
 
-      {/* Form side */}
+      {/* Right Side - Form */}
       <div className={cn(
-        'flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2',
+        'relative flex w-full flex-col items-center justify-center px-6 py-16 lg:w-1/2',
         isRtl ? 'order-1' : 'order-2'
-      )}>
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="mb-8 flex flex-col items-center lg:hidden">
-            <div className="mb-4 overflow-hidden rounded-xl shadow-lg">
+      )}
+        style={{ backgroundColor: 'var(--bg-primary)' }}
+      >
+        <div className="auth-stagger w-full max-w-[420px]">
+
+          {/* Mobile Logo (visible below lg) */}
+          <div className="mb-10 flex flex-col items-center lg:hidden">
+            <div className="mb-5 overflow-hidden rounded-xl shadow-md"
+              style={{ border: '1px solid var(--border-primary)' }}
+            >
               <img
                 src="/logo.jpeg"
                 alt={t('app.company')}
                 className="h-20 w-20 object-cover"
               />
             </div>
-            <h2 className="brand-gradient-text text-xl font-bold">
+            <h2 className="auth-gradient-text text-2xl font-bold tracking-tight">
               {t('app.name')}
             </h2>
+            <p
+              className="mt-1 text-sm"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {t('app.company')}
+            </p>
           </div>
 
           {/* Heading */}
-          <div className="mb-8">
+          <div className="mb-10">
             <h2
-              className="text-2xl font-bold tracking-tight"
+              className="text-3xl font-bold tracking-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('auth.welcomeBack')}
             </h2>
             <p
-              className="mt-2 text-sm"
+              className="mt-3 text-base leading-relaxed"
               style={{ color: 'var(--text-secondary)' }}
             >
               {t('auth.loginSubtitle')}
             </p>
           </div>
 
-          {/* Error message */}
+          {/* Error Message */}
           {error && (
             <div
-              className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+              className="auth-error-animate mb-7 flex items-start gap-3 rounded-xl border px-4 py-3.5 text-sm"
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.06)',
+                borderColor: 'rgba(239, 68, 68, 0.15)',
+                color: '#EF4444',
+              }}
               role="alert"
             >
-              {error}
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
+
             {/* Username */}
             <div>
               <label
                 htmlFor="login-username"
-                className="mb-1.5 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.username')}
@@ -193,7 +223,7 @@ export default function LoginPage() {
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
-                    isRtl ? 'right-3' : 'left-3'
+                    'start-4'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
@@ -207,9 +237,9 @@ export default function LoginPage() {
                   required
                   autoComplete="username"
                   className={cn(
-                    'w-full rounded-lg border py-2.5 text-sm outline-none transition-colors',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                    isRtl ? 'pr-10 pl-3' : 'pl-10 pr-3'
+                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20 focus-visible:shadow-sm',
+                    'ps-11 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -225,7 +255,7 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="login-password"
-                className="mb-1.5 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.password')}
@@ -234,7 +264,7 @@ export default function LoginPage() {
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
-                    isRtl ? 'right-3' : 'left-3'
+                    'start-4'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
@@ -248,9 +278,9 @@ export default function LoginPage() {
                   required
                   autoComplete="current-password"
                   className={cn(
-                    'w-full rounded-lg border py-2.5 text-sm outline-none transition-colors',
-                    'focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--border-focus)]/20',
-                    isRtl ? 'pr-10 pl-10' : 'pl-10 pr-10'
+                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20 focus-visible:shadow-sm',
+                    'ps-11 pe-11'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -263,12 +293,12 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className={cn(
-                    'absolute top-1/2 -translate-y-1/2 transition-colors hover:opacity-70',
-                    isRtl ? 'left-3' : 'right-3'
+                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1 transition-all duration-200 hover:opacity-70',
+                    'end-3'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                   tabIndex={-1}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword
                     ? <EyeOff className="h-[18px] w-[18px]" />
@@ -278,27 +308,48 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Submit */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="brand-gradient flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+              className={cn(
+                'flex w-full items-center justify-center gap-2.5 rounded-xl px-6 py-3.5',
+                'text-sm font-semibold text-white',
+                'transition-all duration-200',
+                'hover:opacity-90',
+                'active:scale-[0.98]',
+                'disabled:cursor-not-allowed disabled:opacity-60'
+              )}
+              style={{
+                background: 'var(--color-brand-600)',
+              }}
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('auth.loginButton')}
             </button>
           </form>
 
-          {/* Register link */}
+          {/* Divider */}
+          <div className="my-8 flex items-center gap-4">
+            <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-primary)' }} />
+            <span
+              className="text-xs font-medium uppercase tracking-wider"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {t('auth.or')}
+            </span>
+            <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-primary)' }} />
+          </div>
+
+          {/* Register Link */}
           <p
-            className="mt-8 text-center text-sm"
+            className="text-center text-sm"
             style={{ color: 'var(--text-secondary)' }}
           >
             {t('auth.noAccount')}{' '}
             <Link
               to="/register"
-              className="font-semibold transition-colors hover:opacity-80"
-              style={{ color: 'var(--border-focus)' }}
+              className="auth-gradient-text font-semibold transition-opacity duration-200 hover:opacity-75"
             >
               {t('auth.register')}
             </Link>

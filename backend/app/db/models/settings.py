@@ -26,6 +26,9 @@ class Settings(Base):
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     forecast_months_default: Mapped[int] = mapped_column(Integer, default=6)
     week_start_day: Mapped[int] = mapped_column(Integer, default=0)  # 0=Sunday
+    onboarding_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

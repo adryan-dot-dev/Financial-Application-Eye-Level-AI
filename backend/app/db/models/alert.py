@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,11 +31,21 @@ class Alert(Base):
     related_month: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     is_dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+    snoozed_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
     expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_alerts_user_id", "user_id"),
+        Index("ix_alerts_user_dismissed", "user_id", "is_dismissed"),
+        Index("ix_alerts_user_read_dismissed", "user_id", "is_read", "is_dismissed"),
+        Index("ix_alerts_user_type", "user_id", "alert_type"),
     )
 
     # Relationships
