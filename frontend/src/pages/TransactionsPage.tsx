@@ -16,18 +16,20 @@ import {
   ChevronUp,
   ChevronDown,
   ArrowUpDown,
+  ArrowUpRight,
+  ArrowDownRight,
   TrendingUp,
   TrendingDown,
   Loader2,
-  Receipt,
   Calendar,
   AlertTriangle,
+  Wallet,
 } from 'lucide-react'
 import type { Transaction, Category } from '@/types'
 import { transactionsApi } from '@/api/transactions'
 import type { TransactionListParams, CreateTransactionData } from '@/api/transactions'
 import { categoriesApi } from '@/api/categories'
-import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { CategoryBadge } from '@/components/ui/CategoryIcon'
 import { queryKeys } from '@/lib/queryKeys'
 import { useToast } from '@/contexts/ToastContext'
@@ -442,25 +444,42 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       {/* ---- Page header ---- */}
       <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-2xl"
+            style={{
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.08))',
+              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.1)',
+            }}
           >
-            {t('transactions.title')}
-          </h1>
-          {!txLoading && (
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              {t('transactions.total')}: <span className="font-medium ltr-nums" style={{ color: 'var(--text-secondary)' }}>{totalCount}</span>
-            </p>
-          )}
+            <Wallet className="h-6 w-6" style={{ color: '#3B82F6' }} />
+          </div>
+          <div>
+            <h1
+              className="text-[1.75rem] font-extrabold tracking-tight"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {t('transactions.title')}
+            </h1>
+            {!txLoading && (
+              <p className="mt-0.5 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                {t('transactions.total')}:{' '}
+                <span
+                  className="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ltr-nums"
+                  style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}
+                >
+                  {totalCount}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+          className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-5 w-5" />
           {t('transactions.add')}
         </button>
       </div>
@@ -565,34 +584,57 @@ export default function TransactionsPage() {
             className="filter-reveal mt-5 grid grid-cols-1 gap-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-4"
             style={{ borderColor: 'var(--border-primary)' }}
           >
-            {/* Category */}
-            <div>
+            {/* Category – pill buttons */}
+            <div className="sm:col-span-2 lg:col-span-4">
               <label
-                className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
+                className="mb-2 block text-xs font-semibold uppercase tracking-wider"
                 style={{ color: 'var(--text-tertiary)' }}
               >
                 {t('transactions.category')}
               </label>
-              <select
-                value={filters.category_id}
-                onChange={(e) => {
-                  setFilters((prev) => ({ ...prev, category_id: e.target.value }))
-                  setPage(1)
-                }}
-                className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
-                style={{
-                  backgroundColor: 'var(--bg-input)',
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                <option value="">{t('transactions.selectCategory')}</option>
-                {filteredCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.icon} {isRtl ? cat.name_he : cat.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setFilters((prev) => ({ ...prev, category_id: '' }))
+                    setPage(1)
+                  }}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all',
+                    'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
+                  )}
+                  style={{
+                    borderColor: !filters.category_id ? 'var(--border-focus)' : 'var(--border-primary)',
+                    backgroundColor: !filters.category_id ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-input)',
+                    color: !filters.category_id ? 'var(--border-focus)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {t('transactions.all')}
+                </button>
+                {filteredCategories.map((cat) => {
+                  const isActive = filters.category_id === cat.id
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        setFilters((prev) => ({ ...prev, category_id: cat.id }))
+                        setPage(1)
+                      }}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all',
+                        'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
+                      )}
+                      style={{
+                        borderColor: isActive ? (cat.color || 'var(--border-focus)') : 'var(--border-primary)',
+                        backgroundColor: isActive ? `${cat.color || 'var(--border-focus)'}15` : 'var(--bg-input)',
+                        color: isActive ? (cat.color || 'var(--border-focus)') : 'var(--text-secondary)',
+                      }}
+                    >
+                      {cat.icon && <span className="text-sm">{cat.icon}</span>}
+                      {isRtl ? cat.name_he : cat.name}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Date from */}
@@ -712,6 +754,123 @@ export default function TransactionsPage() {
         )}
       </div>
 
+      {/* ---- Active filter chips ---- */}
+      {hasActiveFilters && (
+        <div className="animate-fade-in-up flex flex-wrap items-center gap-2">
+          <span
+            className="text-[11px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            {t('transactions.filter')}:
+          </span>
+
+          {filters.type && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
+              style={{
+                backgroundColor: filters.type === 'income' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                color: filters.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
+              }}
+            >
+              {filters.type === 'income' ? t('transactions.income') : t('transactions.expense')}
+              <button
+                onClick={() => { setFilters((prev) => ({ ...prev, type: '', category_id: '' })); setPage(1) }}
+                className="flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-black/10"
+                aria-label={t('transactions.clearFilters')}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          )}
+
+          {filters.category_id && (() => {
+            const cat = categoryMap.get(filters.category_id)
+            return (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
+                style={{
+                  backgroundColor: `${cat?.color || '#3B82F6'}15`,
+                  color: cat?.color || '#3B82F6',
+                }}
+              >
+                {cat?.icon && <span className="text-sm">{cat.icon}</span>}
+                {cat ? (isRtl ? cat.name_he : cat.name) : filters.category_id}
+                <button
+                  onClick={() => { setFilters((prev) => ({ ...prev, category_id: '' })); setPage(1) }}
+                  className="flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-black/10"
+                  aria-label={t('transactions.clearFilters')}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            )
+          })()}
+
+          {filters.start_date && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
+              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}
+            >
+              <Calendar className="h-3 w-3" />
+              {t('transactions.from')}: {filters.start_date}
+              <button
+                onClick={() => { setFilters((prev) => ({ ...prev, start_date: '' })); setPage(1) }}
+                className="flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-black/10"
+                aria-label={t('transactions.clearFilters')}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          )}
+
+          {filters.end_date && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
+              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}
+            >
+              <Calendar className="h-3 w-3" />
+              {t('transactions.to')}: {filters.end_date}
+              <button
+                onClick={() => { setFilters((prev) => ({ ...prev, end_date: '' })); setPage(1) }}
+                className="flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-black/10"
+                aria-label={t('transactions.clearFilters')}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          )}
+
+          {(filters.min_amount || filters.max_amount) && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold ltr-nums"
+              style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6' }}
+            >
+              {filters.min_amount && filters.max_amount
+                ? `${filters.min_amount} – ${filters.max_amount}`
+                : filters.min_amount
+                  ? `≥ ${filters.min_amount}`
+                  : `≤ ${filters.max_amount}`}
+              <button
+                onClick={() => { setFilters((prev) => ({ ...prev, min_amount: '', max_amount: '' })); setPage(1) }}
+                className="flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-black/10"
+                aria-label={t('transactions.clearFilters')}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          )}
+
+          <button
+            onClick={clearFilters}
+            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-all hover:opacity-80"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            <X className="h-3 w-3" />
+            {t('transactions.clearFilters')}
+          </button>
+        </div>
+      )}
+
       {/* ---- Table card ---- */}
       <div className="animate-fade-in-up stagger-3 card overflow-hidden">
         {txLoading ? (
@@ -729,34 +888,51 @@ export default function TransactionsPage() {
             </p>
           </div>
         ) : transactions.length === 0 ? (
-          /* ---- Empty state ---- */
-          <div className="flex flex-col items-center justify-center px-6 py-20">
-            <div
-              className="empty-float mb-6 flex h-20 w-20 items-center justify-center rounded-3xl"
-              style={{
-                background: 'rgba(59, 130, 246, 0.08)',
-                border: '1px solid rgba(59, 130, 246, 0.1)',
-              }}
-            >
-              <Receipt className="h-9 w-9" style={{ color: 'var(--border-focus)' }} />
+          /* ---- Empty state – SVG illustration ---- */
+          <div className="flex flex-col items-center justify-center px-6 py-24">
+            {/* Illustrated SVG */}
+            <div className="empty-float mb-8">
+              <svg width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Desk / base surface */}
+                <ellipse cx="90" cy="128" rx="80" ry="10" fill="var(--bg-hover)" opacity="0.6" />
+                {/* Receipt paper */}
+                <rect x="55" y="22" width="70" height="96" rx="8" fill="var(--bg-card)" stroke="var(--border-primary)" strokeWidth="1.5" />
+                {/* Receipt lines */}
+                <rect x="68" y="40" width="44" height="4" rx="2" fill="var(--border-primary)" opacity="0.5" />
+                <rect x="68" y="52" width="36" height="4" rx="2" fill="var(--border-primary)" opacity="0.35" />
+                <rect x="68" y="64" width="40" height="4" rx="2" fill="var(--border-primary)" opacity="0.25" />
+                <rect x="68" y="76" width="28" height="4" rx="2" fill="var(--border-primary)" opacity="0.15" />
+                {/* Receipt dollar icon circle */}
+                <circle cx="90" cy="100" r="10" fill="rgba(59, 130, 246, 0.1)" />
+                <text x="90" y="105" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#3B82F6">$</text>
+                {/* Decorative floating circles */}
+                <circle cx="38" cy="48" r="14" fill="rgba(16, 185, 129, 0.12)" />
+                <path d="M32 48L36 52L44 44" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="148" cy="38" r="12" fill="rgba(239, 68, 68, 0.10)" />
+                <path d="M144 34L152 42M152 34L144 42" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="142" cy="90" r="8" fill="rgba(139, 92, 246, 0.10)" />
+                {/* Small sparkle */}
+                <path d="M30 88L32 84L34 88L32 92Z" fill="rgba(251, 191, 36, 0.4)" />
+                <path d="M152 68L154 64L156 68L154 72Z" fill="rgba(59, 130, 246, 0.3)" />
+              </svg>
             </div>
             <h3
-              className="mb-2 text-lg font-semibold"
+              className="mb-2 text-xl font-bold"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('transactions.noTransactions')}
             </h3>
             <p
-              className="mb-8 max-w-sm text-center text-sm leading-relaxed"
+              className="mb-10 max-w-md text-center text-sm leading-relaxed"
               style={{ color: 'var(--text-tertiary)' }}
             >
               {t('transactions.noTransactionsDesc')}
             </p>
             <button
               onClick={openCreateModal}
-              className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+              className="btn-primary inline-flex items-center gap-2 px-7 py-3.5 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-5 w-5" />
               {t('transactions.add')}
             </button>
           </div>
@@ -820,28 +996,42 @@ export default function TransactionsPage() {
                     <tr
                       key={tx.id}
                       className={cn(
-                        'row-animate border-b transition-colors',
+                        'row-animate border-b transition-all duration-200',
                         isIncome ? 'row-income' : 'row-expense',
                       )}
                       style={{
                         borderColor: 'var(--border-primary)',
                         animationDelay: `${index * 30}ms`,
+                        borderInlineStartWidth: '3px',
+                        borderInlineStartColor: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
                       }}
                     >
                       {/* Date */}
                       <td
-                        className="whitespace-nowrap px-5 py-4 ltr-nums text-[13px]"
+                        className="whitespace-nowrap px-5 py-5 text-[13px]"
                         style={{ color: 'var(--text-secondary)' }}
                       >
-                        <span className="inline-flex items-center gap-2">
-                          <Calendar className="h-3.5 w-3.5 opacity-40" />
-                          {formatDate(tx.date, isRtl ? 'he-IL' : 'en-US')}
+                        <span className="inline-flex items-center gap-2.5">
+                          <span
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold ltr-nums"
+                            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}
+                          >
+                            {new Date(tx.date).getDate()}
+                          </span>
+                          <span className="flex flex-col">
+                            <span className="text-[11px] font-medium ltr-nums" style={{ color: 'var(--text-tertiary)' }}>
+                              {new Date(tx.date).toLocaleDateString(isRtl ? 'he-IL' : 'en-US', { month: 'short' })}
+                            </span>
+                            <span className="text-[11px] ltr-nums" style={{ color: 'var(--text-tertiary)', opacity: 0.7 }}>
+                              {new Date(tx.date).getFullYear()}
+                            </span>
+                          </span>
                         </span>
                       </td>
 
                       {/* Description */}
                       <td
-                        className="max-w-[240px] overflow-hidden truncate px-5 py-4 text-[13px] font-medium"
+                        className="max-w-[260px] overflow-hidden truncate px-5 py-5 text-[13px] font-semibold"
                         style={{ color: 'var(--text-primary)' }}
                         title={tx.description || undefined}
                       >
@@ -849,25 +1039,42 @@ export default function TransactionsPage() {
                       </td>
 
                       {/* Category */}
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-5">
                         <CategoryBadgeWrapper category={cat} label={catLabel} />
                       </td>
 
-                      {/* Amount */}
-                      <td
-                        className="whitespace-nowrap px-5 py-4 text-end text-[14px] font-bold tabular-nums ltr-nums"
-                        style={{ color: isIncome ? 'var(--color-income)' : 'var(--color-expense)' }}
-                      >
-                        {isIncome ? '+' : '\u2212'}{formatCurrency(tx.amount, tx.currency)}
+                      {/* Amount – larger with arrow icon */}
+                      <td className="whitespace-nowrap px-5 py-5 text-end">
+                        <span
+                          className="inline-flex items-center gap-1.5"
+                          style={{ color: isIncome ? 'var(--color-income)' : 'var(--color-expense)' }}
+                        >
+                          <span
+                            className="flex h-6 w-6 items-center justify-center rounded-full"
+                            style={{
+                              backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                            }}
+                          >
+                            {isIncome ? (
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                            ) : (
+                              <ArrowDownRight className="h-3.5 w-3.5" />
+                            )}
+                          </span>
+                          <span className="text-base fin-number font-bold ltr-nums">
+                            {isIncome ? '+' : '\u2212'}{formatCurrency(tx.amount, tx.currency)}
+                          </span>
+                        </span>
                       </td>
 
-                      {/* Type */}
-                      <td className="px-5 py-4">
+                      {/* Type – prominent pill badge */}
+                      <td className="px-5 py-5">
                         <span
-                          className={cn(
-                            'type-pill',
-                            isIncome ? 'type-pill-income' : 'type-pill-expense',
-                          )}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
+                          style={{
+                            backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.10)' : 'rgba(239, 68, 68, 0.10)',
+                            color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
+                          }}
                         >
                           {isIncome ? (
                             <TrendingUp className="h-3 w-3" />
@@ -879,11 +1086,11 @@ export default function TransactionsPage() {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-5">
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => openEditModal(tx)}
-                            className="action-btn action-btn-edit rounded-lg p-2 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                            className="action-btn action-btn-edit rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
                             style={{ color: 'var(--text-tertiary)' }}
                             data-tooltip={t('transactions.edit')}
                             aria-label={t('transactions.edit')}
@@ -892,7 +1099,7 @@ export default function TransactionsPage() {
                           </button>
                           <button
                             onClick={() => duplicateMutation.mutate(tx.id)}
-                            className="action-btn action-btn-duplicate rounded-lg p-2 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                            className="action-btn action-btn-duplicate rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
                             style={{ color: 'var(--text-tertiary)' }}
                             data-tooltip={t('transactions.duplicate')}
                             aria-label={t('transactions.duplicate')}
@@ -901,7 +1108,7 @@ export default function TransactionsPage() {
                           </button>
                           <button
                             onClick={() => setDeleteTarget(tx)}
-                            className="action-btn action-btn-delete rounded-lg p-2 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                            className="action-btn action-btn-delete rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
                             style={{ color: 'var(--text-tertiary)' }}
                             data-tooltip={t('transactions.delete')}
                             aria-label={t('transactions.delete')}
@@ -921,11 +1128,13 @@ export default function TransactionsPage() {
         {/* ---- Pagination ---- */}
         {!txLoading && transactions.length > 0 && totalPages > 1 && (
           <div
-            className="flex items-center justify-between border-t px-5 py-4"
-            style={{ borderColor: 'var(--border-primary)' }}
+            className="flex items-center justify-between border-t px-6 py-5"
+            style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--bg-secondary)' }}
           >
-            <p className="text-xs font-medium ltr-nums" style={{ color: 'var(--text-tertiary)' }}>
-              {t('common.page')} {page} {t('common.of')} {totalPages}
+            <p className="text-xs font-semibold ltr-nums" style={{ color: 'var(--text-tertiary)' }}>
+              {t('common.page')}{' '}
+              <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{page}</span>{' '}
+              {t('common.of')} {totalPages}
             </p>
             <div className="flex items-center gap-1.5">
               <button
@@ -1354,7 +1563,7 @@ export default function TransactionsPage() {
                 )}
                 {deleteTarget.amount && (
                   <p
-                    className="mt-2 text-base font-bold tabular-nums ltr-nums"
+                    className="mt-2 text-base fin-number ltr-nums"
                     style={{
                       color: deleteTarget.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                     }}

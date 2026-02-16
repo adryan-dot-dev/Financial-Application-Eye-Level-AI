@@ -38,6 +38,7 @@ from app.db.models import (
     FixedIncomeExpense,
     Installment,
     Loan,
+    Settings,
     Transaction,
     User,
 )
@@ -240,10 +241,19 @@ async def get_dashboard_weekly(
     today = date.today()
     current_balance = await _get_current_balance(db, current_user.id)
 
-    # Start from 11 weeks ago (12 weeks total including current)
-    # Align to start of week (Sunday)
-    days_since_sunday = (today.weekday() + 1) % 7
-    current_week_start = today - timedelta(days=days_since_sunday)
+    # ORANGE-10: Read week_start_day from user settings (0=Sunday, 1=Monday, ...)
+    settings_result = await db.execute(
+        select(Settings).where(Settings.user_id == current_user.id)
+    )
+    user_settings = settings_result.scalar_one_or_none()
+    week_start_day = user_settings.week_start_day if user_settings else 0
+
+    # Align to start of week based on user preference
+    # Python weekday(): Monday=0 .. Sunday=6; our setting: 0=Sunday,1=Monday..6=Saturday
+    # Convert our setting to Python weekday: (week_start_day - 1) % 7
+    py_week_start = (week_start_day - 1) % 7  # 0=Sun->6, 1=Mon->0, etc.
+    days_since_start = (today.weekday() - py_week_start) % 7
+    current_week_start = today - timedelta(days=days_since_start)
     first_week_start = current_week_start - timedelta(weeks=11)
     last_week_end = current_week_start + timedelta(days=6)
 

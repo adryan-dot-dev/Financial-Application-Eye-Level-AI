@@ -787,7 +787,7 @@ export default function AlertsPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1
-              className="text-2xl font-bold tracking-tight"
+              className="text-[1.75rem] font-extrabold tracking-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('alerts.title')}

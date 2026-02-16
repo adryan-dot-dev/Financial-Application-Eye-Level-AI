@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -15,17 +16,21 @@ class SettingsResponse(BaseModel):
     notifications_enabled: bool
     forecast_months_default: int
     week_start_day: int
+    alert_warning_threshold: Decimal
+    alert_critical_threshold: Decimal
     onboarding_completed: bool
 
     model_config = {"from_attributes": True}
 
 
 class SettingsUpdate(BaseModel):
-    currency: Optional[str] = Field(None, max_length=3)
-    language: Optional[str] = Field(None, max_length=2)
-    date_format: Optional[str] = Field(None, max_length=20)
-    theme: Optional[str] = Field(None, pattern="^(light|dark|system)$")
+    currency: Optional[str] = Field(None, pattern=r"^[A-Z]{3}$")
+    language: Optional[str] = Field(None, pattern=r"^(he|en)$")
+    date_format: Optional[str] = Field(None, pattern=r"^(DD/MM/YYYY|MM/DD/YYYY|YYYY-MM-DD)$")
+    theme: Optional[str] = Field(None, pattern=r"^(light|dark|system)$")
     notifications_enabled: Optional[bool] = None
     forecast_months_default: Optional[int] = Field(None, ge=1, le=24)
     week_start_day: Optional[int] = Field(None, ge=0, le=6)
+    alert_warning_threshold: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
+    alert_critical_threshold: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     onboarding_completed: Optional[bool] = None

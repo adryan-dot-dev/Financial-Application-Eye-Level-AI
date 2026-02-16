@@ -774,7 +774,7 @@ export default function LoansPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1
-              className="text-2xl font-bold tracking-tight"
+              className="text-[1.75rem] font-extrabold tracking-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('loans.title')}
@@ -933,7 +933,7 @@ export default function LoansPage() {
 
                   {/* Original amount */}
                   <p
-                    className="mb-1 text-2xl font-bold tabular-nums ltr-nums"
+                    className="mb-1 fin-number text-2xl ltr-nums"
                     style={{ color: 'var(--text-primary)' }}
                   >
                     {formatCurrency(loan.original_amount, loan.currency)}
@@ -969,7 +969,7 @@ export default function LoansPage() {
                         </p>
                       </div>
                       <p
-                        className="mt-1 text-sm font-bold tabular-nums ltr-nums"
+                        className="mt-1 fin-number text-sm ltr-nums"
                         style={{ color: 'var(--color-expense)' }}
                       >
                         {formatCurrency(loan.monthly_payment, loan.currency)}
@@ -986,7 +986,7 @@ export default function LoansPage() {
                         </p>
                       </div>
                       <p
-                        className="mt-1 text-sm font-bold tabular-nums ltr-nums"
+                        className="mt-1 fin-number text-sm ltr-nums"
                         style={{ color: 'var(--text-primary)' }}
                       >
                         {formatCurrency(loan.remaining_balance, loan.currency)}
@@ -1721,7 +1721,7 @@ export default function LoansPage() {
                   </p>
                 )}
                 <p
-                  className="mt-2 text-base font-bold tabular-nums ltr-nums"
+                  className="mt-2 fin-number text-base ltr-nums"
                   style={{ color: 'var(--text-primary)' }}
                 >
                   {formatCurrency(deleteTarget.original_amount, deleteTarget.currency)}

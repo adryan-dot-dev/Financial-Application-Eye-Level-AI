@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Set, Union
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -10,6 +10,19 @@ from passlib.context import CryptContext
 from app.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ORANGE-9: In-memory token blacklist (for MVP; use Redis in production)
+_token_blacklist: Set[str] = set()
+
+
+def blacklist_token(jti: str) -> None:
+    """Add a token JTI to the blacklist."""
+    _token_blacklist.add(jti)
+
+
+def is_token_blacklisted(jti: str) -> bool:
+    """Check if a token JTI has been blacklisted."""
+    return jti in _token_blacklist
 
 
 def hash_password(password: str) -> str:

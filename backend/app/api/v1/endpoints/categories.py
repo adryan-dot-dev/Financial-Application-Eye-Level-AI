@@ -6,7 +6,7 @@ from uuid import UUID
 
 import math
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app.api.v1.schemas.category import (
 )
 from app.core.exceptions import NotFoundException
 from app.db.models.category import Category
+from app.db.models.transaction import Transaction
 from app.db.models.user import User
 from app.db.session import get_db
 
@@ -31,7 +32,7 @@ async def list_categories(
     type: Optional[str] = Query(None, pattern="^(income|expense)$"),
     include_archived: bool = Query(False),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    page_size: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -128,6 +129,36 @@ async def update_category(
         raise NotFoundException("Category")
 
     update_data = data.model_dump(exclude_unset=True)
+
+    # RED-7: Check for circular parent-child references
+    if "parent_id" in update_data and update_data["parent_id"] is not None:
+        new_parent_id = update_data["parent_id"]
+        visited: set = set()
+        current = new_parent_id
+        while current is not None:
+            if current == category_id:
+                raise HTTPException(
+                    status_code=400, detail="Circular reference detected"
+                )
+            if current in visited:
+                break
+            visited.add(current)
+            parent = await db.get(Category, current)
+            current = parent.parent_id if parent else None
+
+    # ORANGE-5: Prevent type change when category has existing transactions
+    if "type" in update_data and update_data["type"] != category.type:
+        tx_count = await db.scalar(
+            select(func.count()).where(
+                Transaction.category_id == category_id
+            )
+        )
+        if tx_count and tx_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change type: category has existing transactions",
+            )
+
     for field, value in update_data.items():
         setattr(category, field, value)
 

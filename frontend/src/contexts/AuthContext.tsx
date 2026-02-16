@@ -46,6 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (data: LoginRequest) => {
+    // Clear cached onboarding flag so ProtectedRoute re-checks from the API
+    sessionStorage.removeItem('onboarding_completed')
     const response = await authApi.login(data)
     localStorage.setItem('access_token', response.access_token)
     localStorage.setItem('refresh_token', response.refresh_token)
@@ -54,6 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(async (data: RegisterRequest) => {
+    // Clear cached onboarding flag so the new user goes through onboarding
+    sessionStorage.removeItem('onboarding_completed')
     const response = await authApi.register(data)
     localStorage.setItem('access_token', response.access_token)
     localStorage.setItem('refresh_token', response.refresh_token)
@@ -64,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
+    sessionStorage.removeItem('onboarding_completed')
     setUser(null)
     queryClient.clear()
   }, [])

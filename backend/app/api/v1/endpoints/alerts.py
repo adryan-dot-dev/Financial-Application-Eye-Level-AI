@@ -29,6 +29,19 @@ async def list_alerts(
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
+
+    # YELLOW-5: Auto-dismiss expired alerts
+    await db.execute(
+        update(Alert)
+        .where(
+            Alert.user_id == current_user.id,
+            Alert.is_dismissed == False,
+            Alert.expires_at != None,
+            Alert.expires_at <= now,
+        )
+        .values(is_dismissed=True)
+    )
+
     result = await db.execute(
         select(Alert).where(
             Alert.user_id == current_user.id,

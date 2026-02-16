@@ -339,7 +339,7 @@ function PaymentSchedulePanel({
               <td className="px-4 py-2.5 ltr-nums" style={{ color: 'var(--text-secondary)' }}>
                 {formatDate(payment.date, isRtl ? 'he-IL' : 'en-US')}
               </td>
-              <td className="px-4 py-2.5 font-bold ltr-nums" style={{ color: 'var(--text-primary)' }}>
+              <td className="fin-number px-4 py-2.5 ltr-nums" style={{ color: 'var(--text-primary)' }}>
                 {formatAmount(payment.amount)}
               </td>
               <td className="px-4 py-2.5">
@@ -603,7 +603,7 @@ export default function InstallmentsPage() {
       <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <h1
-            className="text-2xl font-bold tracking-tight"
+            className="text-[1.75rem] font-extrabold tracking-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             {t('installments.title')}
@@ -670,7 +670,7 @@ export default function InstallmentsPage() {
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                 {t('installments.summaryRemainingExpense')}
               </p>
-              <p className="text-lg font-bold tabular-nums ltr-nums" style={{ color: 'var(--color-expense)' }}>
+              <p className="fin-number text-lg ltr-nums" style={{ color: 'var(--color-expense)' }}>
                 {formatAmount(summaryData.remainingExpense)}
               </p>
             </div>
@@ -690,7 +690,7 @@ export default function InstallmentsPage() {
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                 {t('installments.summaryRemainingIncome')}
               </p>
-              <p className="text-lg font-bold tabular-nums ltr-nums" style={{ color: 'var(--color-income)' }}>
+              <p className="fin-number text-lg ltr-nums" style={{ color: 'var(--color-income)' }}>
                 {formatAmount(summaryData.remainingIncome)}
               </p>
             </div>
@@ -887,7 +887,7 @@ export default function InstallmentsPage() {
                   {/* Amounts row */}
                   <div className="mb-3 flex items-baseline gap-3">
                     <p
-                      className="text-2xl font-bold tabular-nums ltr-nums"
+                      className="fin-number text-2xl ltr-nums"
                       style={{
                         color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
                       }}
@@ -913,7 +913,7 @@ export default function InstallmentsPage() {
                           {t('installments.remainingAmount')}
                         </span>
                         <span
-                          className="text-sm font-bold tabular-nums ltr-nums"
+                          className="fin-number text-sm ltr-nums"
                           style={{ color: 'var(--text-primary)' }}
                         >
                           {formatAmount(inst.remaining_amount, inst.currency)}
@@ -1317,7 +1317,7 @@ export default function InstallmentsPage() {
                       {t('installments.monthlyAmount')}
                     </p>
                     <p
-                      className="mt-0.5 text-lg font-bold tabular-nums ltr-nums"
+                      className="mt-0.5 fin-number text-lg ltr-nums"
                       style={{ color: 'var(--border-focus)' }}
                     >
                       {formatAmount(computedMonthly)}
@@ -1545,7 +1545,7 @@ export default function InstallmentsPage() {
                   </p>
                 )}
                 <p
-                  className="mt-2 text-base font-bold tabular-nums ltr-nums"
+                  className="mt-2 fin-number text-base ltr-nums"
                   style={{
                     color: deleteTarget.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                   }}
@@ -1659,7 +1659,7 @@ export default function InstallmentsPage() {
                   })}
                 </p>
                 <p
-                  className="mt-1 text-base font-bold tabular-nums ltr-nums"
+                  className="mt-1 fin-number text-base ltr-nums"
                   style={{ color: '#10B981' }}
                 >
                   {formatAmount(markPaymentTarget.monthly_amount, markPaymentTarget.currency)}

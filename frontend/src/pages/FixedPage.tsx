@@ -9,7 +9,6 @@ import {
   Trash2,
   X,
   Loader2,
-  CalendarDays,
   TrendingUp,
   TrendingDown,
   Pause,
@@ -305,25 +304,42 @@ export default function FixedPage() {
     <div className="space-y-6">
       {/* ---- Page header ---- */}
       <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-2xl"
+            style={{
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.08))',
+              boxShadow: '0 4px 14px rgba(139, 92, 246, 0.1)',
+            }}
           >
-            {t('fixed.title')}
-          </h1>
-          {!isLoading && (
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              {t('transactions.total')}: <span className="font-medium ltr-nums" style={{ color: 'var(--text-secondary)' }}>{entries.length}</span>
-            </p>
-          )}
+            <Repeat className="h-6 w-6" style={{ color: '#8B5CF6' }} />
+          </div>
+          <div>
+            <h1
+              className="text-[1.75rem] font-extrabold tracking-tight"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {t('fixed.title')}
+            </h1>
+            {!isLoading && (
+              <p className="mt-0.5 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                {t('transactions.total')}:{' '}
+                <span
+                  className="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ltr-nums"
+                  style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6' }}
+                >
+                  {entries.length}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+          className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-5 w-5" />
           {t('fixed.add')}
         </button>
       </div>
@@ -422,19 +438,19 @@ export default function FixedPage() {
             return (
               <div
                 key={entry.id}
-                className="card card-hover overflow-hidden"
+                className="card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
                 style={{
                   animationDelay: `${index * 40}ms`,
-                  borderInlineStartWidth: '3px',
+                  borderInlineStartWidth: '4px',
                   borderInlineStartColor: isIncome ? '#10B981' : '#EF4444',
                 }}
               >
                 <div className="p-5">
-                  {/* Card header */}
-                  <div className="mb-3 flex items-start justify-between">
+                  {/* Card header: name + toggle switch */}
+                  <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <h3
-                        className="truncate text-sm font-bold"
+                        className="truncate text-[15px] font-bold"
                         style={{ color: 'var(--text-primary)' }}
                         title={entry.name}
                       >
@@ -447,84 +463,109 @@ export default function FixedPage() {
                       )}
                     </div>
 
-                    {/* Status badge */}
-                    <span
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                    {/* Animated toggle switch for active/paused */}
+                    <button
+                      onClick={() =>
+                        entry.is_active
+                          ? pauseMutation.mutate(entry.id)
+                          : resumeMutation.mutate(entry.id)
+                      }
+                      disabled={pauseMutation.isPending || resumeMutation.isPending}
+                      className="relative flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors duration-300 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                       style={{
-                        backgroundColor: entry.is_active ? 'var(--bg-success)' : 'var(--bg-warning)',
-                        color: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
+                        backgroundColor: entry.is_active ? '#10B981' : 'var(--bg-hover)',
                       }}
+                      role="switch"
+                      aria-checked={entry.is_active}
+                      aria-label={entry.is_active ? t('fixed.pause') : t('fixed.resume')}
                     >
                       <span
-                        className="h-1.5 w-1.5 rounded-full"
+                        className="flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm transition-all duration-300"
                         style={{
-                          backgroundColor: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
+                          transform: entry.is_active
+                            ? (isRtl ? 'translateX(-20px)' : 'translateX(20px)')
+                            : 'translateX(0)',
                         }}
-                      />
-                      {entry.is_active ? t('fixed.active') : t('fixed.paused')}
-                    </span>
+                      >
+                        {(pauseMutation.isPending || resumeMutation.isPending) ? (
+                          <Loader2 className="h-3 w-3 animate-spin" style={{ color: 'var(--text-tertiary)' }} />
+                        ) : entry.is_active ? (
+                          <Play className="h-3 w-3" style={{ color: '#10B981' }} />
+                        ) : (
+                          <Pause className="h-3 w-3" style={{ color: 'var(--text-tertiary)' }} />
+                        )}
+                      </span>
+                    </button>
                   </div>
 
-                  {/* Amount */}
-                  <p
-                    className="mb-1 text-2xl font-bold tabular-nums ltr-nums"
-                    style={{
-                      color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
-                    }}
-                  >
-                    {isIncome ? '+' : '\u2212'}{formatCurrency(entry.amount, entry.currency)}
-                  </p>
-
-                  {/* Type badge (small) */}
-                  <div className="mb-3">
+                  {/* Amount with arrow icon */}
+                  <div className="mb-3 flex items-center gap-2">
                     <span
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                      className="flex h-8 w-8 items-center justify-center rounded-full"
                       style={{
-                        backgroundColor: isIncome ? '#10B98110' : '#EF444410',
-                        color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
+                        backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                        color: isIncome ? '#10B981' : '#EF4444',
                       }}
                     >
                       {isIncome ? (
-                        <TrendingUp className="h-3 w-3" />
+                        <TrendingUp className="h-4 w-4" />
                       ) : (
-                        <TrendingDown className="h-3 w-3" />
+                        <TrendingDown className="h-4 w-4" />
                       )}
-                      {isIncome ? t('transactions.income') : t('transactions.expense')}
                     </span>
+                    <p
+                      className="fin-number text-2xl ltr-nums"
+                      style={{
+                        color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
+                      }}
+                    >
+                      {isIncome ? '+' : '\u2212'}{formatCurrency(entry.amount, entry.currency)}
+                    </p>
                   </div>
 
-                  {/* Details grid */}
-                  <div
-                    className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                  {/* Calendar badge + dates row */}
+                  <div className="mb-4 flex items-center gap-3">
+                    {/* Calendar day badge */}
+                    <div
+                      className="flex flex-col items-center overflow-hidden rounded-lg"
+                      style={{ border: '1px solid var(--border-primary)' }}
+                    >
+                      <div
+                        className="w-full px-2.5 py-0.5 text-center text-[9px] font-bold uppercase tracking-wider text-white"
+                        style={{ backgroundColor: '#3B82F6' }}
+                      >
                         {t('fixed.dayOfMonth')}
-                      </span>
-                      <span className="mt-0.5 inline-flex items-center gap-1 font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
-                        <CalendarDays className="h-3 w-3" style={{ color: 'var(--border-focus)' }} />
-                        {entry.day_of_month}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                        {t('fixed.startDate')}
-                      </span>
-                      <span className="mt-0.5 font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
-                        {formatDate(entry.start_date, isRtl ? 'he-IL' : 'en-US')}
-                      </span>
-                    </div>
-                    {entry.end_date && (
-                      <div className="flex flex-col col-span-2">
-                        <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                          {t('fixed.endDate')}
-                        </span>
-                        <span className="mt-0.5 font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
-                          {formatDate(entry.end_date, isRtl ? 'he-IL' : 'en-US')}
+                      </div>
+                      <div
+                        className="flex items-center justify-center px-3 py-1"
+                        style={{ backgroundColor: 'var(--bg-secondary)' }}
+                      >
+                        <span
+                          className="text-lg font-extrabold ltr-nums"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {entry.day_of_month}
                         </span>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Date info stacked */}
+                    <div className="flex flex-col gap-1 text-xs">
+                      <span style={{ color: 'var(--text-tertiary)' }}>
+                        {t('fixed.startDate')}:{' '}
+                        <span className="font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
+                          {formatDate(entry.start_date, isRtl ? 'he-IL' : 'en-US')}
+                        </span>
+                      </span>
+                      {entry.end_date && (
+                        <span style={{ color: 'var(--text-tertiary)' }}>
+                          {t('fixed.endDate')}:{' '}
+                          <span className="font-semibold ltr-nums" style={{ color: 'var(--text-primary)' }}>
+                            {formatDate(entry.end_date, isRtl ? 'he-IL' : 'en-US')}
+                          </span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -538,49 +579,32 @@ export default function FixedPage() {
                     </p>
                   )}
 
-                  {/* Actions */}
+                  {/* Actions footer */}
                   <div
                     className="flex items-center justify-between border-t pt-3"
                     style={{ borderColor: 'var(--border-primary)' }}
                   >
-                    {/* Pause / Resume */}
-                    {entry.is_active ? (
-                      <button
-                        onClick={() => pauseMutation.mutate(entry.id)}
-                        disabled={pauseMutation.isPending}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                    {/* Status label */}
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold"
+                      style={{
+                        color: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
+                      }}
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full"
                         style={{
-                          backgroundColor: 'var(--bg-warning)',
-                          color: 'var(--color-warning)',
+                          backgroundColor: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
                         }}
-                        title={t('fixed.pause')}
-                        aria-label={t('fixed.pause')}
-                      >
-                        {pauseMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
-                        {t('fixed.pause')}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => resumeMutation.mutate(entry.id)}
-                        disabled={resumeMutation.isPending}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
-                        style={{
-                          backgroundColor: 'var(--bg-success)',
-                          color: 'var(--color-success)',
-                        }}
-                        title={t('fixed.resume')}
-                        aria-label={t('fixed.resume')}
-                      >
-                        {resumeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                        {t('fixed.resume')}
-                      </button>
-                    )}
+                      />
+                      {entry.is_active ? t('fixed.active') : t('fixed.paused')}
+                    </span>
 
                     {/* Edit / Delete */}
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEditModal(entry)}
-                        className="action-btn action-btn-edit rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="action-btn action-btn-edit rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.edit')}
                         aria-label={t('common.edit')}
@@ -589,7 +613,7 @@ export default function FixedPage() {
                       </button>
                       <button
                         onClick={() => setDeleteTarget(entry)}
-                        className="action-btn action-btn-delete rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="action-btn action-btn-delete rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.delete')}
                         aria-label={t('common.delete')}
@@ -1027,7 +1051,7 @@ export default function FixedPage() {
                   </p>
                 )}
                 <p
-                  className="mt-2 text-base font-bold tabular-nums ltr-nums"
+                  className="mt-2 fin-number text-base ltr-nums"
                   style={{
                     color: deleteTarget.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                   }}

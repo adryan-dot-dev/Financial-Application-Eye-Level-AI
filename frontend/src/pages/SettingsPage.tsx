@@ -390,7 +390,7 @@ export default function SettingsPage() {
       <div className="page-reveal space-y-6">
         <div className="animate-fade-in-up stagger-1">
           <h1
-            className="text-2xl font-bold tracking-tight"
+            className="text-[1.75rem] font-extrabold tracking-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             {t('settings.title')}
@@ -410,7 +410,7 @@ export default function SettingsPage() {
       <div className="animate-fade-in-up stagger-1 flex items-center justify-between">
         <div>
           <h1
-            className="text-2xl font-bold tracking-tight"
+            className="text-[1.75rem] font-extrabold tracking-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             {t('settings.title')}

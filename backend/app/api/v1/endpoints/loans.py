@@ -99,6 +99,15 @@ async def create_loan(
         if not cat or cat.user_id != current_user.id:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
 
+    # ORANGE-2: Validate monthly payment exceeds monthly interest
+    if data.interest_rate > 0:
+        monthly_interest = data.original_amount * (data.interest_rate / Decimal("12") / Decimal("100"))
+        if data.monthly_payment <= monthly_interest:
+            raise HTTPException(
+                status_code=400,
+                detail="Monthly payment must exceed monthly interest to pay off the loan",
+            )
+
     loan = Loan(
         user_id=current_user.id,
         remaining_balance=data.original_amount,
@@ -258,3 +267,34 @@ async def get_loan_breakdown(
     if not loan:
         raise NotFoundException("Loan not found")
     return _build_amortization(loan)
+
+
+@router.post("/{loan_id}/reverse-payment", response_model=LoanResponse)
+async def reverse_loan_payment(
+    loan_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Loan).where(
+            Loan.id == loan_id,
+            Loan.user_id == current_user.id,
+        ).with_for_update()
+    )
+    loan = result.scalar_one_or_none()
+    if not loan:
+        raise NotFoundException("Loan not found")
+
+    if loan.payments_made <= 0:
+        raise HTTPException(status_code=400, detail="No payments to reverse")
+
+    loan.payments_made -= 1
+    loan.remaining_balance += loan.monthly_payment
+    if loan.remaining_balance > loan.original_amount:
+        loan.remaining_balance = loan.original_amount
+    if loan.status == "completed":
+        loan.status = "active"
+
+    await db.commit()
+    await db.refresh(loan)
+    return loan

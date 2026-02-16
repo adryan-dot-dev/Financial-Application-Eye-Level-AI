@@ -383,7 +383,7 @@ export default function CategoriesPage() {
       <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1
-            className="text-2xl font-bold tracking-tight"
+            className="text-[1.75rem] font-extrabold tracking-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             {t('categories.title')}

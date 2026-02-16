@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenException, UnauthorizedException
-from app.core.security import decode_token
+from app.core.security import decode_token, is_token_blacklisted
 from app.db.models.user import User
 from app.db.session import get_db
 
@@ -25,6 +25,11 @@ async def get_current_user(
 
     if payload.get("type") != "access":
         raise UnauthorizedException("Invalid token type")
+
+    # ORANGE-9: Check token blacklist
+    jti = payload.get("jti")
+    if jti and is_token_blacklisted(jti):
+        raise UnauthorizedException("Token has been revoked")
 
     user_id = payload.get("sub")
     if user_id is None:

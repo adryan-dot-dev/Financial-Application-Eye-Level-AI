@@ -18,6 +18,7 @@ from app.api.v1.schemas.auth import (
 )
 from app.core.exceptions import AlreadyExistsException, NotFoundException, UnauthorizedException
 from app.core.security import (
+    blacklist_token,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -115,8 +116,17 @@ async def refresh_token(request: Request, data: TokenRefresh, db: AsyncSession =
 
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)):
-    # JWT is stateless; client should discard tokens
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    # ORANGE-9: Blacklist the current access token
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = decode_token(token)
+        if payload and payload.get("jti"):
+            blacklist_token(payload["jti"])
     return {"message": "Successfully logged out"}
 
 

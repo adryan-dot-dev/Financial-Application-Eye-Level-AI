@@ -62,40 +62,47 @@ function SkeletonBox({ className, style }: { className?: string; style?: CSSProp
 // Gauge
 // ---------------------------------------------------------------------------
 
-function SemiCircularGauge({ score, grade, t }: { score: number; grade: FinancialHealthResponse['grade']; t: (key: string) => string }) {
+function RingGauge({ score, grade, t }: { score: number; grade: FinancialHealthResponse['grade']; t: (key: string) => string }) {
   const color = getScoreColor(score)
-  const radius = 80
-  const strokeWidth = 12
-  const cx = 100
-  const cy = 90
-  const arcLength = Math.PI * radius
+  const size = 160
+  const strokeWidth = 14
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
   const progress = Math.max(0, Math.min(100, score))
-  const dashOffset = arcLength - (arcLength * progress) / 100
+  const dashOffset = circumference - (circumference * progress) / 100
 
   return (
-    <div className="flex flex-col items-center">
-      <svg viewBox="0 0 200 110" className="w-full max-w-[220px]">
-        {/* Background arc */}
-        <path
-          d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        {/* Background ring */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
           fill="none"
           stroke="var(--border-primary)"
           strokeWidth={strokeWidth}
-          strokeLinecap="round"
+          strokeOpacity={0.3}
         />
-        {/* Progress arc */}
-        <path
-          d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
+        {/* Colored progress ring */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
           fill="none"
           stroke={color}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
-          strokeDasharray={arcLength}
+          strokeDasharray={circumference}
           strokeDashoffset={dashOffset}
-          style={{ transition: 'stroke-dashoffset 0.8s ease-in-out, stroke 0.4s ease' }}
+          style={{
+            transition: 'stroke-dashoffset 1s ease-in-out, stroke 0.4s ease',
+            filter: `drop-shadow(0 0 6px ${color}40)`,
+          }}
         />
       </svg>
-      <div className="-mt-14 flex flex-col items-center">
+      {/* Center label */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
           className="text-4xl font-extrabold ltr-nums"
           style={{ color }}
@@ -103,7 +110,7 @@ function SemiCircularGauge({ score, grade, t }: { score: number; grade: Financia
           {score}
         </span>
         <span
-          className="mt-1 text-sm font-semibold"
+          className="mt-0.5 text-xs font-semibold"
           style={{ color }}
         >
           {t(getGradeKey(grade))}
@@ -207,39 +214,45 @@ export function FinancialHealthWidget() {
   }
 
   return (
-    <div className="card card-hover animate-fade-in-up overflow-hidden p-7">
-      {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
+    <div className="card card-hover animate-fade-in-up overflow-hidden">
+      {/* Widget header bar */}
+      <div
+        className="flex items-center gap-3 border-b px-7 py-5"
+        style={{ borderColor: 'var(--border-primary)' }}
+      >
         <div
-          className="flex h-9 w-9 items-center justify-center rounded-xl"
+          className="flex h-10 w-10 items-center justify-center rounded-xl"
           style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.04))',
             color: '#EF4444',
           }}
         >
-          <Heart className="h-4.5 w-4.5" />
+          <Heart className="h-5 w-5" />
         </div>
         <h3
-          className="text-base font-bold"
+          className="text-sm font-bold"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('dashboard.financialHealth')}
         </h3>
       </div>
 
-      {/* Gauge */}
-      <div className="mb-6">
-        <SemiCircularGauge score={data.score} grade={data.grade} t={t} />
-      </div>
-
-      {/* Factor bars */}
-      {data.factors.length > 0 && (
-        <div className="space-y-3.5">
-          {data.factors.map((factor) => (
-            <FactorBar key={factor.name} factor={factor} t={t} />
-          ))}
+      {/* Content: Ring gauge + factor bars side by side */}
+      <div className="flex flex-col items-center gap-8 p-7 sm:flex-row sm:items-start">
+        {/* Ring gauge */}
+        <div className="shrink-0">
+          <RingGauge score={data.score} grade={data.grade} t={t} />
         </div>
-      )}
+
+        {/* Factor bars - fills remaining space */}
+        {data.factors.length > 0 && (
+          <div className="w-full flex-1 space-y-4">
+            {data.factors.map((factor) => (
+              <FactorBar key={factor.name} factor={factor} t={t} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -21,7 +21,7 @@ from app.api.v1.schemas.installment import (
     PaymentScheduleItem,
 )
 from app.core.exceptions import NotFoundException
-from app.db.models import Category, Installment, User
+from app.db.models import Category, Installment, Transaction, User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/installments", tags=["Installments"])
@@ -282,6 +282,60 @@ async def mark_installment_paid(
         raise HTTPException(status_code=422, detail="All payments have already been completed")
 
     inst.payments_completed += 1
+    payment_number = inst.payments_completed
+
+    # RED-8: Rounding correction - last payment absorbs the difference
+    if payment_number == inst.number_of_payments:
+        actual_amount = inst.total_amount - (
+            inst.monthly_amount * (inst.number_of_payments - 1)
+        )
+    else:
+        actual_amount = inst.monthly_amount
+
+    # RED-2: Create automatic transaction for the payment
+    payment_date = inst.start_date + relativedelta(months=payment_number - 1)
+    payment_date = _safe_day(payment_date.year, payment_date.month, inst.day_of_month)
+
+    tx = Transaction(
+        user_id=current_user.id,
+        amount=actual_amount,
+        currency=inst.currency,
+        type=inst.type,
+        category_id=inst.category_id,
+        description=f"Installment: {inst.name} ({payment_number}/{inst.number_of_payments})",
+        date=payment_date,
+        entry_pattern="installment",
+        is_recurring=True,
+        installment_id=inst.id,
+        installment_number=payment_number,
+    )
+    db.add(tx)
+
+    await db.commit()
+    await db.refresh(inst)
+    return _enrich_installment(inst)
+
+
+@router.post("/{installment_id}/reverse-payment", response_model=InstallmentResponse)
+async def reverse_installment_payment(
+    installment_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Installment).where(
+            Installment.id == installment_id,
+            Installment.user_id == current_user.id,
+        ).with_for_update()
+    )
+    inst = result.scalar_one_or_none()
+    if not inst:
+        raise NotFoundException("Installment not found")
+
+    if inst.payments_completed <= 0:
+        raise HTTPException(status_code=400, detail="No payments to reverse")
+
+    inst.payments_completed -= 1
     await db.commit()
     await db.refresh(inst)
     return _enrich_installment(inst)

@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: cashflow
-      POSTGRES_PASSWORD: CashFlow_Pr0d_2026!Secure
+      POSTGRES_PASSWORD: cashflow
       POSTGRES_DB: cashflow
     ports:
       - "5432:5432"
@@ -32,7 +32,7 @@ services:
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@eyelevel.ai
-      PGADMIN_DEFAULT_PASSWORD: EyeLevel2026!Admin
+      PGADMIN_DEFAULT_PASSWORD: admin123
     ports:
       - "5050:80"
     volumes:

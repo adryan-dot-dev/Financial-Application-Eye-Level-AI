@@ -241,7 +241,7 @@ function ForecastTooltip({
               {fieldMap[String(entry.dataKey)] ?? String(entry.dataKey)}
             </span>
             <span
-              className="ms-auto ps-4 text-xs font-semibold tabular-nums ltr-nums"
+              className="fin-number ms-auto ps-4 text-xs ltr-nums"
               style={{ color: 'var(--text-primary)' }}
             >
               {formatAmount(entry.value as number)}
@@ -346,7 +346,7 @@ function KpiCard({
         {label}
       </p>
       <p
-        className="ltr-nums mt-1.5 text-xl font-bold tracking-tight"
+        className="fin-number text-xl ltr-nums mt-1.5 tracking-tight"
         style={{ color: 'var(--text-primary)' }}
       >
         {value}
@@ -647,7 +647,7 @@ function MonthDrillDownModal({
               {t('forecast.openingBalance')}
             </p>
             <p
-              className="ltr-nums mt-1 text-base font-bold"
+              className="fin-number text-base ltr-nums mt-1"
               style={{ color: isNegative(month.opening_balance) ? 'var(--color-expense)' : 'var(--text-primary)' }}
             >
               {formatAmount(month.opening_balance)}
@@ -658,7 +658,7 @@ function MonthDrillDownModal({
               {t('forecast.netChange')}
             </p>
             <p
-              className="ltr-nums mt-1 text-base font-bold"
+              className="fin-number text-base ltr-nums mt-1"
               style={{ color: netChange >= 0 ? 'var(--color-income)' : 'var(--color-expense)' }}
             >
               {netChange >= 0 ? '+' : ''}{formatAmount(month.net_change)}
@@ -669,7 +669,7 @@ function MonthDrillDownModal({
               {t('forecast.closingBalance')}
             </p>
             <p
-              className="ltr-nums mt-1 text-base font-bold"
+              className="fin-number text-base ltr-nums mt-1"
               style={{ color: closingNeg ? 'var(--color-expense)' : 'var(--color-income)' }}
             >
               {formatAmount(month.closing_balance)}
@@ -701,7 +701,7 @@ function MonthDrillDownModal({
                       {item.label}
                     </span>
                     <span
-                      className="text-xs font-semibold tabular-nums ltr-nums"
+                      className="fin-number text-xs ltr-nums"
                       style={{ color: val > 0 ? '#10B981' : 'var(--text-tertiary)' }}
                     >
                       {formatAmount(item.value)}
@@ -716,7 +716,7 @@ function MonthDrillDownModal({
                 <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                   {t('forecast.totalIncome')}
                 </span>
-                <span className="text-sm font-bold tabular-nums ltr-nums" style={{ color: '#10B981' }}>
+                <span className="fin-number text-sm ltr-nums" style={{ color: '#10B981' }}>
                   {formatAmount(month.total_income)}
                 </span>
               </div>
@@ -745,7 +745,7 @@ function MonthDrillDownModal({
                       {item.label}
                     </span>
                     <span
-                      className="text-xs font-semibold tabular-nums ltr-nums"
+                      className="fin-number text-xs ltr-nums"
                       style={{ color: val > 0 ? '#EF4444' : 'var(--text-tertiary)' }}
                     >
                       {formatAmount(Math.abs(parseFloat(item.value)))}
@@ -760,7 +760,7 @@ function MonthDrillDownModal({
                 <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                   {t('forecast.totalExpenses')}
                 </span>
-                <span className="text-sm font-bold tabular-nums ltr-nums" style={{ color: '#EF4444' }}>
+                <span className="fin-number text-sm ltr-nums" style={{ color: '#EF4444' }}>
                   {formatAmount(Math.abs(parseFloat(month.total_expenses)))}
                 </span>
               </div>
@@ -1748,7 +1748,7 @@ function SummaryView({
               <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
                 {t('forecast.avgMonthlyIncome')}
               </p>
-              <p className="ltr-nums mt-1 text-base font-bold" style={{ color: '#10B981' }}>
+              <p className="fin-number text-base ltr-nums mt-1" style={{ color: '#10B981' }}>
                 {formatAmount(avgIncome)}
               </p>
             </div>
@@ -1761,7 +1761,7 @@ function SummaryView({
               <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
                 {t('forecast.avgMonthlyExpenses')}
               </p>
-              <p className="ltr-nums mt-1 text-base font-bold" style={{ color: '#EF4444' }}>
+              <p className="fin-number text-base ltr-nums mt-1" style={{ color: '#EF4444' }}>
                 {formatAmount(avgExpenses)}
               </p>
             </div>
@@ -1775,7 +1775,7 @@ function SummaryView({
                 {t('forecast.lowestBalance')}
               </p>
               <p
-                className="ltr-nums mt-1 text-base font-bold"
+                className="fin-number text-base ltr-nums mt-1"
                 style={{ color: lowestBalance < 0 ? '#EF4444' : 'var(--text-primary)' }}
               >
                 {formatAmount(lowestBalance)}
@@ -1790,7 +1790,7 @@ function SummaryView({
               <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
                 {t('forecast.highestBalance')}
               </p>
-              <p className="ltr-nums mt-1 text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+              <p className="fin-number text-base ltr-nums mt-1" style={{ color: 'var(--text-primary)' }}>
                 {formatAmount(highestBalance)}
               </p>
             </div>
@@ -1806,7 +1806,7 @@ function SummaryView({
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
               {t('balance.current')}
             </p>
-            <p className="ltr-nums mt-1.5 text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            <p className="fin-number text-xl ltr-nums mt-1.5" style={{ color: 'var(--text-primary)' }}>
               {formatAmount(summary.current_balance)}
             </p>
           </div>
@@ -1946,7 +1946,7 @@ export default function ForecastPage() {
       {/* Page header */}
       <div className="animate-fade-in flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1
-          className="text-[1.7rem] font-bold tracking-tight"
+          className="text-[1.75rem] font-extrabold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('forecast.title')}

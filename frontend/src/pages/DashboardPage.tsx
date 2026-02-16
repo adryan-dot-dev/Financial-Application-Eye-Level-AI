@@ -234,13 +234,13 @@ function HeroBalanceCard({
   if (isLoading) {
     return (
       <div
-        className="relative overflow-hidden rounded-2xl p-8 animate-fade-in-up stagger-1"
+        className="hero-balance-card relative overflow-hidden rounded-2xl p-8 animate-fade-in-up stagger-1 h-full"
         style={{
-          background: 'var(--color-brand-600)',
+          background: 'linear-gradient(135deg, #1E3A8A, #2563EB, #3B82F6)',
           minHeight: 180,
         }}
       >
-        <div className="absolute inset-0 bg-white/5" />
+        <div className="absolute inset-0 bg-white/[0.03]" />
         <div className="relative z-10">
           <SkeletonBox className="h-4 w-28 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
           <SkeletonBox className="mt-4 h-10 w-52 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
@@ -253,13 +253,13 @@ function HeroBalanceCard({
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl p-8 animate-fade-in-up stagger-1"
+      className="hero-balance-card relative overflow-hidden rounded-2xl p-8 animate-fade-in-up stagger-1 h-full"
       style={{
-        background: 'var(--color-brand-600)',
+        background: 'linear-gradient(135deg, #1E3A8A, #2563EB, #3B82F6)',
       }}
     >
       {/* Glass overlay */}
-      <div className="absolute inset-0 bg-white/5" />
+      <div className="absolute inset-0 bg-white/[0.03]" />
 
       <div className="relative z-10 flex flex-col gap-5">
         {/* Top row: balance + trend badge */}
@@ -271,7 +271,7 @@ function HeroBalanceCard({
                 {t('dashboard.currentBalance')}
               </p>
             </div>
-            <p className="text-white text-4xl font-bold mt-3 ltr-nums tracking-tight">
+            <p className="text-white fin-number-lg mt-3 ltr-nums">
               {balance}
             </p>
             <p className="text-white/60 text-sm mt-2 flex items-center gap-2">
@@ -327,7 +327,7 @@ function HeroBalanceCard({
             <p className="text-white/60 text-[11px] font-semibold uppercase tracking-wider">
               {t('dashboard.expectedBalance')}
             </p>
-            <p className="text-white text-2xl font-bold ltr-nums tracking-tight mt-0.5">
+            <p className="text-white text-2xl font-bold ltr-nums tracking-tight mt-0.5 fin-number">
               {expectedBalance}
             </p>
           </div>
@@ -374,84 +374,106 @@ function KpiCard({
 
   if (isLoading) {
     return (
-      <div className={cn('card p-5', staggerClass, 'animate-fade-in-up')}>
-        <div className="flex items-center justify-between">
-          <SkeletonBox className="h-10 w-10 rounded-xl" />
-          <SkeletonBox className="h-5 w-14 rounded-full" />
+      <div className={cn('card overflow-hidden', staggerClass, 'animate-fade-in-up')}>
+        <div className="h-1 skeleton" />
+        <div className="p-5">
+          <div className="flex items-center gap-4">
+            <SkeletonBox className="h-14 w-14 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <SkeletonBox className="h-3 w-20 rounded" />
+              <SkeletonBox className="h-7 w-28 rounded" />
+            </div>
+            <SkeletonBox className="h-16 w-14 rounded-xl" />
+          </div>
+          <SkeletonBox className="mt-4 h-12 w-full rounded-lg" />
         </div>
-        <SkeletonBox className="mt-4 h-3 w-20 rounded" />
-        <SkeletonBox className="mt-2.5 h-7 w-28 rounded" />
-        <SkeletonBox className="mt-3 h-10 w-full rounded" />
       </div>
     )
   }
 
   return (
     <div
-      className={cn('card widget-hover p-5 relative overflow-hidden', staggerClass, 'animate-fade-in-up')}
-      style={{
-        borderInlineStart: `3px solid ${accentColor}`,
-      }}
+      className={cn(
+        'card overflow-hidden transition-all duration-300',
+        'hover:-translate-y-1 hover:shadow-lg',
+        staggerClass,
+        'animate-fade-in-up',
+      )}
     >
-      <div className="flex items-center justify-between">
-        {/* Icon box */}
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl"
-          style={{
-            backgroundColor: `${accentColor}14`,
-            color: accentColor,
-          }}
-        >
-          {icon}
+      {/* Colored accent bar at top */}
+      <div className="h-1" style={{ background: accentColor }} />
+
+      <div className="p-5">
+        {/* Row: icon circle + value + trend */}
+        <div className="flex items-center gap-4">
+          {/* Large colored icon circle */}
+          <div
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+            style={{
+              background: `linear-gradient(135deg, ${accentColor}20, ${accentColor}08)`,
+              color: accentColor,
+              boxShadow: `0 4px 14px ${accentColor}15`,
+            }}
+          >
+            {icon}
+          </div>
+
+          {/* Label + Value stacked */}
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-[11px] font-semibold uppercase tracking-widest"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {label}
+            </p>
+            <p
+              className="fin-number text-2xl ltr-nums mt-1 leading-tight"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {value}
+            </p>
+          </div>
+
+          {/* Big prominent trend indicator */}
+          {trendVal > 0 ? (
+            <div
+              className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-2.5"
+              style={{
+                backgroundColor: isPositive
+                  ? 'rgba(16, 185, 129, 0.1)'
+                  : 'rgba(239, 68, 68, 0.1)',
+                color: isPositive ? '#10B981' : '#EF4444',
+              }}
+            >
+              {isPositive ? (
+                <ArrowUpRight className="h-6 w-6" />
+              ) : (
+                <ArrowDownRight className="h-6 w-6" />
+              )}
+              <span className="text-sm font-bold ltr-nums">
+                {trendVal.toFixed(1)}%
+              </span>
+            </div>
+          ) : (
+            <div
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl"
+              style={{
+                backgroundColor: 'var(--bg-hover)',
+                color: 'var(--text-tertiary)',
+              }}
+            >
+              <Activity className="h-5 w-5 opacity-40" />
+            </div>
+          )}
         </div>
 
-        {/* Trend badge */}
-        {trendVal > 0 ? (
-          <div
-            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
-            style={{
-              backgroundColor: isPositive
-                ? 'var(--bg-success)'
-                : 'var(--bg-danger)',
-              color: isPositive ? 'var(--color-success)' : 'var(--color-danger)',
-            }}
-          >
-            {isPositive ? (
-              <ArrowUpRight className="h-3 w-3" />
-            ) : (
-              <ArrowDownRight className="h-3 w-3" />
-            )}
-            {trendVal.toFixed(1)}%
-          </div>
-        ) : (
-          <div
-            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-            style={{
-              backgroundColor: 'var(--bg-hover)',
-              color: 'var(--text-tertiary)',
-            }}
-          >
-            --
-          </div>
-        )}
-      </div>
-
-      <p
-        className="mt-3 text-[11px] font-semibold uppercase tracking-widest"
-        style={{ color: 'var(--text-tertiary)' }}
-      >
-        {label}
-      </p>
-      <p
-        className="ltr-nums mt-1.5 text-[1.5rem] font-bold leading-tight tracking-tight"
-        style={{ color: 'var(--text-primary)' }}
-      >
-        {value}
-      </p>
-
-      {/* Mini Sparkline */}
-      <div className="mt-3">
-        <MiniSparkline data={sparklineData} color={sparklineColor} height={48} />
+        {/* Sparkline in tinted container */}
+        <div
+          className="mt-4 -mx-1 overflow-hidden rounded-lg"
+          style={{ backgroundColor: `${accentColor}06` }}
+        >
+          <MiniSparkline data={sparklineData} color={sparklineColor} height={52} />
+        </div>
       </div>
     </div>
   )
@@ -537,23 +559,37 @@ function ForecastChart({
   const { formatAmount } = useCurrency()
 
   return (
-    <div className="card card-hover animate-fade-in-up section-delay-2 overflow-hidden p-7">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h3
-            className="text-base font-bold"
-            style={{ color: 'var(--text-primary)' }}
+    <div className="card card-hover animate-fade-in-up section-delay-2 overflow-hidden">
+      {/* Widget header bar with icon circle */}
+      <div
+        className="flex items-center justify-between border-b px-7 py-5"
+        style={{ borderColor: 'var(--border-primary)' }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-xl"
+            style={{
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.04))',
+            }}
           >
-            {t('dashboard.forecast')}
-          </h3>
-          <p
-            className="mt-1 text-xs"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            {data.length > 0
-              ? `${data[0].month} - ${data[data.length - 1].month}`
-              : ''}
-          </p>
+            <BarChart3 className="h-5 w-5" style={{ color: '#3B82F6' }} />
+          </div>
+          <div>
+            <h3
+              className="text-sm font-bold"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {t('dashboard.forecast')}
+            </h3>
+            <p
+              className="text-[11px]"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {data.length > 0
+                ? `${data[0].month} - ${data[data.length - 1].month}`
+                : ''}
+            </p>
+          </div>
         </div>
         <Link
           to="/forecast"
@@ -568,7 +604,8 @@ function ForecastChart({
         </Link>
       </div>
 
-      <div className="h-[340px] px-1" dir="ltr">
+      {/* Chart content area */}
+      <div className="h-[340px] px-6 pt-6 pb-3" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
             <defs>
@@ -861,14 +898,28 @@ function QuickActions({ isRtl }: { isRtl: boolean }) {
   ]
 
   return (
-    <div className="card card-hover animate-fade-in-up section-delay-3 overflow-hidden p-6">
-      <h3
-        className="mb-5 text-base font-bold"
-        style={{ color: 'var(--text-primary)' }}
+    <div className="card card-hover animate-fade-in-up section-delay-3 overflow-hidden">
+      {/* Widget header bar */}
+      <div
+        className="flex items-center gap-3 border-b px-7 py-5"
+        style={{ borderColor: 'var(--border-primary)' }}
       >
-        {t('dashboard.quickActions')}
-      </h3>
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0.04))',
+          }}
+        >
+          <PlusCircle className="h-5 w-5" style={{ color: '#2563EB' }} />
+        </div>
+        <h3
+          className="text-sm font-bold"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {t('dashboard.quickActions')}
+        </h3>
+      </div>
+      <div className="grid grid-cols-2 gap-4 p-6 md:grid-cols-4">
         {actions.map((action, index) => (
           <Link
             key={action.href}
@@ -883,7 +934,7 @@ function QuickActions({ isRtl }: { isRtl: boolean }) {
           >
             {/* Gradient icon circle */}
             <div
-              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-sm"
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm transition-transform duration-200 group-hover:scale-110"
               style={{ background: action.gradient }}
             >
               {action.icon}
@@ -956,17 +1007,22 @@ function CategoryDonutChart() {
   }
 
   return (
-    <div className="card card-hover animate-fade-in-up section-delay-3 overflow-hidden p-7">
-      {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
+    <div className="card card-hover animate-fade-in-up section-delay-3 overflow-hidden">
+      {/* Widget header bar */}
+      <div
+        className="flex items-center gap-3 border-b px-7 py-5"
+        style={{ borderColor: 'var(--border-primary)' }}
+      >
         <div
-          className="flex h-9 w-9 items-center justify-center rounded-xl"
-          style={{ backgroundColor: 'rgba(139, 92, 246, 0.08)' }}
+          className="flex h-10 w-10 items-center justify-center rounded-xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.04))',
+          }}
         >
-          <Target className="h-4.5 w-4.5" style={{ color: '#3B82F6' }} />
+          <Target className="h-5 w-5" style={{ color: '#8B5CF6' }} />
         </div>
         <h3
-          className="text-base font-bold"
+          className="text-sm font-bold"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('dashboard.categoryBreakdown')}
@@ -974,7 +1030,7 @@ function CategoryDonutChart() {
       </div>
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10">
+        <div className="flex flex-col items-center justify-center py-10 px-7">
           <div
             className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
             style={{ backgroundColor: 'var(--bg-hover)' }}
@@ -988,7 +1044,7 @@ function CategoryDonutChart() {
       ) : (
         <>
           {/* Donut chart */}
-          <div className="flex items-center justify-center" dir="ltr">
+          <div className="flex items-center justify-center px-7 pt-6" dir="ltr">
             <div className="relative h-[220px] w-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -1070,7 +1126,7 @@ function CategoryDonutChart() {
           </div>
 
           {/* Legend list */}
-          <div className="mt-5 space-y-2.5 max-h-[180px] overflow-y-auto px-1">
+          <div className="mt-5 space-y-2.5 max-h-[180px] overflow-y-auto px-7 pb-6">
             {items.map((item) => (
               <div
                 key={item.category_id ?? 'uncategorized'}
@@ -1561,7 +1617,7 @@ export default function DashboardPage() {
       <div className="animate-fade-in flex items-end justify-between">
         <div>
           <h1
-            className="text-[1.7rem] font-bold tracking-tight"
+            className="text-[1.75rem] font-extrabold tracking-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             {t('dashboard.title')}
@@ -1599,21 +1655,21 @@ export default function DashboardPage() {
         <EmptyState />
       )}
 
-      {/* --- Hero Balance Card (full width) --- */}
+      {/* --- Hero + KPI Cards in unified grid --- */}
       {!isAllError && (
-        <HeroBalanceCard
-          balance={summary ? formatAmount(summary.current_balance) : '--'}
-          netCashflow={summary ? formatAmount(summary.net_cashflow) : '--'}
-          balanceTrend={summary?.balance_trend ?? '0'}
-          isLoading={isSummaryLoading}
-          expectedBalance={summary ? formatAmount(expectedBalanceNum) : '--'}
-          isNetPositive={isNetPositive}
-        />
-      )}
-
-      {/* --- KPI Cards: 3 in a row below hero --- */}
-      {!isAllError && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+          {/* Hero balance card - spans 2 columns */}
+          <div className="lg:col-span-2">
+            <HeroBalanceCard
+              balance={summary ? formatAmount(summary.current_balance) : '--'}
+              netCashflow={summary ? formatAmount(summary.net_cashflow) : '--'}
+              balanceTrend={summary?.balance_trend ?? '0'}
+              isLoading={isSummaryLoading}
+              expectedBalance={summary ? formatAmount(expectedBalanceNum) : '--'}
+              isNetPositive={isNetPositive}
+            />
+          </div>
+          {/* 3 KPI cards - 1 column each */}
           {kpis.map((kpi) => (
             <KpiCard key={kpi.label} {...kpi} isLoading={isSummaryLoading} />
           ))}

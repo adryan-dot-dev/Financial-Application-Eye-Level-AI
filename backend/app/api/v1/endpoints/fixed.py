@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -45,6 +46,15 @@ async def create_fixed(
         cat = await db.get(Category, data.category_id)
         if not cat or cat.user_id != current_user.id:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+        if cat.type != data.type:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Category type '{cat.type}' does not match fixed type '{data.type}'",
+            )
+
+    # H-4: Validate date range
+    if data.end_date and data.end_date < data.start_date:
+        raise HTTPException(status_code=422, detail="end_date must be >= start_date")
 
     fixed = FixedIncomeExpense(
         user_id=current_user.id,
@@ -97,6 +107,12 @@ async def update_fixed(
         cat = await db.get(Category, update_data["category_id"])
         if not cat or cat.user_id != current_user.id:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+        effective_type = update_data.get("type", fixed.type)
+        if cat.type != effective_type:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Category type '{cat.type}' does not match fixed type '{effective_type}'",
+            )
 
     for key, value in update_data.items():
         setattr(fixed, key, value)
@@ -146,6 +162,7 @@ async def pause_fixed(
     if not fixed:
         raise NotFoundException("Fixed income/expense not found")
     fixed.is_active = False
+    fixed.paused_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(fixed)
     return fixed
@@ -167,6 +184,7 @@ async def resume_fixed(
     if not fixed:
         raise NotFoundException("Fixed income/expense not found")
     fixed.is_active = True
+    fixed.resumed_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(fixed)
     return fixed

@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Alert, Installment, Loan, Transaction
+from app.db.models import Alert, Installment, Loan, Settings, Transaction
 from app.services.forecast_service import compute_monthly_forecast
 
 logger = logging.getLogger(__name__)
@@ -68,12 +68,13 @@ def _build_negative_cashflow_alert(
     income: Decimal,
     expenses: Decimal,
     net: Decimal,
+    warning_threshold: Decimal = Decimal("5000"),
 ) -> Tuple[str, str, str]:
     """Build title, message, severity for a negative cashflow alert."""
     hm = _hebrew_month(month_date)
     year = month_date.year
 
-    if closing < Decimal("-5000"):
+    if closing < -warning_threshold:
         severity = "critical"
         title = f"\U0001f6a8 יתרה שלילית צפויה - {hm} {year}"
         message = (
@@ -759,6 +760,14 @@ async def generate_alerts(
     Gracefully degrades if forecast computation fails.
     """
 
+    # ORANGE-7: Load user settings for configurable alert thresholds
+    settings_result = await db.execute(
+        select(Settings).where(Settings.user_id == user_id)
+    )
+    user_settings = settings_result.scalar_one_or_none()
+    warning_threshold = Decimal(str(user_settings.alert_warning_threshold)) if user_settings else Decimal("5000")
+    critical_threshold = Decimal(str(user_settings.alert_critical_threshold)) if user_settings else Decimal("1000")
+
     # ------------------------------------------------------------------
     # 1. Forecast-based alerts (negative_cashflow, high_expenses, approaching_negative)
     # ------------------------------------------------------------------
@@ -797,7 +806,8 @@ async def generate_alerts(
             # --- Negative cashflow alert ---
             if closing < 0:
                 severity, title, message = _build_negative_cashflow_alert(
-                    month_date, closing, income, expenses, net
+                    month_date, closing, income, expenses, net,
+                    warning_threshold=warning_threshold,
                 )
                 key = ("negative_cashflow", month_date)
                 seen_forecast_keys.add(key)
@@ -824,8 +834,8 @@ async def generate_alerts(
                     db.add(alert)
                     result_alerts.append(alert)
 
-            # --- Approaching negative alert (positive but below 1000) ---
-            elif Decimal("0") <= closing < Decimal("1000"):
+            # --- Approaching negative alert (positive but below threshold) ---
+            elif Decimal("0") <= closing < critical_threshold:
                 title, message = _build_approaching_negative_alert(
                     month_date, closing, income, expenses
                 )

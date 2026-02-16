@@ -57,13 +57,22 @@ async def update_balance(
     if not old_balance:
         raise NotFoundException("No current balance. Use POST to create one.")
 
-    # Mark the old balance as non-current (preserves it as a history entry)
+    update_data = data.model_dump(exclude_unset=True)
+    new_effective_date = update_data.get("effective_date", old_balance.effective_date)
+
+    # If the effective_date is not changing, update the existing record in place
+    if new_effective_date == old_balance.effective_date:
+        old_balance.balance = update_data.get("balance", old_balance.balance)
+        if "notes" in update_data:
+            old_balance.notes = update_data["notes"]
+        await db.commit()
+        await db.refresh(old_balance)
+        return old_balance
+
+    # Effective date is changing: create a new entry and archive the old one
     old_balance.is_current = False
 
-    # Build the new balance entry from the update data, falling back to old values
-    update_data = data.model_dump(exclude_unset=True)
     new_balance_value = update_data.get("balance", old_balance.balance)
-    new_effective_date = update_data.get("effective_date", old_balance.effective_date)
     new_notes = update_data.get("notes", old_balance.notes)
 
     new_entry = BankBalance(

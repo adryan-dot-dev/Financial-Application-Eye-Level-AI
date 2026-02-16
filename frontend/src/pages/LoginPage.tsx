@@ -81,10 +81,10 @@ export default function LoginPage() {
       )}>
         <button
           onClick={toggleLanguage}
-          className="flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium tracking-wide backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
+          className="flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium tracking-wide backdrop-blur-md transition-all duration-200 hover:scale-105 hover:shadow-sm"
           style={{
             color: 'var(--text-secondary)',
-            backgroundColor: 'var(--bg-secondary)',
+            backgroundColor: 'color-mix(in srgb, var(--bg-secondary) 80%, transparent)',
             borderColor: 'var(--border-primary)',
           }}
           title={t('settings.language')}
@@ -94,10 +94,10 @@ export default function LoginPage() {
         </button>
         <button
           onClick={cycleTheme}
-          className="flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
+          className="flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-md transition-all duration-200 hover:scale-105 hover:shadow-sm"
           style={{
             color: 'var(--text-secondary)',
-            backgroundColor: 'var(--bg-secondary)',
+            backgroundColor: 'color-mix(in srgb, var(--bg-secondary) 80%, transparent)',
             borderColor: 'var(--border-primary)',
           }}
           title={themeLabel}
@@ -106,39 +106,108 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* Left Side - Brand Panel */}
+      {/* Left Side - Brand Panel with animated gradient mesh + floating shapes */}
       <div className={cn(
         'relative hidden w-1/2 items-center justify-center overflow-hidden lg:flex',
         isRtl ? 'order-2' : 'order-1'
       )}>
-        {/* Solid brand background */}
+        {/* Gradient mesh background */}
         <div className="auth-brand-bg absolute inset-0" />
 
+        {/* Animated gradient mesh overlay */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.3) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(236, 72, 153, 0.2) 0%, transparent 50%)',
+          }}
+        />
+
+        {/* Floating decorative shapes */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {/* Large circle top-right */}
+          <div
+            className="absolute -top-20 -end-20 h-72 w-72 rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)',
+              animation: 'float 8s ease-in-out infinite',
+            }}
+          />
+          {/* Medium circle bottom-left */}
+          <div
+            className="absolute -bottom-16 -start-16 h-56 w-56 rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%)',
+              animation: 'float 10s ease-in-out infinite reverse',
+            }}
+          />
+          {/* Small diamond center-right */}
+          <div
+            className="absolute top-1/3 end-12 h-16 w-16 rotate-45"
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '4px',
+              animation: 'float 6s ease-in-out infinite',
+            }}
+          />
+          {/* Tiny circle top-left */}
+          <div
+            className="absolute top-24 start-20 h-8 w-8 rounded-full"
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              animation: 'float 7s ease-in-out infinite reverse',
+            }}
+          />
+          {/* Horizontal line accents */}
+          <div
+            className="absolute top-1/4 start-0 h-px w-32"
+            style={{
+              background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent)',
+            }}
+          />
+          <div
+            className="absolute bottom-1/3 end-0 h-px w-40"
+            style={{
+              background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.1), transparent)',
+            }}
+          />
+        </div>
+
         <div className="relative z-10 flex flex-col items-center px-12">
-          {/* Logo */}
-          <div className="mb-8 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/20">
+          {/* Logo with glow */}
+          <div
+            className="mb-8 overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/20"
+            style={{
+              boxShadow: '0 0 40px rgba(59, 130, 246, 0.3), 0 0 80px rgba(139, 92, 246, 0.15), 0 20px 60px rgba(0,0,0,0.3)',
+            }}
+          >
             <img
               src="/logo.jpeg"
               alt={t('app.company')}
-              className="h-24 w-24 object-cover"
+              className="h-32 w-32 object-cover"
             />
           </div>
 
           {/* App name */}
-          <h1 className="mb-2 text-3xl font-bold tracking-tight text-white">
+          <h1 className="mb-3 text-4xl font-extrabold tracking-tight text-white drop-shadow-lg">
             {t('app.name')}
           </h1>
 
           {/* Company name */}
-          <p className="text-base font-medium text-white/80">
+          <p className="text-base font-semibold tracking-widest text-white/70 uppercase">
             {t('app.company')}
           </p>
 
-          {/* Divider */}
-          <div className="my-7 h-px w-20 bg-white/25" />
+          {/* Divider with gradient glow */}
+          <div
+            className="my-8 h-px w-32"
+            style={{
+              background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent)',
+              boxShadow: '0 0 12px rgba(255,255,255,0.15)',
+            }}
+          />
 
           {/* Subtitle */}
-          <p className="max-w-[260px] text-center text-sm leading-relaxed text-white/65">
+          <p className="max-w-[300px] text-center text-base leading-relaxed text-white/60">
             {t('auth.loginSubtitle')}
           </p>
         </div>
@@ -155,20 +224,24 @@ export default function LoginPage() {
 
           {/* Mobile Logo (visible below lg) */}
           <div className="mb-10 flex flex-col items-center lg:hidden">
-            <div className="mb-5 overflow-hidden rounded-xl shadow-md"
-              style={{ border: '1px solid var(--border-primary)' }}
+            <div
+              className="mb-5 overflow-hidden rounded-2xl"
+              style={{
+                border: '1px solid var(--border-primary)',
+                boxShadow: '0 0 30px rgba(59, 130, 246, 0.15), 0 8px 32px rgba(0,0,0,0.1)',
+              }}
             >
               <img
                 src="/logo.jpeg"
                 alt={t('app.company')}
-                className="h-20 w-20 object-cover"
+                className="h-24 w-24 object-cover"
               />
             </div>
-            <h2 className="auth-gradient-text text-2xl font-bold tracking-tight">
+            <h2 className="auth-gradient-text text-2xl font-extrabold tracking-tight">
               {t('app.name')}
             </h2>
             <p
-              className="mt-1 text-sm"
+              className="mt-1.5 text-xs font-semibold uppercase tracking-widest"
               style={{ color: 'var(--text-tertiary)' }}
             >
               {t('app.company')}
@@ -178,7 +251,7 @@ export default function LoginPage() {
           {/* Heading */}
           <div className="mb-10">
             <h2
-              className="text-3xl font-bold tracking-tight"
+              className="text-[34px] font-extrabold tracking-tight leading-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('auth.welcomeBack')}
@@ -214,12 +287,12 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="login-username"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2.5 block text-sm font-semibold"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.username')}
               </label>
-              <div className="relative">
+              <div className="group relative">
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
@@ -227,7 +300,7 @@ export default function LoginPage() {
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  <User className="h-[18px] w-[18px]" />
+                  <User className="h-5 w-5 transition-colors duration-200 group-focus-within:text-[var(--border-focus)]" />
                 </div>
                 <input
                   id="login-username"
@@ -237,9 +310,9 @@ export default function LoginPage() {
                   required
                   autoComplete="username"
                   className={cn(
-                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20 focus-visible:shadow-sm',
-                    'ps-11 pe-4'
+                    'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
+                    'ps-12 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -255,12 +328,12 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="login-password"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2.5 block text-sm font-semibold"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.password')}
               </label>
-              <div className="relative">
+              <div className="group relative">
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
@@ -268,7 +341,7 @@ export default function LoginPage() {
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  <Lock className="h-[18px] w-[18px]" />
+                  <Lock className="h-5 w-5 transition-colors duration-200 group-focus-within:text-[var(--border-focus)]" />
                 </div>
                 <input
                   id="login-password"
@@ -278,9 +351,9 @@ export default function LoginPage() {
                   required
                   autoComplete="current-password"
                   className={cn(
-                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20 focus-visible:shadow-sm',
-                    'ps-11 pe-11'
+                    'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
+                    'ps-12 pe-12'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -293,7 +366,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className={cn(
-                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1 transition-all duration-200 hover:opacity-70',
+                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition-all duration-200 hover:bg-[var(--bg-hover)]',
                     'end-3'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
@@ -301,30 +374,23 @@ export default function LoginPage() {
                   aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword
-                    ? <EyeOff className="h-[18px] w-[18px]" />
-                    : <Eye className="h-[18px] w-[18px]" />
+                    ? <EyeOff className="h-5 w-5" />
+                    : <Eye className="h-5 w-5" />
                   }
                 </button>
               </div>
             </div>
 
-            {/* Submit Button */}
+            {/* Submit Button – gradient with glow + scale hover */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className={cn(
-                'flex w-full items-center justify-center gap-2.5 rounded-xl px-6 py-3.5',
-                'text-sm font-semibold text-white',
-                'transition-all duration-200',
-                'hover:opacity-90',
-                'active:scale-[0.98]',
-                'disabled:cursor-not-allowed disabled:opacity-60'
-              )}
+              className="btn-primary flex h-12 w-full items-center justify-center gap-2.5 text-[15px] font-bold transition-all duration-200 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
               style={{
-                background: 'var(--color-brand-600)',
+                boxShadow: '0 8px 24px rgba(59, 130, 246, 0.3)',
               }}
             >
-              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}
               {t('auth.loginButton')}
             </button>
           </form>

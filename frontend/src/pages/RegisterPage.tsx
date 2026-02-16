@@ -134,7 +134,7 @@ export default function RegisterPage() {
 
     try {
       await register({ username: username.trim(), email: email.trim(), password })
-      navigate('/dashboard')
+      navigate('/onboarding')
     } catch (err: unknown) {
       const axiosError = err as { response?: { data?: { detail?: string } } }
       const message = axiosError?.response?.data?.detail || t('common.error')
@@ -157,10 +157,10 @@ export default function RegisterPage() {
       )}>
         <button
           onClick={toggleLanguage}
-          className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium tracking-wide backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
+          className="flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium tracking-wide backdrop-blur-md transition-all duration-200 hover:scale-105 hover:shadow-sm"
           style={{
             color: 'var(--text-secondary)',
-            backgroundColor: 'var(--bg-secondary)',
+            backgroundColor: 'color-mix(in srgb, var(--bg-secondary) 80%, transparent)',
             borderColor: 'var(--border-primary)',
           }}
           title={t('settings.language')}
@@ -170,10 +170,10 @@ export default function RegisterPage() {
         </button>
         <button
           onClick={cycleTheme}
-          className="flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-sm transition-all duration-200 hover:bg-[var(--bg-hover)]"
+          className="flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-md transition-all duration-200 hover:scale-105 hover:shadow-sm"
           style={{
             color: 'var(--text-secondary)',
-            backgroundColor: 'var(--bg-secondary)',
+            backgroundColor: 'color-mix(in srgb, var(--bg-secondary) 80%, transparent)',
             borderColor: 'var(--border-primary)',
           }}
           title={themeLabel}
@@ -182,37 +182,97 @@ export default function RegisterPage() {
         </button>
       </div>
 
-      {/* Left side - Brand panel */}
+      {/* Left side - Brand panel with animated gradient mesh + floating shapes */}
       <div className={cn(
         'relative hidden w-1/2 items-center justify-center overflow-hidden lg:flex',
         isRtl ? 'order-2' : 'order-1'
       )}>
-        {/* Solid brand background */}
+        {/* Gradient mesh background */}
         <div className="auth-brand-bg absolute inset-0" />
 
+        {/* Animated gradient mesh overlay */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.3) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(236, 72, 153, 0.2) 0%, transparent 50%)',
+          }}
+        />
+
+        {/* Floating decorative shapes */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div
+            className="absolute -top-20 -end-20 h-72 w-72 rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)',
+              animation: 'float 8s ease-in-out infinite',
+            }}
+          />
+          <div
+            className="absolute -bottom-16 -start-16 h-56 w-56 rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%)',
+              animation: 'float 10s ease-in-out infinite reverse',
+            }}
+          />
+          <div
+            className="absolute top-1/3 end-12 h-16 w-16 rotate-45"
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '4px',
+              animation: 'float 6s ease-in-out infinite',
+            }}
+          />
+          <div
+            className="absolute top-24 start-20 h-8 w-8 rounded-full"
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              animation: 'float 7s ease-in-out infinite reverse',
+            }}
+          />
+          <div
+            className="absolute top-1/4 start-0 h-px w-32"
+            style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent)' }}
+          />
+          <div
+            className="absolute bottom-1/3 end-0 h-px w-40"
+            style={{ background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.1), transparent)' }}
+          />
+        </div>
+
         <div className="relative z-10 flex flex-col items-center px-12 text-center">
-          {/* Logo */}
-          <div className="mb-8 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/20">
+          {/* Logo with glow */}
+          <div
+            className="mb-8 overflow-hidden rounded-3xl ring-1 ring-white/20"
+            style={{
+              boxShadow: '0 0 40px rgba(59, 130, 246, 0.3), 0 0 80px rgba(139, 92, 246, 0.15), 0 20px 60px rgba(0,0,0,0.3)',
+            }}
+          >
             <img
               src="/logo.jpeg"
               alt={t('app.company')}
-              className="h-24 w-24 object-cover"
+              className="h-32 w-32 object-cover"
             />
           </div>
 
           {/* Title */}
-          <h1 className="mb-2 text-3xl font-bold tracking-tight text-white">
+          <h1 className="mb-3 text-4xl font-extrabold tracking-tight text-white drop-shadow-lg">
             {t('app.name')}
           </h1>
-          <p className="text-base font-medium text-white/80">
+          <p className="text-base font-semibold tracking-widest text-white/70 uppercase">
             {t('app.company')}
           </p>
 
-          {/* Divider */}
-          <div className="my-7 h-px w-20 bg-white/25" />
+          {/* Divider with gradient glow */}
+          <div
+            className="my-8 h-px w-32"
+            style={{
+              background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent)',
+              boxShadow: '0 0 12px rgba(255,255,255,0.15)',
+            }}
+          />
 
           {/* Subtitle */}
-          <p className="max-w-[280px] text-sm leading-relaxed text-white/65">
+          <p className="max-w-[300px] text-base leading-relaxed text-white/60">
             {t('auth.registerSubtitle')}
           </p>
         </div>
@@ -228,16 +288,20 @@ export default function RegisterPage() {
         <div className="auth-stagger w-full max-w-md">
           {/* Mobile logo */}
           <div className="mb-8 flex flex-col items-center lg:hidden">
-            <div className="mb-4 overflow-hidden rounded-xl shadow-md"
-              style={{ border: '1px solid var(--border-primary)' }}
+            <div
+              className="mb-4 overflow-hidden rounded-2xl"
+              style={{
+                border: '1px solid var(--border-primary)',
+                boxShadow: '0 0 30px rgba(59, 130, 246, 0.15), 0 8px 32px rgba(0,0,0,0.1)',
+              }}
             >
               <img
                 src="/logo.jpeg"
                 alt={t('app.company')}
-                className="h-20 w-20 object-cover"
+                className="h-24 w-24 object-cover"
               />
             </div>
-            <h2 className="auth-gradient-text text-xl font-bold">
+            <h2 className="auth-gradient-text text-xl font-extrabold tracking-tight">
               {t('app.name')}
             </h2>
           </div>
@@ -245,13 +309,13 @@ export default function RegisterPage() {
           {/* Heading */}
           <div className="mb-8">
             <h2
-              className="text-3xl font-bold tracking-tight"
+              className="text-[34px] font-extrabold tracking-tight leading-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('auth.createAccount')}
             </h2>
             <p
-              className="mt-2 text-sm leading-relaxed"
+              className="mt-3 text-base leading-relaxed"
               style={{ color: 'var(--text-secondary)' }}
             >
               {t('auth.registerSubtitle')}
@@ -280,12 +344,12 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="register-username"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2.5 block text-sm font-semibold"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.username')}
               </label>
-              <div className="relative">
+              <div className="group relative">
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
@@ -293,7 +357,7 @@ export default function RegisterPage() {
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  <User className="h-[18px] w-[18px]" />
+                  <User className="h-5 w-5 transition-colors duration-200 group-focus-within:text-[var(--border-focus)]" />
                 </div>
                 <input
                   id="register-username"
@@ -308,10 +372,10 @@ export default function RegisterPage() {
                   required
                   autoComplete="username"
                   className={cn(
-                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
                     fieldErrors.username ? 'border-red-400' : '',
-                    'ps-11 pe-4'
+                    'ps-12 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -333,12 +397,12 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="register-email"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2.5 block text-sm font-semibold"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.email')}
               </label>
-              <div className="relative">
+              <div className="group relative">
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
@@ -346,7 +410,7 @@ export default function RegisterPage() {
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  <Mail className="h-[18px] w-[18px]" />
+                  <Mail className="h-5 w-5 transition-colors duration-200 group-focus-within:text-[var(--border-focus)]" />
                 </div>
                 <input
                   id="register-email"
@@ -361,10 +425,10 @@ export default function RegisterPage() {
                   required
                   autoComplete="email"
                   className={cn(
-                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
                     fieldErrors.email ? 'border-red-400' : '',
-                    'ps-11 pe-4'
+                    'ps-12 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -386,12 +450,12 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="register-password"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2.5 block text-sm font-semibold"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.password')}
               </label>
-              <div className="relative">
+              <div className="group relative">
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
@@ -399,7 +463,7 @@ export default function RegisterPage() {
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  <Lock className="h-[18px] w-[18px]" />
+                  <Lock className="h-5 w-5 transition-colors duration-200 group-focus-within:text-[var(--border-focus)]" />
                 </div>
                 <input
                   id="register-password"
@@ -414,10 +478,10 @@ export default function RegisterPage() {
                   required
                   autoComplete="new-password"
                   className={cn(
-                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
                     fieldErrors.password ? 'border-red-400' : '',
-                    'ps-11 pe-11'
+                    'ps-12 pe-12'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -430,7 +494,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className={cn(
-                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1 transition-all hover:opacity-70',
+                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition-all hover:bg-[var(--bg-hover)]',
                     'end-3'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
@@ -438,8 +502,8 @@ export default function RegisterPage() {
                   aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword
-                    ? <EyeOff className="h-[18px] w-[18px]" />
-                    : <Eye className="h-[18px] w-[18px]" />
+                    ? <EyeOff className="h-5 w-5" />
+                    : <Eye className="h-5 w-5" />
                   }
                 </button>
               </div>
@@ -464,16 +528,17 @@ export default function RegisterPage() {
                       {t(passwordStrength.labelKey)}
                     </span>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1.5">
                     {[1, 2, 3, 4, 5].map((level) => (
                       <div
                         key={level}
                         className={cn(
-                          'h-1 flex-1 rounded-full transition-all duration-300',
+                          'h-1.5 flex-1 rounded-full transition-all duration-300',
                           passwordStrength.score >= level
                             ? passwordStrength.bgColor
-                            : 'bg-gray-200 dark:bg-gray-700'
+                            : ''
                         )}
+                        style={passwordStrength.score >= level ? undefined : { backgroundColor: 'var(--bg-tertiary)' }}
                       />
                     ))}
                   </div>
@@ -485,12 +550,12 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="register-confirm-password"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2.5 block text-sm font-semibold"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('auth.confirmPassword')}
               </label>
-              <div className="relative">
+              <div className="group relative">
                 <div
                   className={cn(
                     'pointer-events-none absolute top-1/2 -translate-y-1/2',
@@ -498,7 +563,7 @@ export default function RegisterPage() {
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  <Lock className="h-[18px] w-[18px]" />
+                  <Lock className="h-5 w-5 transition-colors duration-200 group-focus-within:text-[var(--border-focus)]" />
                 </div>
                 <input
                   id="register-confirm-password"
@@ -513,14 +578,14 @@ export default function RegisterPage() {
                   required
                   autoComplete="new-password"
                   className={cn(
-                    'w-full rounded-lg border py-3.5 text-sm outline-none transition-all duration-200',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
                     fieldErrors.confirmPassword
                       ? 'border-red-400'
                       : passwordsMatch
                         ? 'border-emerald-400'
                         : '',
-                    'ps-11 pe-11'
+                    'ps-12 pe-12'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
@@ -537,7 +602,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className={cn(
-                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1 transition-all hover:opacity-70',
+                    'absolute top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition-all hover:bg-[var(--bg-hover)]',
                     'end-3'
                   )}
                   style={{ color: 'var(--text-tertiary)' }}
@@ -545,8 +610,8 @@ export default function RegisterPage() {
                   aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showConfirmPassword
-                    ? <EyeOff className="h-[18px] w-[18px]" />
-                    : <Eye className="h-[18px] w-[18px]" />
+                    ? <EyeOff className="h-5 w-5" />
+                    : <Eye className="h-5 w-5" />
                   }
                 </button>
               </div>
@@ -572,23 +637,16 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Submit button */}
+            {/* Submit button – gradient with glow + scale hover */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className={cn(
-                'flex w-full items-center justify-center gap-2.5 rounded-xl px-4 py-3.5',
-                'text-sm font-semibold text-white',
-                'transition-all duration-200',
-                'hover:opacity-90',
-                'active:scale-[0.98]',
-                'disabled:cursor-not-allowed disabled:opacity-60'
-              )}
+              className="btn-primary flex h-12 w-full items-center justify-center gap-2.5 text-[15px] font-bold transition-all duration-200 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
               style={{
-                background: 'var(--color-brand-600)',
+                boxShadow: '0 8px 24px rgba(59, 130, 246, 0.3)',
               }}
             >
-              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}
               {t('auth.registerButton')}
             </button>
           </form>

@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -166,6 +166,9 @@ async def update_transaction(
         cat = await db.get(Category, update_data["category_id"])
         if not cat or cat.user_id != current_user.id:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+        # RED-6: Reject archived categories on update
+        if cat.is_archived:
+            raise HTTPException(status_code=422, detail="Cannot assign an archived category")
         # Determine the effective transaction type (updated or existing)
         effective_type = update_data.get("type", transaction.type)
         if cat.type != effective_type:
@@ -235,7 +238,7 @@ async def duplicate_transaction(
     return new_transaction
 
 
-@router.post("/bulk", response_model=list[TransactionResponse], status_code=201)
+@router.post("/bulk", response_model=List[TransactionResponse], status_code=201)
 async def bulk_create_transactions(
     data: TransactionBulkCreate,
     current_user: User = Depends(get_current_user),

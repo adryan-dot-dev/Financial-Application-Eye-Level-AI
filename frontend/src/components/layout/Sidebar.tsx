@@ -103,13 +103,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const ExpandIcon = isRtl ? ChevronRight : ChevronLeft
 
   const renderNavGroup = (group: string, items: NavItem[], label?: string) => (
-    <div key={group} className="mb-1">
+    <div key={group} className="mb-1.5">
       {/* Section label (visible when expanded) */}
       {label && !collapsed && (
-        <div className="mb-1 px-3 pt-1">
+        <div className="mb-1 px-3 pt-2">
           <span
-            className="text-[10px] font-semibold uppercase tracking-[0.06em]"
-            style={{ color: 'var(--text-tertiary)', opacity: 0.4 }}
+            className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+            style={{ color: 'var(--text-sidebar)', opacity: 0.35 }}
           >
             {label}
           </span>
@@ -127,22 +127,23 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               onMouseLeave={() => handleItemHover(null)}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'sidebar-nav-item group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium',
+                'sidebar-nav-item group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium my-0.5',
                 collapsed && 'justify-center px-2',
                 active
                   ? 'sidebar-nav-item-active text-[var(--text-sidebar-active)]'
-                  : 'text-[var(--text-sidebar)] hover:text-[var(--text-primary)]',
+                  : 'text-[var(--text-sidebar)] hover:text-[var(--text-sidebar-active)]',
               )}
             >
               {/* Active indicator bar */}
               {active && (
                 <div
                   className={cn(
-                    'sidebar-active-indicator absolute top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full',
+                    'sidebar-active-indicator absolute top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-full',
                     '-end-0.5',
                   )}
                   style={{
-                    background: '#3B82F6',
+                    background: 'linear-gradient(180deg, #06B6D4, #3B82F6)',
+                    boxShadow: '0 0 8px rgba(59, 130, 246, 0.4)',
                   }}
                 />
               )}
@@ -153,7 +154,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                     'shrink-0 transition-colors',
                     active
                       ? 'nav-icon-active text-[var(--text-sidebar-active)]'
-                      : 'text-[var(--text-sidebar)] group-hover:text-[var(--text-primary)]',
+                      : 'text-[var(--text-sidebar)] group-hover:text-[var(--text-sidebar-active)]',
                   )}
                 />
                 {/* Alert badge */}
@@ -228,26 +229,26 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         </button>
 
         {/* Logo area */}
-        <div className="flex flex-col items-center gap-2.5 px-4 pb-4 pt-6">
+        <div className="flex flex-col items-center gap-3 px-4 pb-5 pt-6">
           <div
-            className="overflow-hidden rounded-xl ring-1 ring-white/10"
+            className="overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-lg shadow-black/20"
           >
             <img
               src="/logo.jpeg"
               alt={t('app.company')}
               className={cn(
                 'w-auto transition-all duration-300',
-                collapsed ? 'h-[36px]' : 'h-[44px]',
+                collapsed ? 'h-[36px]' : 'h-[48px]',
               )}
             />
           </div>
           {!collapsed && (
             <div className="text-center">
-              <h1 className="text-white font-bold text-[13px] leading-tight">
+              <h1 className="text-white font-bold text-sm leading-tight tracking-tight">
                 {t('app.name')}
               </h1>
-              <p className="mt-0.5 text-[10px] font-medium tracking-wider uppercase"
-                style={{ color: 'var(--text-sidebar)', opacity: 0.5 }}
+              <p className="mt-1 text-[10px] font-medium tracking-widest uppercase"
+                style={{ color: 'var(--text-sidebar)', opacity: 0.4 }}
               >
                 {t('app.company')}
               </p>
@@ -271,29 +272,29 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           {collapsed ? <ExpandIcon size={10} /> : <CollapseIcon size={10} />}
         </button>
 
-        {/* Logo separator */}
-        <div className="sidebar-logo-separator mb-3" />
+        {/* Logo separator - gradient fade */}
+        <div className="mx-4 mb-3 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.08) 50%, transparent)' }} />
 
         {/* Navigation */}
         <nav aria-label={t('nav.mainNavigation')} className="flex-1 overflow-y-auto px-3 pb-3">
           {renderNavGroup('main', mainItems)}
 
-          <div className="sidebar-divider" />
+          <div className="mx-2 my-2 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.06) 50%, transparent)' }} />
 
           {renderNavGroup('finance', financeItems)}
 
-          <div className="sidebar-divider" />
+          <div className="mx-2 my-2 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.06) 50%, transparent)' }} />
 
           {renderNavGroup('system', systemItems)}
         </nav>
 
         {/* Bottom controls */}
-        <div className="sidebar-bottom-area px-3 py-3">
+        <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           {/* Theme toggle */}
           <div className={cn(
-            'mb-2 flex items-center rounded-lg p-0.5',
+            'mb-2.5 flex items-center rounded-xl p-0.5',
             collapsed ? 'flex-col gap-1' : 'gap-0.5',
-            !collapsed && 'bg-white/5',
+            !collapsed && 'bg-white/[0.04]',
           )}>
             {([
               { value: 'light' as const, Icon: Sun },
@@ -306,11 +307,11 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 title={t(`settings.${value}`)}
                 aria-label={t(`settings.${value}`)}
                 className={cn(
-                  'flex h-7 items-center justify-center rounded-md transition-all duration-200',
+                  'flex h-7 items-center justify-center rounded-lg transition-all duration-200',
                   collapsed ? 'w-7' : 'flex-1',
                   theme === value
-                    ? 'bg-white/10 text-white shadow-sm'
-                    : 'text-[var(--text-sidebar)] hover:text-white',
+                    ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/5'
+                    : 'text-[var(--text-sidebar)] hover:text-white hover:bg-white/[0.04]',
                 )}
               >
                 <Icon size={14} />

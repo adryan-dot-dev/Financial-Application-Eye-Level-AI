@@ -7,10 +7,17 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.utils import strip_tags
+
+
+MAX_AMOUNT = Decimal("9999999999999.99")
+
 
 def _validate_decimal_precision(v: Decimal, max_digits: int = 15) -> Decimal:
     """Validate that a Decimal value does not exceed max_digits total digits."""
     if v is not None:
+        if v > MAX_AMOUNT:
+            raise ValueError(f"Amount exceeds maximum allowed value ({MAX_AMOUNT})")
         s = str(abs(v))
         digits_only = s.replace('.', '').lstrip('0') or '0'
         if len(digits_only) > max_digits:
@@ -22,7 +29,7 @@ class InstallmentCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     total_amount: Decimal = Field(..., gt=0, max_digits=15, decimal_places=2)
     number_of_payments: int = Field(..., ge=1, le=360)
-    currency: str = Field(default="ILS", max_length=3)
+    currency: str = Field(default="ILS", min_length=3, max_length=3, pattern="^[A-Z]{3}$")
     type: str = Field(..., pattern="^(income|expense)$")
     category_id: Optional[UUID] = None
     start_date: date
@@ -33,6 +40,25 @@ class InstallmentCreate(BaseModel):
     @classmethod
     def validate_amount_precision(cls, v: Decimal) -> Decimal:
         return _validate_decimal_precision(v)
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = strip_tags(v)
+        v = v.strip()
+        if not v:
+            raise ValueError("Name must not be empty or whitespace-only")
+        return v
+
+    @field_validator('description')
+    @classmethod
+    def sanitize_description(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = strip_tags(v)
+            v = v.strip()
+            if not v:
+                return None
+        return v
 
 
 class InstallmentUpdate(BaseModel):

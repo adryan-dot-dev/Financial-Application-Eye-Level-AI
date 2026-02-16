@@ -125,7 +125,7 @@ function BalanceTooltip({
           {balanceLabel}
         </span>
         <span
-          className="ms-auto ps-4 text-xs font-semibold tabular-nums ltr-nums"
+          className="fin-number ms-auto ps-4 text-xs ltr-nums"
           style={{
             color: balance >= 0 ? 'var(--color-income)' : 'var(--color-expense)',
           }}
@@ -421,7 +421,7 @@ export default function BalancePage() {
       {/* Page header */}
       <div className="animate-fade-in flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1
-          className="text-[1.7rem] font-bold tracking-tight"
+          className="text-[1.75rem] font-extrabold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('balance.title')}
@@ -475,7 +475,7 @@ export default function BalancePage() {
                 {t('balance.current')}
               </p>
               <p
-                className="ltr-nums mt-1 text-[2.5rem] font-bold leading-tight tracking-tight"
+                className="fin-number text-[2.5rem] ltr-nums mt-1 leading-tight tracking-tight"
                 style={{ color: balanceColor }}
               >
                 {formatAmount(currentBalance.balance)}
@@ -616,7 +616,7 @@ export default function BalancePage() {
                         {formatDate(entry.effective_date, isRtl ? 'he-IL' : 'en-US')}
                       </td>
                       <td
-                        className="whitespace-nowrap px-6 py-3.5 font-semibold tabular-nums ltr-nums"
+                        className="fin-number whitespace-nowrap px-6 py-3.5 ltr-nums"
                         style={{ color: entryColor }}
                       >
                         {formatAmount(entry.balance)}
