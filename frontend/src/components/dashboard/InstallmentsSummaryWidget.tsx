@@ -61,7 +61,7 @@ function InstallmentItemRow({
 }) {
   const { formatAmount } = useCurrency()
   const isExpense = item.type === 'expense'
-  const accentColor = isExpense ? '#3B82F6' : '#10B981'
+  const accentColor = isExpense ? 'var(--color-brand-500)' : 'var(--color-success)'
   const amountColor = isExpense ? 'var(--color-danger)' : 'var(--color-income)'
 
   return (
@@ -178,15 +178,15 @@ export function InstallmentsSummaryWidget() {
           <div className="relative">
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
-              style={{ backgroundColor: 'rgba(59, 130, 246, 0.08)' }}
+              style={{ backgroundColor: 'rgba(67, 24, 255, 0.08)' }}
             >
-              <CreditCard className="h-4.5 w-4.5" style={{ color: '#3B82F6' }} />
+              <CreditCard className="h-4.5 w-4.5" style={{ color: 'var(--color-brand-500)' }} />
             </div>
             {/* Count badge */}
             {activeCount > 0 && (
               <span
                 className="absolute -top-1.5 -end-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-                style={{ backgroundColor: '#3B82F6' }}
+                style={{ backgroundColor: 'var(--color-brand-500)' }}
               >
                 {activeCount}
               </span>
@@ -202,7 +202,7 @@ export function InstallmentsSummaryWidget() {
             {activeCount > 0 && (
               <span
                 className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
-                style={{ backgroundColor: '#3B82F6' }}
+                style={{ backgroundColor: 'var(--color-brand-500)' }}
               >
                 {activeCount}
               </span>

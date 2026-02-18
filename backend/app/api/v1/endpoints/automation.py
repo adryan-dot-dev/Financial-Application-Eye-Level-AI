@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.models import User
 from app.db.session import get_db
+from app.services.audit_service import log_action
 from app.services.automation_service import process_recurring_charges
 from app.services.scheduler import get_scheduler_status
 
@@ -32,6 +33,8 @@ async def process_recurring(
         reference_date=target_date,
         preview=False,
     )
+    await log_action(db, user_id=current_user.id, action="process_recurring", entity_type="automation", details=f"processed recurring charges")
+    await db.commit()
     return result
 
 
@@ -76,6 +79,30 @@ async def manual_process(
         reference_date=target_date,
         preview=preview,
     )
+    if not preview:
+        await log_action(db, user_id=current_user.id, action="process", entity_type="automation", details=f"manual process recurring charges")
+        await db.commit()
+    return result
+
+
+@router.post("/sync-now")
+async def sync_now(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Immediately process all recurring charges for today.
+
+    Convenience endpoint that triggers processing for the current date,
+    ensuring the dashboard reflects the latest recurring entries.
+    """
+    result = await process_recurring_charges(
+        db=db,
+        user_id=current_user.id,
+        reference_date=date.today(),
+        preview=False,
+    )
+    await log_action(db, user_id=current_user.id, action="sync_now", entity_type="automation", details="sync recurring charges for today")
+    await db.commit()
     return result
 
 

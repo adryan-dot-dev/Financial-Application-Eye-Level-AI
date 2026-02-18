@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SettingsResponse(BaseModel):
@@ -23,6 +23,9 @@ class SettingsResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+_SUPPORTED_CURRENCIES = {"ILS", "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD"}
+
+
 class SettingsUpdate(BaseModel):
     currency: Optional[str] = Field(None, pattern=r"^[A-Z]{3}$")
     language: Optional[str] = Field(None, pattern=r"^(he|en)$")
@@ -34,3 +37,10 @@ class SettingsUpdate(BaseModel):
     alert_warning_threshold: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     alert_critical_threshold: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     onboarding_completed: Optional[bool] = None
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _SUPPORTED_CURRENCIES:
+            raise ValueError(f"Unsupported currency: {v}. Supported: {', '.join(sorted(_SUPPORTED_CURRENCIES))}")
+        return v

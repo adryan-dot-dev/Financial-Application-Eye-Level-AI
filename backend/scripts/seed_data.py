@@ -55,13 +55,21 @@ async def seed():
         admin = result.scalar_one_or_none()
 
         if admin:
-            print("\n[SKIP] Admin user already exists")
+            # Ensure existing admin is super_admin
+            if not admin.is_super_admin:
+                admin.is_super_admin = True
+                admin.is_admin = True
+                await db.flush()
+                print("\n[UPGRADE] Admin user upgraded to super admin")
+            else:
+                print("\n[SKIP] Admin user already exists (super admin)")
         else:
             admin = User(
                 username="admin",
                 email="admin@eyelevel.ai",
                 password_hash=hash_password(settings.ADMIN_DEFAULT_PASSWORD),
                 is_admin=True,
+                is_super_admin=True,
             )
             db.add(admin)
             await db.flush()

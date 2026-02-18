@@ -35,6 +35,7 @@ class FixedCreate(BaseModel):
     start_date: date
     end_date: Optional[date] = None
     description: Optional[str] = Field(None, max_length=1000)
+    credit_card_id: Optional[UUID] = None
 
     @field_validator('amount')
     @classmethod
@@ -77,6 +78,7 @@ class FixedUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     description: Optional[str] = Field(None, max_length=1000)
+    credit_card_id: Optional[UUID] = None
 
     @field_validator('amount')
     @classmethod
@@ -91,6 +93,9 @@ class FixedResponse(BaseModel):
     name: str
     amount: Decimal
     currency: str
+    original_amount: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
     type: str
     category_id: Optional[UUID]
     day_of_month: int
@@ -98,6 +103,7 @@ class FixedResponse(BaseModel):
     end_date: Optional[date]
     is_active: bool
     description: Optional[str]
+    credit_card_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

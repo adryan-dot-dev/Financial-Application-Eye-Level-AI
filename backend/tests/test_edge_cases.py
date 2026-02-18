@@ -932,7 +932,7 @@ class TestBoundaryValues:
 
     @pytest.mark.asyncio
     async def test_transaction_special_characters_in_description(self, client: AsyncClient, auth_headers: dict):
-        """Special characters and Hebrew text in description should be stored correctly."""
+        """Special characters and Hebrew text in description should be stored correctly (HTML stripped)."""
         special_desc = "Payment <script>alert('xss')</script> & 'quotes' \"double\" \u05e9\u05dc\u05d5\u05dd"
         response = await client.post("/api/v1/transactions", json={
             "amount": 100,
@@ -941,7 +941,8 @@ class TestBoundaryValues:
             "description": special_desc,
         }, headers=auth_headers)
         assert response.status_code == 201
-        assert response.json()["description"] == special_desc
+        # HTML tags are stripped by strip_tags sanitization
+        assert response.json()["description"] == "Payment alert('xss') & 'quotes' \"double\" \u05e9\u05dc\u05d5\u05dd"
 
     @pytest.mark.asyncio
     async def test_loan_name_special_characters(self, client: AsyncClient, auth_headers: dict):

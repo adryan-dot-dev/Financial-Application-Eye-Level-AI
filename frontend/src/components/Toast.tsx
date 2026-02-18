@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
@@ -21,31 +21,31 @@ const TOAST_CONFIG: Record<
 > = {
   success: {
     icon: <CheckCircle className="h-5 w-5" />,
-    bg: 'rgba(16, 185, 129, 0.08)',
-    border: 'rgba(16, 185, 129, 0.25)',
-    accent: '#10B981',
-    progressColor: '#10B981',
+    bg: 'var(--bg-success)',
+    border: 'var(--border-success)',
+    accent: 'var(--color-success)',
+    progressColor: 'var(--color-success)',
   },
   error: {
     icon: <XCircle className="h-5 w-5" />,
-    bg: 'rgba(239, 68, 68, 0.08)',
-    border: 'rgba(239, 68, 68, 0.25)',
-    accent: '#EF4444',
-    progressColor: '#EF4444',
+    bg: 'var(--bg-danger)',
+    border: 'var(--border-danger)',
+    accent: 'var(--color-danger)',
+    progressColor: 'var(--color-danger)',
   },
   warning: {
     icon: <AlertTriangle className="h-5 w-5" />,
-    bg: 'rgba(245, 158, 11, 0.08)',
-    border: 'rgba(245, 158, 11, 0.25)',
-    accent: '#F59E0B',
-    progressColor: '#F59E0B',
+    bg: 'var(--bg-warning)',
+    border: 'var(--border-warning)',
+    accent: 'var(--color-warning)',
+    progressColor: 'var(--color-warning)',
   },
   info: {
     icon: <Info className="h-5 w-5" />,
-    bg: 'rgba(59, 130, 246, 0.08)',
-    border: 'rgba(59, 130, 246, 0.25)',
-    accent: '#3B82F6',
-    progressColor: '#3B82F6',
+    bg: 'var(--bg-info)',
+    border: 'var(--border-info)',
+    accent: 'var(--color-brand-500)',
+    progressColor: 'var(--color-brand-500)',
   },
 }
 
@@ -56,22 +56,13 @@ const TOAST_CONFIG: Record<
 function ToastItem({
   toast,
   onRemove,
-  isRtl,
 }: {
   toast: Toast
   onRemove: (id: string) => void
-  isRtl: boolean
 }) {
   const config = TOAST_CONFIG[toast.type]
   const [isExiting, setIsExiting] = useState(false)
-  const [isEntered, setIsEntered] = useState(false)
   const duration = toast.duration ?? 4000
-
-  // Enter animation
-  useEffect(() => {
-    const timer = setTimeout(() => setIsEntered(true), 10)
-    return () => clearTimeout(timer)
-  }, [])
 
   const handleClose = () => {
     setIsExiting(true)
@@ -83,10 +74,8 @@ function ToastItem({
       role="status"
       aria-live="polite"
       className={cn(
-        'pointer-events-auto relative w-80 overflow-hidden rounded-xl border shadow-lg backdrop-blur-sm transition-all duration-300 ease-out',
-        !isEntered && !isExiting && (isRtl ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'),
-        isEntered && !isExiting && 'translate-x-0 opacity-100',
-        isExiting && (isRtl ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'),
+        'pointer-events-auto relative w-80 overflow-hidden rounded-xl border shadow-lg backdrop-blur-sm',
+        isExiting ? 'toast-spring-exit' : 'toast-spring-enter',
       )}
       style={{
         backgroundColor: 'var(--bg-card)',
@@ -132,19 +121,15 @@ function ToastItem({
         </button>
       </div>
 
-      {/* Progress bar */}
+      {/* Countdown progress bar */}
       <div
-        className="h-1 w-full"
-        style={{ backgroundColor: 'var(--bg-tertiary)' }}
-      >
-        <div
-          className="h-full rounded-full"
-          style={{
-            backgroundColor: config.progressColor,
-            animation: `toastProgress ${duration}ms linear forwards`,
-          }}
-        />
-      </div>
+        className="toast-countdown absolute bottom-0 h-0.5 rounded-b-xl"
+        style={{
+          '--toast-duration': `${duration}ms`,
+          backgroundColor: config.progressColor,
+          insetInlineStart: 0,
+        } as React.CSSProperties}
+      />
     </div>
   )
 }
@@ -162,14 +147,6 @@ export function ToastContainer() {
 
   return (
     <>
-      {/* Keyframes for progress bar */}
-      <style>{`
-        @keyframes toastProgress {
-          from { width: 100%; }
-          to { width: 0%; }
-        }
-      `}</style>
-
       <div
         className={cn(
           'fixed bottom-6 z-[9999] flex flex-col gap-3 pointer-events-none',
@@ -181,7 +158,6 @@ export function ToastContainer() {
             key={toast.id}
             toast={toast}
             onRemove={removeToast}
-            isRtl={isRtl}
           />
         ))}
       </div>

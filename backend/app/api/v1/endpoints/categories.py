@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from uuid import UUID
 
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+logger = logging.getLogger(__name__)
+
+from app.api.deps import get_current_user, get_data_context, DataContext
 from app.api.v1.schemas.category import (
     CategoryCreate,
     CategoryListResponse,
@@ -22,21 +25,26 @@ from app.core.exceptions import NotFoundException
 from app.db.models.category import Category
 from app.db.models.transaction import Transaction
 from app.db.models.user import User
+from app.core.cache import set_cache_headers
 from app.db.session import get_db
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/categories", tags=["Categories"])
 
 
 @router.get("", response_model=CategoryListResponse)
 async def list_categories(
+    response: Response,
     type: Optional[str] = Query(None, pattern="^(income|expense)$"),
     include_archived: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Category).where(Category.user_id == current_user.id)
+    set_cache_headers(response, max_age=300)
+    query = select(Category).where(ctx.ownership_filter(Category))
 
     if type:
         query = query.where(Category.type == type)
@@ -71,12 +79,13 @@ async def list_categories(
 async def create_category(
     data: CategoryCreate,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     from app.core.exceptions import AlreadyExistsException
     existing = await db.execute(
         select(Category).where(
-            Category.user_id == current_user.id,
+            ctx.ownership_filter(Category),
             Category.name == data.name,
             Category.type == data.type,
             Category.is_archived == False,
@@ -86,12 +95,14 @@ async def create_category(
         raise AlreadyExistsException("Category with this name and type")
 
     category = Category(
-        user_id=current_user.id,
+        **ctx.create_fields(),
         **data.model_dump(),
     )
     db.add(category)
+    await log_action(db, user_id=current_user.id, action="create", entity_type="category", entity_id=str(category.id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(category)
+    logger.info("User %s created category %s", current_user.id, category.id)
     return category
 
 
@@ -99,11 +110,12 @@ async def create_category(
 async def get_category(
     category_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Category).where(
-            Category.id == category_id, Category.user_id == current_user.id
+            Category.id == category_id, ctx.ownership_filter(Category)
         )
     )
     category = result.scalar_one_or_none()
@@ -117,11 +129,12 @@ async def update_category(
     category_id: UUID,
     data: CategoryUpdate,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Category).where(
-            Category.id == category_id, Category.user_id == current_user.id
+            Category.id == category_id, ctx.ownership_filter(Category)
         )
     )
     category = result.scalar_one_or_none()
@@ -162,6 +175,7 @@ async def update_category(
     for field, value in update_data.items():
         setattr(category, field, value)
 
+    await log_action(db, user_id=current_user.id, action="update", entity_type="category", entity_id=str(category_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(category)
     return category
@@ -171,11 +185,12 @@ async def update_category(
 async def delete_category(
     category_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Category).where(
-            Category.id == category_id, Category.user_id == current_user.id
+            Category.id == category_id, ctx.ownership_filter(Category)
         )
     )
     category = result.scalar_one_or_none()
@@ -184,6 +199,7 @@ async def delete_category(
 
     # Soft delete - archive instead of delete
     category.is_archived = True
+    await log_action(db, user_id=current_user.id, action="archive", entity_type="category", entity_id=str(category_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     return {"message": "Category archived successfully"}
 
@@ -192,6 +208,7 @@ async def delete_category(
 async def reorder_categories(
     data: CategoryReorder,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     # Single UPDATE with CASE expression instead of N separate UPDATE queries
@@ -201,7 +218,7 @@ async def reorder_categories(
             update(Category)
             .where(
                 Category.id.in_(data.ordered_ids),
-                Category.user_id == current_user.id,
+                ctx.ownership_filter(Category),
             )
             .values(
                 display_order=case(
@@ -211,5 +228,6 @@ async def reorder_categories(
             )
         )
 
+    await log_action(db, user_id=current_user.id, action="reorder", entity_type="category", user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     return {"message": "Categories reordered successfully"}

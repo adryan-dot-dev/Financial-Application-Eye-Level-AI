@@ -79,14 +79,7 @@ function ComparisonTooltip({
   if (!active || !payload || payload.length === 0) return null
 
   return (
-    <div
-      className="rounded-xl border px-4 py-3"
-      style={{
-        backgroundColor: 'var(--bg-card)',
-        borderColor: 'var(--border-primary)',
-        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.12)',
-      }}
-    >
+    <div className="glass-tooltip">
       <p
         className="text-xs font-semibold mb-2"
         style={{ color: 'var(--text-primary)' }}
@@ -189,8 +182,8 @@ export function MonthlyComparisonChart() {
           <div
             className="flex h-9 w-9 items-center justify-center rounded-xl"
             style={{
-              backgroundColor: 'rgba(59, 130, 246, 0.08)',
-              color: '#3B82F6',
+              backgroundColor: 'rgba(67, 24, 255, 0.08)',
+              color: 'var(--color-brand-500)',
             }}
           >
             <BarChart3 className="h-4.5 w-4.5" />
@@ -216,16 +209,7 @@ export function MonthlyComparisonChart() {
       <div className="h-[300px] px-1" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
-            <defs>
-              <linearGradient id="incomeBarGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#34D399" stopOpacity={1} />
-                <stop offset="100%" stopColor="#10B981" stopOpacity={0.8} />
-              </linearGradient>
-              <linearGradient id="expenseBarGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#F87171" stopOpacity={1} />
-                <stop offset="100%" stopColor="#EF4444" stopOpacity={0.8} />
-              </linearGradient>
-            </defs>
+            {/* Solid fills — no gradients */}
             <CartesianGrid
               strokeDasharray="4 4"
               stroke="var(--border-primary)"
@@ -272,17 +256,19 @@ export function MonthlyComparisonChart() {
             />
             <Bar
               dataKey="income"
-              fill="url(#incomeBarGradient)"
+              fill="var(--color-success)"
               radius={[4, 4, 0, 0]}
               isAnimationActive={true}
-              animationDuration={600}
+              animationDuration={450}
+              animationEasing="ease-out"
             />
             <Bar
               dataKey="expenses"
-              fill="url(#expenseBarGradient)"
+              fill="var(--color-danger)"
               radius={[4, 4, 0, 0]}
               isAnimationActive={true}
-              animationDuration={600}
+              animationDuration={450}
+              animationEasing="ease-out"
             />
           </BarChart>
         </ResponsiveContainer>

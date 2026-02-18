@@ -80,8 +80,8 @@ export function LoansSummaryWidget() {
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
               style={{
-                backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                color: '#3B82F6',
+                backgroundColor: 'rgba(67, 24, 255, 0.08)',
+                color: 'var(--color-brand-500)',
               }}
             >
               <Banknote className="h-4.5 w-4.5" />
@@ -122,8 +122,8 @@ export function LoansSummaryWidget() {
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
               style={{
-                backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                color: '#3B82F6',
+                backgroundColor: 'rgba(67, 24, 255, 0.08)',
+                color: 'var(--color-brand-500)',
               }}
             >
               <Banknote className="h-4.5 w-4.5" />
@@ -131,7 +131,7 @@ export function LoansSummaryWidget() {
             {activeCount > 0 && (
               <span
                 className="absolute -top-1.5 -end-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-                style={{ backgroundColor: '#7C3AED' }}
+                style={{ backgroundColor: 'var(--color-accent-purple)' }}
               >
                 {activeCount}
               </span>
@@ -147,7 +147,7 @@ export function LoansSummaryWidget() {
             {activeCount > 0 && (
               <span
                 className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
-                style={{ backgroundColor: '#7C3AED' }}
+                style={{ backgroundColor: 'var(--color-accent-purple)' }}
               >
                 {activeCount}
               </span>
@@ -157,7 +157,7 @@ export function LoansSummaryWidget() {
         <Link
           to="/loans"
           className="flex items-center gap-1 text-xs font-semibold transition-colors hover:opacity-80"
-          style={{ color: '#3B82F6' }}
+          style={{ color: 'var(--color-brand-500)' }}
         >
           {t('dashboard.viewAll')}
           <ChevronRight
@@ -178,7 +178,7 @@ export function LoansSummaryWidget() {
               className="h-full rounded-full"
               style={{
                 width: `${Math.min(overallPct, 100)}%`,
-                backgroundColor: '#3B82F6',
+                backgroundColor: 'var(--color-brand-500)',
                 transition: 'width 0.8s ease-out',
               }}
             />
@@ -256,8 +256,8 @@ export function LoansSummaryWidget() {
                     <div
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
                       style={{
-                        backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                        color: '#3B82F6',
+                        backgroundColor: 'rgba(67, 24, 255, 0.08)',
+                        color: 'var(--color-brand-500)',
                       }}
                     >
                       <Banknote className="h-3.5 w-3.5" />
@@ -273,8 +273,8 @@ export function LoansSummaryWidget() {
                       <span
                         className="mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
                         style={{
-                          backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                          color: '#3B82F6',
+                          backgroundColor: 'rgba(67, 24, 255, 0.08)',
+                          color: 'var(--color-brand-500)',
                         }}
                       >
                         {parseFloat(loan.interest_rate).toFixed(1)}% APR
@@ -300,14 +300,14 @@ export function LoansSummaryWidget() {
                         className="h-full rounded-full"
                         style={{
                           width: `${Math.min(progressPct, 100)}%`,
-                          backgroundColor: '#3B82F6',
+                          backgroundColor: 'var(--color-brand-500)',
                           transition: 'width 0.8s ease-out',
                         }}
                       />
                     </div>
                     <span
                       className="shrink-0 text-[11px] font-semibold ltr-nums"
-                      style={{ color: '#3B82F6' }}
+                      style={{ color: 'var(--color-brand-500)' }}
                     >
                       {progressPct.toFixed(0)}%
                     </span>

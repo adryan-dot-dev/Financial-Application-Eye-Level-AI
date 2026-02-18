@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useModalA11y } from '@/hooks/useModalA11y'
@@ -15,10 +15,9 @@ import {
   DollarSign,
   Banknote,
   ChevronDown,
-  ChevronUp,
   TableProperties,
+  Check,
 } from 'lucide-react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import type { Loan, Category } from '@/types'
 import { loansApi } from '@/api/loans'
 import type { CreateLoanData, LoanBreakdownEntry } from '@/api/loans'
@@ -28,6 +27,9 @@ import { CategoryBadge as SharedCategoryBadge } from '@/components/ui/CategoryIc
 import { queryKeys } from '@/lib/queryKeys'
 import { useToast } from '@/contexts/ToastContext'
 import { getApiErrorMessage } from '@/api/client'
+import { useCurrency } from '@/hooks/useCurrency'
+import DatePicker from '@/components/ui/DatePicker'
+import CurrencySelector from '@/components/CurrencySelector'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +45,8 @@ interface FormData {
   day_of_month: string
   description: string
   category_id: string
+  currency: string
+  first_payment_made: boolean
 }
 
 const today = () => new Date().toISOString().split('T')[0]
@@ -57,6 +61,8 @@ const EMPTY_FORM: FormData = {
   day_of_month: '1',
   description: '',
   category_id: '',
+  currency: 'ILS',
+  first_payment_made: false,
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +85,7 @@ function CardSkeleton() {
           key={i}
           className="card p-5"
         >
-          <div className="space-y-3">
+          <div className="space-y-3 skeleton-group">
             <div className="flex items-center justify-between">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-5 w-16 rounded-full" />
@@ -134,10 +140,13 @@ function ProgressBar({
 
   // Color coding: green if complete, amber if halfway, blue otherwise
   let barColor = 'var(--border-focus)' // blue
+  let barGradient = 'var(--color-brand-500)'
   if (isComplete) {
-    barColor = '#10B981' // green
+    barColor = 'var(--color-success)' // green
+    barGradient = 'var(--color-success)'
   } else if (isHalfway) {
-    barColor = '#F59E0B' // amber
+    barColor = 'var(--color-warning)' // amber
+    barGradient = 'var(--color-warning)'
   }
 
   return (
@@ -157,15 +166,15 @@ function ProgressBar({
         </span>
       </div>
       <div
-        className="h-2.5 w-full overflow-hidden rounded-full"
+        className="progress-premium h-2.5 w-full overflow-hidden rounded-full"
         style={{ backgroundColor: 'var(--bg-tertiary)' }}
       >
         <div
-          className="h-full rounded-full transition-all duration-700 ease-out"
+          className="progress-fill h-full rounded-full progress-fill-animated"
           style={{
-            width: `${percentage}%`,
-            backgroundColor: barColor,
-          }}
+            '--target-width': `${percentage}%`,
+            backgroundColor: barGradient,
+          } as CSSProperties}
         />
       </div>
     </div>
@@ -176,12 +185,12 @@ function StatusBadge({ status }: { status: Loan['status'] }) {
   const { t } = useTranslation()
 
   const config = {
-    active: { bg: 'var(--bg-info)', color: '#3B82F6', dotColor: '#3B82F6' },
-    completed: { bg: 'var(--bg-success)', color: '#10B981', dotColor: '#10B981' },
-    paused: { bg: 'var(--bg-warning)', color: '#F59E0B', dotColor: '#F59E0B' },
+    active: 'var(--color-brand-500)',
+    completed: 'var(--color-income)',
+    paused: 'var(--text-tertiary)',
   }
 
-  const { bg, color, dotColor } = config[status]
+  const color = config[status]
 
   const label =
     status === 'active'
@@ -192,12 +201,12 @@ function StatusBadge({ status }: { status: Loan['status'] }) {
 
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-      style={{ backgroundColor: bg, color }}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+      style={{ color, border: '1px solid currentColor', opacity: 0.8 }}
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: dotColor }}
+        style={{ backgroundColor: color }}
       />
       {label}
     </span>
@@ -224,7 +233,7 @@ function PaidRemainingBar({
   return (
     <div className="w-full">
       <div className="mb-1 flex items-center justify-between text-[10px] font-semibold">
-        <span style={{ color: '#10B981' }}>
+        <span style={{ color: 'var(--color-success)' }}>
           {t('loans.totalPaid')}: {formatCurrency(paid, currency)}
         </span>
         <span style={{ color: 'var(--color-expense)' }}>
@@ -239,14 +248,14 @@ function PaidRemainingBar({
           className="h-full rounded-s-full transition-all duration-700 ease-out"
           style={{
             width: `${paidPct}%`,
-            backgroundColor: '#10B981',
+            backgroundColor: 'var(--color-success)',
           }}
         />
         <div
           className="h-full rounded-e-full transition-all duration-700 ease-out"
           style={{
             width: `${100 - paidPct}%`,
-            backgroundColor: '#EF4444',
+            backgroundColor: 'var(--color-danger)',
             opacity: 0.5,
           }}
         />
@@ -258,8 +267,6 @@ function PaidRemainingBar({
 // ---------------------------------------------------------------------------
 // Mini principal vs interest pie chart
 // ---------------------------------------------------------------------------
-
-const PIE_COLORS = ['#3B82F6', '#F59E0B']
 
 function PrincipalInterestMiniChart({
   originalAmount,
@@ -277,11 +284,8 @@ function PrincipalInterestMiniChart({
   const totalCost = monthlyPayment * totalPayments
   const totalInterest = Math.max(0, totalCost - originalAmount)
   const principal = originalAmount
-
-  const data = [
-    { name: t('loans.principalPortion'), value: principal },
-    { name: t('loans.interestPortion'), value: totalInterest },
-  ]
+  const total = principal + totalInterest
+  const principalPercent = total > 0 ? Math.round((principal / total) * 100) : 100
 
   if (totalInterest <= 0) return null
 
@@ -291,54 +295,28 @@ function PrincipalInterestMiniChart({
       style={{ backgroundColor: 'var(--bg-secondary)' }}
     >
       <p
-        className="mb-1 text-[10px] font-semibold uppercase tracking-wider"
+        className="mb-2 text-[10px] font-semibold uppercase tracking-wider"
         style={{ color: 'var(--text-tertiary)' }}
       >
         {t('loans.principalVsInterest')}
       </p>
-      <div className="flex items-center gap-3">
-        <div className="h-14 w-14 shrink-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={14}
-                outerRadius={26}
-                paddingAngle={2}
-                dataKey="value"
-                strokeWidth={0}
-              >
-                {data.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index]} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value: number | undefined) => formatCurrency(value ?? 0, currency)}
-                contentStyle={{
-                  backgroundColor: 'var(--bg-card)',
-                  borderColor: 'var(--border-primary)',
-                  borderRadius: '8px',
-                  fontSize: '11px',
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-between text-[10px]">
+          <span style={{ color: 'var(--text-secondary)' }}>{t('loans.principalPortion')}</span>
+          <span className="font-bold ltr-nums" style={{ color: 'var(--text-primary)' }}>{formatCurrency(principal, currency)}</span>
         </div>
-        <div className="flex flex-col gap-1 text-[10px]">
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[0] }} />
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {t('loans.principalPortion')}: <span className="font-bold ltr-nums">{formatCurrency(principal, currency)}</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[1] }} />
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {t('loans.interestPortion')}: <span className="font-bold ltr-nums">{formatCurrency(totalInterest, currency)}</span>
-            </span>
-          </div>
+        <div className="h-2 w-full rounded-full" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+          <div
+            className="h-full rounded-full"
+            style={{
+              width: `${principalPercent}%`,
+              backgroundColor: 'var(--color-brand-500)',
+            }}
+          />
+        </div>
+        <div className="flex justify-between text-[10px]">
+          <span style={{ color: 'var(--text-secondary)' }}>{t('loans.interestPortion')}</span>
+          <span className="font-bold ltr-nums" style={{ color: 'var(--text-primary)' }}>{formatCurrency(totalInterest, currency)}</span>
         </div>
       </div>
     </div>
@@ -381,9 +359,9 @@ function AmortizationSchedule({
   const statusColor = (status: LoanBreakdownEntry['status']) => {
     switch (status) {
       case 'paid':
-        return { bg: 'rgba(16, 185, 129, 0.08)', color: '#10B981' }
+        return { bg: 'rgba(5, 205, 153, 0.08)', color: 'var(--color-success)' }
       case 'upcoming':
-        return { bg: 'rgba(59, 130, 246, 0.08)', color: '#3B82F6' }
+        return { bg: 'rgba(67, 24, 255, 0.08)', color: 'var(--color-brand-500)' }
       case 'future':
       default:
         return { bg: 'transparent', color: 'var(--text-tertiary)' }
@@ -430,7 +408,7 @@ function AmortizationSchedule({
       className="mt-3 overflow-hidden rounded-xl border"
       style={{ borderColor: 'var(--border-primary)' }}
     >
-      <div className="max-h-[400px] overflow-y-auto">
+      <div className="max-h-[400px] overflow-y-auto overscroll-contain">
         <table className="w-full text-xs" style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
           <thead>
             <tr
@@ -465,37 +443,47 @@ function AmortizationSchedule({
           <tbody>
             {breakdown.map((item) => {
               const sc = statusColor(item.status)
+              const isPaid = item.status === 'paid'
+              const isUpcoming = item.status === 'upcoming'
               return (
                 <tr
                   key={item.payment_number}
                   style={{
-                    backgroundColor: sc.bg,
+                    backgroundColor: isUpcoming ? 'rgba(67, 24, 255, 0.06)' : sc.bg,
                     borderBottom: '1px solid var(--border-primary)',
+                    borderInlineStartWidth: isUpcoming ? '3px' : undefined,
+                    borderInlineStartColor: isUpcoming ? 'var(--color-brand-500)' : undefined,
                   }}
                 >
-                  <td className="px-3 py-2 ltr-nums font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    {item.payment_number}
+                  <td className="px-3 py-2.5 ltr-nums font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold" style={{
+                      backgroundColor: isPaid ? 'rgba(5, 205, 153, 0.1)' : isUpcoming ? 'rgba(67, 24, 255, 0.1)' : 'var(--bg-tertiary)',
+                      color: isPaid ? 'var(--color-success)' : isUpcoming ? 'var(--color-brand-500)' : 'var(--text-tertiary)',
+                    }}>
+                      {isPaid ? <Check className="h-3 w-3" /> : item.payment_number}
+                    </span>
                   </td>
-                  <td className="px-3 py-2 ltr-nums" style={{ color: 'var(--text-primary)' }}>
+                  <td className="px-3 py-2.5 ltr-nums" style={{ color: 'var(--text-primary)' }}>
                     {formatDate(item.date, isRtl ? 'he-IL' : 'en-US')}
                   </td>
-                  <td className="px-3 py-2 ltr-nums font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  <td className="px-3 py-2.5 ltr-nums font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {formatCurrency(item.payment_amount, currency)}
                   </td>
-                  <td className="px-3 py-2 ltr-nums" style={{ color: '#3B82F6' }}>
+                  <td className="px-3 py-2.5 ltr-nums" style={{ color: 'var(--color-brand-500)' }}>
                     {formatCurrency(item.principal, currency)}
                   </td>
-                  <td className="px-3 py-2 ltr-nums" style={{ color: '#F59E0B' }}>
+                  <td className="px-3 py-2.5 ltr-nums" style={{ color: 'var(--color-warning)' }}>
                     {formatCurrency(item.interest, currency)}
                   </td>
-                  <td className="px-3 py-2 ltr-nums" style={{ color: 'var(--text-secondary)' }}>
+                  <td className="px-3 py-2.5 ltr-nums" style={{ color: 'var(--text-secondary)' }}>
                     {formatCurrency(item.remaining_balance, currency)}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2.5">
                     <span
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                      style={{ backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.color}20` }}
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{ backgroundColor: sc.bg === 'transparent' ? 'var(--bg-tertiary)' : sc.bg, color: sc.color, border: `1px solid ${sc.color}20` }}
                     >
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: sc.color }} />
                       {statusLabel(item.status)}
                     </span>
                   </td>
@@ -521,10 +509,10 @@ function AmortizationSchedule({
               <td className="px-3 py-2.5 ltr-nums font-bold" style={{ color: 'var(--text-primary)' }}>
                 {formatCurrency(totals.totalPayment, currency)}
               </td>
-              <td className="px-3 py-2.5 ltr-nums font-bold" style={{ color: '#3B82F6' }}>
+              <td className="px-3 py-2.5 ltr-nums font-bold" style={{ color: 'var(--color-brand-500)' }}>
                 {formatCurrency(totals.totalPrincipal, currency)}
               </td>
-              <td className="px-3 py-2.5 ltr-nums font-bold" style={{ color: '#F59E0B' }}>
+              <td className="px-3 py-2.5 ltr-nums font-bold" style={{ color: 'var(--color-warning)' }}>
                 {formatCurrency(totals.totalInterest, currency)}
               </td>
               <td className="px-3 py-2.5" colSpan={2} />
@@ -556,6 +544,7 @@ export default function LoansPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { currency: defaultCurrency } = useCurrency()
   const isRtl = i18n.language === 'he'
 
   useEffect(() => {
@@ -656,7 +645,7 @@ export default function LoansPage() {
   // ---- Modal helpers ----
   const openCreateModal = () => {
     setEditingEntry(null)
-    setFormData(EMPTY_FORM)
+    setFormData({ ...EMPTY_FORM, currency: defaultCurrency })
     setFormErrors({})
     setModalOpen(true)
   }
@@ -673,6 +662,8 @@ export default function LoansPage() {
       day_of_month: String(entry.day_of_month),
       description: entry.description ?? '',
       category_id: entry.category_id ?? '',
+      currency: entry.currency ?? defaultCurrency,
+      first_payment_made: false,
     })
     setFormErrors({})
     setModalOpen(true)
@@ -702,9 +693,9 @@ export default function LoansPage() {
   }
 
   // Modal accessibility (Escape key, focus trap, aria)
-  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
-  const { panelRef: deletePanelRef } = useModalA11y(!!deleteTarget, closeDeleteDialog)
-  const { panelRef: paymentPanelRef } = useModalA11y(!!paymentTarget, closePaymentDialog)
+  const { panelRef: modalPanelRef, closing: modalClosing, requestClose: requestModalClose } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: deletePanelRef, closing: deleteClosing, requestClose: requestDeleteClose } = useModalA11y(!!deleteTarget, closeDeleteDialog)
+  const { panelRef: paymentPanelRef, closing: paymentClosing, requestClose: requestPaymentClose } = useModalA11y(!!paymentTarget, closePaymentDialog)
 
   // ---- Form validation & submit ----
   const validateForm = (): boolean => {
@@ -739,11 +730,13 @@ export default function LoansPage() {
       day_of_month: parseInt(formData.day_of_month),
       description: formData.description || undefined,
       category_id: formData.category_id || undefined,
+      currency: formData.currency,
     }
 
     if (editingEntry) {
       updateMutation.mutate({ id: editingEntry.id, data: payload })
     } else {
+      payload.first_payment_made = formData.first_payment_made
       createMutation.mutate(payload)
     }
   }
@@ -771,42 +764,53 @@ export default function LoansPage() {
     <div className="space-y-6">
       {/* ---- Page header ---- */}
       <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1
-              className="text-[1.75rem] font-extrabold tracking-tight"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {t('loans.title')}
-            </h1>
-            {/* Active loans count bubble */}
-            {!isLoading && activeLoansCount > 0 && (
-              <span
-                className="inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-bold text-white"
-                style={{
-                  background: 'linear-gradient(135deg, #60A5FA, #3B82F6)',
-                  boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
-                }}
-              >
-                {activeLoansCount}
-              </span>
-            )}
+        <div className="flex items-center gap-4">
+          {/* Gradient icon circle */}
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-lg"
+            style={{
+              backgroundColor: 'var(--color-brand-500)',
+              boxShadow: 'var(--shadow-xs)',
+            }}
+          >
+            <Landmark className="h-6 w-6 text-white" />
           </div>
-          {!isLoading && (
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              {t('transactions.total')}: <span className="font-medium ltr-nums" style={{ color: 'var(--text-secondary)' }}>{loans.length}</span>
-              {activeLoansCount > 0 && activeLoansCount < loans.length && (
-                <span className="ms-2" style={{ color: 'var(--text-tertiary)' }}>
-                  ({t('loans.activeLoansCount', { count: activeLoansCount })})
+          <div>
+            <div className="flex items-center gap-3">
+              <h1
+                className="gradient-heading text-[1.75rem] font-extrabold tracking-tight"
+              >
+                {t('loans.title')}
+              </h1>
+              {!isLoading && activeLoansCount > 0 && (
+                <span
+                  className="inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2.5 text-xs font-bold text-white"
+                  style={{
+                    backgroundColor: 'var(--color-brand-500)',
+                    boxShadow: 'var(--shadow-xs)',
+                  }}
+                >
+                  {activeLoansCount}
                 </span>
               )}
-            </p>
-          )}
+            </div>
+            {!isLoading && (
+              <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                {t('transactions.total')}: <span className="font-medium ltr-nums" style={{ color: 'var(--text-secondary)' }}>{loans.length}</span>
+                {activeLoansCount > 0 && activeLoansCount < loans.length && (
+                  <span className="ms-2" style={{ color: 'var(--text-tertiary)' }}>
+                    ({t('loans.activeLoansCount', { count: activeLoansCount })})
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+          className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white transition-all duration-200 hover:scale-[1.04] hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+          style={{ boxShadow: 'var(--shadow-xs)' }}
         >
           <Plus className="h-4 w-4" />
           {t('loans.add')}
@@ -834,8 +838,8 @@ export default function LoansPage() {
           <div
             className="empty-float mb-6 flex h-20 w-20 items-center justify-center rounded-3xl"
             style={{
-              background: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.1)',
+              background: 'rgba(67, 24, 255, 0.08)',
+              border: '1px solid rgba(67, 24, 255, 0.1)',
             }}
           >
             <Landmark className="h-9 w-9" style={{ color: 'var(--border-focus)' }} />
@@ -861,7 +865,7 @@ export default function LoansPage() {
           </button>
         </div>
       ) : (
-        <div className="animate-fade-in-up stagger-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="animate-fade-in-up stagger-2 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {loans.map((loan, index) => {
             const cat = loan.category_id ? categoryMap.get(loan.category_id) : undefined
             const interestRate = parseFloat(loan.interest_rate)
@@ -876,68 +880,75 @@ export default function LoansPage() {
               <div
                 key={loan.id}
                 className={cn(
-                  'card card-hover overflow-hidden',
+                  'row-enter card card-lift overflow-hidden transition-all duration-300',
                   isExpanded && 'sm:col-span-2 lg:col-span-3',
                 )}
-                style={{ animationDelay: `${index * 40}ms` }}
+                style={{ '--row-index': Math.min(index, 15), animationDelay: `${index * 40}ms` } as CSSProperties}
               >
-                {/* Subtle top accent based on status */}
+                {/* Top accent bar – thicker */}
                 <div
-                  className="h-1"
+                  className="h-1.5"
                   style={{
-                    background: loan.status === 'completed'
-                      ? 'linear-gradient(90deg, #34D399, #10B981)'
+                    backgroundColor: loan.status === 'completed'
+                      ? 'var(--color-success)'
                       : loan.status === 'paused'
-                        ? 'linear-gradient(90deg, #FCD34D, #F59E0B)'
-                        : 'linear-gradient(90deg, #60A5FA, #3B82F6)',
+                        ? 'var(--color-warning)'
+                        : 'var(--color-brand-500)',
                   }}
                 />
 
                 <div className="p-5">
                   {/* Card header */}
-                  <div className="mb-3 flex items-start justify-between">
+                  <div className="mb-3 flex w-full items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h3
-                        className="truncate text-base font-bold"
-                        style={{ color: 'var(--text-primary)' }}
-                        title={loan.name}
-                      >
-                        {loan.name}
-                      </h3>
-                      {cat && (
-                        <div className="mt-1.5">
-                          <CategoryBadge category={cat} isRtl={isRtl} />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Interest rate highlight */}
-                      {interestRate > 0 && (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ltr-nums"
-                          style={{
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                            color: '#F59E0B',
-                            border: '1px solid rgba(245, 158, 11, 0.2)',
-                          }}
+                      <div className="flex items-center gap-2">
+                        <h3
+                          className="truncate text-base font-bold"
+                          style={{ color: 'var(--text-primary)' }}
+                          title={loan.name}
                         >
-                          <Percent className="h-2.5 w-2.5" />
-                          {interestRate.toFixed(1)}%
-                        </span>
-                      )}
-                      {/* Status badge */}
-                      <StatusBadge status={loan.status} />
+                          {loan.name}
+                        </h3>
+                        {/* Interest rate highlight */}
+                        {interestRate > 0 && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ltr-nums"
+                            style={{
+                              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                              color: 'var(--color-warning)',
+                              border: '1px solid rgba(245, 158, 11, 0.2)',
+                            }}
+                          >
+                            <Percent className="h-2.5 w-2.5" />
+                            {interestRate.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        {cat && <CategoryBadge category={cat} isRtl={isRtl} />}
+                        <StatusBadge status={loan.status} />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Original amount */}
-                  <p
-                    className="mb-1 fin-number text-2xl ltr-nums"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {formatCurrency(loan.original_amount, loan.currency)}
-                  </p>
+                  {/* Original amount – larger with icon */}
+                  <div className="mb-3 flex items-center gap-2.5">
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                      style={{
+                        backgroundColor: 'rgba(67, 24, 255, 0.1)',
+                        color: 'var(--color-brand-500)',
+                      }}
+                    >
+                      <DollarSign className="h-4.5 w-4.5" />
+                    </div>
+                    <p
+                      className="fin-number text-2xl ltr-nums"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {formatCurrency(loan.original_amount, loan.currency)}
+                    </p>
+                  </div>
 
                   {/* Progress bar */}
                   <div className="mb-3">
@@ -1051,7 +1062,7 @@ export default function LoansPage() {
                     </p>
                   )}
 
-                  {/* Actions */}
+                  {/* Actions footer */}
                   <div
                     className="flex items-center justify-between border-t pt-3"
                     style={{ borderColor: 'var(--border-primary)' }}
@@ -1072,24 +1083,21 @@ export default function LoansPage() {
                       {/* View Amortization Schedule button */}
                       <button
                         onClick={() => toggleAmortization(loan.id)}
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all',
-                          isExpanded
-                            ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
-                            : 'hover:bg-[var(--bg-hover)]',
-                        )}
+                        className="btn-press inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all"
                         style={{
-                          borderColor: isExpanded ? undefined : 'var(--border-primary)',
-                          color: isExpanded ? '#3B82F6' : 'var(--text-secondary)',
+                          borderColor: isExpanded ? 'var(--color-brand-500)' : 'var(--border-primary)',
+                          backgroundColor: isExpanded ? 'rgba(67, 24, 255, 0.08)' : 'transparent',
+                          color: isExpanded ? 'var(--color-brand-500)' : 'var(--text-secondary)',
                         }}
                       >
                         <TableProperties className="h-3.5 w-3.5" />
                         {isExpanded ? t('loans.hideAmortization') : t('loans.viewAmortization')}
-                        {isExpanded ? (
-                          <ChevronUp className="h-3 w-3" />
-                        ) : (
+                        <span
+                          className="inline-flex transition-transform duration-300"
+                          style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        >
                           <ChevronDown className="h-3 w-3" />
-                        )}
+                        </span>
                       </button>
                     </div>
 
@@ -1097,7 +1105,7 @@ export default function LoansPage() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEditModal(loan)}
-                        className="action-btn action-btn-edit rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="btn-press action-btn action-btn-edit rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.edit')}
                         aria-label={t('common.edit')}
@@ -1106,7 +1114,7 @@ export default function LoansPage() {
                       </button>
                       <button
                         onClick={() => setDeleteTarget(loan)}
-                        className="action-btn action-btn-delete rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="btn-press action-btn action-btn-delete rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.delete')}
                         aria-label={t('common.delete')}
@@ -1136,12 +1144,12 @@ export default function LoansPage() {
           ================================================================== */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${modalClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="loan-modal-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal()
+            if (e.target === e.currentTarget) requestModalClose()
           }}
         >
           {/* Backdrop */}
@@ -1150,7 +1158,7 @@ export default function LoansPage() {
           {/* Panel */}
           <div
             ref={modalPanelRef}
-            className="modal-panel relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto overflow-hidden rounded-2xl border p-0"
+            className="modal-panel modal-form-layout relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1161,11 +1169,11 @@ export default function LoansPage() {
             <div
               className="h-1"
               style={{
-                background: 'linear-gradient(90deg, #60A5FA, #3B82F6, #2563EB)',
+                backgroundColor: 'var(--color-brand-500)',
               }}
             />
 
-            <div className="p-6">
+            <div className="modal-body p-6">
               {/* Header */}
               <div className="mb-6 flex items-center justify-between">
                 <h2
@@ -1176,7 +1184,7 @@ export default function LoansPage() {
                   {editingEntry ? t('common.edit') : t('loans.add')}
                 </h2>
                 <button
-                  onClick={closeModal}
+                  onClick={requestModalClose}
                   className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
                   style={{ color: 'var(--text-tertiary)' }}
                   aria-label={t('common.cancel')}
@@ -1185,7 +1193,7 @@ export default function LoansPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleFormSubmit} className="space-y-5">
+              <form id="loan-form" onSubmit={handleFormSubmit} className="space-y-5">
                 {/* Name */}
                 <div>
                   <label
@@ -1203,11 +1211,10 @@ export default function LoansPage() {
                     className={cn(
                       'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
                       'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                      formErrors.name && 'border-red-400',
-                    )}
+                                          )}
                     style={{
                       backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.name ? undefined : 'var(--border-primary)',
+                      borderColor: formErrors.name ? 'var(--border-danger)' : 'var(--border-primary)',
                       color: 'var(--text-primary)',
                     }}
                     placeholder={t('fixed.name')}
@@ -1241,11 +1248,10 @@ export default function LoansPage() {
                       className={cn(
                         'amount-input w-full rounded-xl border px-4 py-3 outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.original_amount && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.original_amount ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.original_amount ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       placeholder="0.00"
@@ -1276,11 +1282,10 @@ export default function LoansPage() {
                       className={cn(
                         'amount-input w-full rounded-xl border px-4 py-3 outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.monthly_payment && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.monthly_payment ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.monthly_payment ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--color-expense)',
                       }}
                       placeholder="0.00"
@@ -1315,11 +1320,10 @@ export default function LoansPage() {
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.interest_rate && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.interest_rate ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.interest_rate ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       placeholder="0.00"
@@ -1349,11 +1353,10 @@ export default function LoansPage() {
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.total_payments && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.total_payments ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.total_payments ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.total_payments ? 'loan-total-payments-error' : undefined}
@@ -1376,20 +1379,18 @@ export default function LoansPage() {
                     >
                       {t('fixed.startDate')} *
                     </label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={formData.start_date}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, start_date: e.target.value }))
+                      onChange={(val) =>
+                        setFormData((prev) => ({ ...prev, start_date: val }))
                       }
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.start_date && 'border-red-400',
                       )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.start_date ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.start_date ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.start_date ? 'loan-start-date-error' : undefined}
@@ -1419,11 +1420,10 @@ export default function LoansPage() {
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.day_of_month && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.day_of_month ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.day_of_month ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.day_of_month ? 'loan-day-error' : undefined}
@@ -1436,6 +1436,31 @@ export default function LoansPage() {
                     )}
                   </div>
                 </div>
+
+                {/* First payment already made - only show on create, not edit */}
+                {!editingEntry && (
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="loan_first_payment_made"
+                      checked={formData.first_payment_made}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, first_payment_made: e.target.checked }))
+                      }
+                      className="h-4 w-4 rounded border accent-[var(--color-brand-500)]"
+                      style={{
+                        borderColor: 'var(--border-primary)',
+                      }}
+                    />
+                    <label
+                      htmlFor="loan_first_payment_made"
+                      className="text-sm font-medium"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {t('loans.firstPaymentMade')}
+                    </label>
+                  </div>
+                )}
 
                 {/* Category */}
                 <div>
@@ -1469,6 +1494,23 @@ export default function LoansPage() {
                   </select>
                 </div>
 
+                {/* Currency */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('currency.label')}
+                  </label>
+                  <CurrencySelector
+                    value={formData.currency}
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, currency: val }))
+                    }
+                    className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
+                  />
+                </div>
+
                 {/* Description */}
                 <div>
                   <label
@@ -1496,30 +1538,35 @@ export default function LoansPage() {
                   />
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
-                    style={{
-                      borderColor: 'var(--border-primary)',
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'var(--bg-input)',
-                    }}
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isMutating}
-                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {t('common.save')}
-                  </button>
-                </div>
+
               </form>
+            </div>
+            {/* Sticky footer */}
+            <div className="modal-footer flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={requestModalClose}
+                className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                style={{
+                  borderColor: 'var(--border-primary)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-input)',
+                }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const form = document.getElementById('loan-form') as HTMLFormElement
+                  form?.requestSubmit()
+                }}
+                disabled={isMutating}
+                className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('common.save')}
+              </button>
             </div>
           </div>
         </div>
@@ -1530,13 +1577,13 @@ export default function LoansPage() {
           ================================================================== */}
       {paymentTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${paymentClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="loan-payment-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              closePaymentDialog()
+              requestPaymentClose()
             }
           }}
         >
@@ -1546,7 +1593,7 @@ export default function LoansPage() {
           {/* Panel */}
           <div
             ref={paymentPanelRef}
-            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border p-0"
+            className="modal-panel relative z-10 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1556,7 +1603,7 @@ export default function LoansPage() {
             {/* Green accent bar */}
             <div
               className="h-1"
-              style={{ background: 'linear-gradient(90deg, #34D399, #10B981, #059669)' }}
+              style={{ backgroundColor: 'var(--color-success)' }}
             />
 
             <div className="p-6">
@@ -1570,7 +1617,7 @@ export default function LoansPage() {
                   {t('loans.recordPayment')}
                 </h2>
                 <button
-                  onClick={closePaymentDialog}
+                  onClick={requestPaymentClose}
                   className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
                   style={{ color: 'var(--text-tertiary)' }}
                   aria-label={t('common.cancel')}
@@ -1628,7 +1675,7 @@ export default function LoansPage() {
                 <div className="flex items-center gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
                   <button
                     type="button"
-                    onClick={closePaymentDialog}
+                    onClick={requestPaymentClose}
                     className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
                     style={{
                       borderColor: 'var(--border-primary)',
@@ -1643,8 +1690,8 @@ export default function LoansPage() {
                     disabled={recordPaymentMutation.isPending}
                     className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
                     style={{
-                      background: 'linear-gradient(135deg, #34D399, #10B981)',
-                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                      backgroundColor: 'var(--color-success)',
+                      boxShadow: 'var(--shadow-xs)',
                     }}
                   >
                     {recordPaymentMutation.isPending && (
@@ -1664,12 +1711,12 @@ export default function LoansPage() {
           ================================================================== */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${deleteClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="loan-delete-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteTarget(null)
+            if (e.target === e.currentTarget) requestDeleteClose()
           }}
         >
           {/* Backdrop */}
@@ -1678,7 +1725,7 @@ export default function LoansPage() {
           {/* Panel */}
           <div
             ref={deletePanelRef}
-            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
+            className="modal-panel relative z-10 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1688,7 +1735,7 @@ export default function LoansPage() {
             {/* Red accent bar */}
             <div
               className="h-1"
-              style={{ background: 'linear-gradient(90deg, #F87171, #EF4444, #DC2626)' }}
+              style={{ backgroundColor: 'var(--color-danger)' }}
             />
 
             <div className="p-6">
@@ -1730,7 +1777,7 @@ export default function LoansPage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setDeleteTarget(null)}
+                  onClick={requestDeleteClose}
                   className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
                   style={{
                     borderColor: 'var(--border-primary)',
@@ -1745,8 +1792,8 @@ export default function LoansPage() {
                   disabled={deleteMutation.isPending}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
                   style={{
-                    background: 'linear-gradient(135deg, #F87171, #EF4444)',
-                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                    backgroundColor: 'var(--color-danger)',
+                    boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   {deleteMutation.isPending && (

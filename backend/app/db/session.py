@@ -5,6 +5,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.core.slow_query_logger import setup_slow_query_logging
 
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -14,7 +15,10 @@ engine = create_async_engine(
     max_overflow=20,
     pool_pre_ping=True,
     pool_recycle=3600,
+    connect_args={"server_settings": {"statement_timeout": "30000"}},  # 30s query timeout
 )
+
+setup_slow_query_logging(engine)
 
 async_session = async_sessionmaker(
     engine,

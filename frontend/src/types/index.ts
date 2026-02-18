@@ -6,6 +6,7 @@ export interface User {
   full_name: string | null
   phone_number: string | null
   is_admin: boolean
+  is_super_admin: boolean
   is_active: boolean
   created_at: string
   last_login_at: string | null
@@ -37,6 +38,8 @@ export interface Settings {
   notifications_enabled: boolean
   forecast_months_default: number
   week_start_day: number
+  alert_warning_threshold: string
+  alert_critical_threshold: string
   onboarding_completed: boolean
 }
 
@@ -112,6 +115,27 @@ export interface Installment {
   end_date: string | null
   remaining_amount: string
   progress_percentage: number
+}
+
+// Subscription
+export interface Subscription {
+  id: string
+  name: string
+  amount: string
+  currency: string
+  category_id: string | null
+  billing_cycle: 'monthly' | 'quarterly' | 'semi_annual' | 'annual'
+  next_renewal_date: string
+  last_renewal_date: string | null
+  auto_renew: boolean
+  is_active: boolean
+  paused_at: string | null
+  resumed_at: string | null
+  provider: string | null
+  provider_url: string | null
+  notes: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 // Loan
@@ -207,4 +231,27 @@ export interface Alert {
 export interface AlertListResponse {
   items: Alert[]
   unread_count: number
+}
+
+// Organization types
+export type OrgRole = 'owner' | 'admin' | 'member' | 'viewer'
+
+export interface Organization {
+  id: string
+  name: string
+  slug: string
+  is_active: boolean
+  owner_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface OrgMember {
+  id: string
+  user_id: string
+  username: string | null
+  email: string | null
+  role: OrgRole
+  joined_at: string
+  is_active: boolean
 }

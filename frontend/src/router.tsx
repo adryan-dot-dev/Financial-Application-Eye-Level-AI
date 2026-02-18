@@ -20,6 +20,9 @@ const BalancePage = lazy(() => import('@/pages/BalancePage'))
 const AlertsPage = lazy(() => import('@/pages/AlertsPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const UsersPage = lazy(() => import('@/pages/UsersPage'))
+const BackupsPage = lazy(() => import('@/pages/BackupsPage'))
+const SubscriptionsPage = lazy(() => import('@/pages/SubscriptionsPage'))
+const OrganizationPage = lazy(() => import('@/pages/OrganizationPage'))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -111,6 +114,14 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: '/subscriptions',
+            element: (
+              <SuspenseWrapper>
+                <SubscriptionsPage />
+              </SuspenseWrapper>
+            ),
+          },
+          {
             path: '/categories',
             element: (
               <SuspenseWrapper>
@@ -155,6 +166,22 @@ export const router = createBrowserRouter([
             element: (
               <SuspenseWrapper>
                 <UsersPage />
+              </SuspenseWrapper>
+            ),
+          },
+          {
+            path: '/backups',
+            element: (
+              <SuspenseWrapper>
+                <BackupsPage />
+              </SuspenseWrapper>
+            ),
+          },
+          {
+            path: '/organizations',
+            element: (
+              <SuspenseWrapper>
+                <OrganizationPage />
               </SuspenseWrapper>
             ),
           },

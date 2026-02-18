@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useModalA11y } from '@/hooks/useModalA11y'
@@ -14,13 +14,12 @@ import {
   TrendingDown,
   CreditCard,
   ChevronDown,
-  ChevronUp,
   Check,
-  Clock,
   AlertTriangle,
   CheckCircle2,
   ArrowDownCircle,
   ArrowUpCircle,
+  ListOrdered,
 } from 'lucide-react'
 import type { Installment, Category } from '@/types'
 import { installmentsApi } from '@/api/installments'
@@ -28,6 +27,8 @@ import type { CreateInstallmentData, InstallmentPayment } from '@/api/installmen
 import { categoriesApi } from '@/api/categories'
 import { cn, formatDate } from '@/lib/utils'
 import { useCurrency } from '@/hooks/useCurrency'
+import CurrencySelector from '@/components/CurrencySelector'
+import DatePicker from '@/components/ui/DatePicker'
 import { CategoryBadge as SharedCategoryBadge } from '@/components/ui/CategoryIcon'
 import { queryKeys } from '@/lib/queryKeys'
 import { useToast } from '@/contexts/ToastContext'
@@ -48,6 +49,8 @@ interface FormData {
   day_of_month: string
   description: string
   category_id: string
+  currency: string
+  first_payment_made: boolean
 }
 
 const today = () => new Date().toISOString().split('T')[0]
@@ -61,6 +64,8 @@ const EMPTY_FORM: FormData = {
   day_of_month: '1',
   description: '',
   category_id: '',
+  currency: 'ILS',
+  first_payment_made: false,
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +100,7 @@ function CardSkeleton() {
           key={i}
           className="card p-5"
         >
-          <div className="space-y-3">
+          <div className="space-y-3 skeleton-group">
             <div className="flex items-center justify-between">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-5 w-16 rounded-full" />
@@ -138,42 +143,22 @@ function CategoryBadge({
 
 function StatusBadge({ status, t }: { status: Installment['status']; t: (key: string) => string }) {
   const config = {
-    completed: {
-      bg: 'var(--bg-success)',
-      color: '#10B981',
-      dotColor: '#10B981',
-      label: t('installments.statusCompleted'),
-    },
-    active: {
-      bg: 'var(--bg-info)',
-      color: '#3B82F6',
-      dotColor: '#3B82F6',
-      label: t('installments.statusActive'),
-    },
-    pending: {
-      bg: '#6B728012',
-      color: '#6B7280',
-      dotColor: '#6B7280',
-      label: t('installments.statusPending'),
-    },
-    overdue: {
-      bg: 'var(--bg-danger)',
-      color: '#EF4444',
-      dotColor: '#EF4444',
-      label: t('installments.statusOverdue'),
-    },
+    completed: { color: 'var(--color-income)', label: t('installments.statusCompleted') },
+    active: { color: 'var(--color-brand-500)', label: t('installments.statusActive') },
+    pending: { color: 'var(--text-tertiary)', label: t('installments.statusPending') },
+    overdue: { color: 'var(--color-expense)', label: t('installments.statusOverdue') },
   }
 
   const c = config[status] || config.active
 
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-      style={{ backgroundColor: c.bg, color: c.color }}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+      style={{ color: c.color, border: '1px solid currentColor', opacity: 0.8 }}
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: c.dotColor }}
+        style={{ backgroundColor: c.color }}
       />
       {c.label}
     </span>
@@ -183,14 +168,14 @@ function StatusBadge({ status, t }: { status: Installment['status']; t: (key: st
 function OnTrackIndicator({ isOnTrack, t }: { isOnTrack: boolean; t: (key: string) => string }) {
   if (isOnTrack) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: '#10B981' }}>
+      <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: 'var(--color-success)' }}>
         <CheckCircle2 className="h-3.5 w-3.5" />
         {t('installments.onTrack')}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: '#EF4444' }}>
+    <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: 'var(--color-danger)' }}>
       <AlertTriangle className="h-3.5 w-3.5" />
       {t('installments.behind')}
     </span>
@@ -215,11 +200,11 @@ function ProgressBar({
   // Color based on status/on-track
   let barColor = 'var(--border-focus)' // default blue for active
   if (status === 'completed') {
-    barColor = '#10B981' // green
+    barColor = 'var(--color-success)' // green
   } else if (status === 'overdue' || !isOnTrack) {
-    barColor = '#EF4444' // red
+    barColor = 'var(--color-danger)' // red
   } else if (status === 'pending') {
-    barColor = '#9CA3AF' // gray
+    barColor = 'var(--text-tertiary)' // gray
   }
 
   return (
@@ -239,16 +224,21 @@ function ProgressBar({
         </span>
       </div>
       <div
-        className="h-3.5 w-full overflow-hidden rounded-full"
+        className="progress-premium h-3.5 w-full overflow-hidden rounded-full"
         style={{ backgroundColor: 'var(--bg-tertiary)' }}
       >
         <div
-          className="h-full rounded-full transition-all duration-700 ease-out"
+          className="progress-fill h-full rounded-full progress-fill-animated"
           style={{
-            width: `${percentage}%`,
-            backgroundColor: barColor,
-            boxShadow: percentage > 0 ? `0 2px 8px ${barColor}40` : 'none',
-          }}
+            '--target-width': `${percentage}%`,
+            backgroundColor: status === 'completed'
+              ? 'var(--color-success)'
+              : status === 'overdue' || !isOnTrack
+                ? 'var(--color-danger)'
+                : status === 'pending'
+                  ? 'var(--text-tertiary)'
+                  : 'var(--color-brand-500)',
+          } as CSSProperties}
         />
       </div>
     </div>
@@ -289,81 +279,88 @@ function PaymentSchedulePanel({
   }
 
   return (
-    <div className="max-h-48 overflow-y-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr
-            className="border-b"
-            style={{ borderColor: 'var(--border-primary)' }}
-          >
-            <th
-              scope="col"
-              className="px-4 py-2.5 text-start text-[10px] font-semibold uppercase tracking-wider"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              #
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-2.5 text-start text-[10px] font-semibold uppercase tracking-wider"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              {t('transactions.date')}
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-2.5 text-start text-[10px] font-semibold uppercase tracking-wider"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              {t('transactions.amount')}
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-2.5 text-start text-[10px] font-semibold uppercase tracking-wider"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              {t('loans.status')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {payments.map((payment: InstallmentPayment) => (
-            <tr
-              key={payment.payment_number}
-              className="border-b last:border-b-0 transition-colors"
-              style={{ borderColor: 'var(--border-primary)' }}
-            >
-              <td className="px-4 py-2.5 font-semibold ltr-nums" style={{ color: 'var(--text-secondary)' }}>
-                {payment.payment_number}
-              </td>
-              <td className="px-4 py-2.5 ltr-nums" style={{ color: 'var(--text-secondary)' }}>
-                {formatDate(payment.date, isRtl ? 'he-IL' : 'en-US')}
-              </td>
-              <td className="fin-number px-4 py-2.5 ltr-nums" style={{ color: 'var(--text-primary)' }}>
-                {formatAmount(payment.amount)}
-              </td>
-              <td className="px-4 py-2.5">
-                {payment.status === 'completed' ? (
-                  <span className="inline-flex items-center gap-1 font-semibold" style={{ color: 'var(--color-income)' }}>
-                    <Check className="h-3 w-3" />
-                    {t('loans.statusCompleted')}
-                  </span>
-                ) : payment.status === 'upcoming' ? (
-                  <span className="inline-flex items-center gap-1 font-semibold" style={{ color: 'var(--border-focus)' }}>
-                    <Clock className="h-3 w-3" />
-                    {t('installments.upcoming')}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--text-tertiary)' }}>
-                    <Clock className="h-3 w-3" />
-                    {t('installments.future')}
-                  </span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="max-h-96 overflow-y-auto overscroll-contain px-5 py-4">
+      {/* Vertical stepper timeline */}
+      <div className="relative">
+        {payments.map((payment: InstallmentPayment, idx: number) => {
+          const isCompleted = payment.status === 'completed'
+          const isUpcoming = payment.status === 'upcoming'
+          const isLast = idx === payments.length - 1
+
+          const dotColor = isCompleted
+            ? 'var(--color-success)'
+            : isUpcoming
+              ? 'var(--color-brand-500)'
+              : 'var(--border-primary)'
+
+          const dotBg = isCompleted
+            ? 'rgba(5, 205, 153, 0.15)'
+            : isUpcoming
+              ? 'rgba(67, 24, 255, 0.15)'
+              : 'var(--bg-hover)'
+
+          return (
+            <div key={payment.payment_number} className="relative flex gap-4 pb-4 last:pb-0">
+              {/* Vertical line connector */}
+              {!isLast && (
+                <div
+                  className="absolute start-[11px] top-6 bottom-0 w-0.5"
+                  style={{
+                    backgroundColor: isCompleted ? 'color-mix(in srgb, var(--color-success) 19%, transparent)' : 'var(--border-primary)',
+                  }}
+                />
+              )}
+
+              {/* Dot */}
+              <div className="relative z-10 shrink-0">
+                <div
+                  className="flex h-6 w-6 items-center justify-center rounded-full"
+                  style={{ backgroundColor: dotBg, border: `2px solid ${dotColor}` }}
+                >
+                  {isCompleted ? (
+                    <Check className="h-3 w-3" style={{ color: dotColor }} />
+                  ) : (
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: dotColor }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex flex-1 items-center justify-between pb-1">
+                <div>
+                  <p
+                    className="text-xs font-bold ltr-nums"
+                    style={{ color: isCompleted ? 'var(--text-primary)' : isUpcoming ? 'var(--color-brand-500)' : 'var(--text-tertiary)' }}
+                  >
+                    #{payment.payment_number} &middot; {formatDate(payment.date, isRtl ? 'he-IL' : 'en-US')}
+                  </p>
+                  <p
+                    className="mt-0.5 text-[10px] font-semibold"
+                    style={{
+                      color: isCompleted ? 'var(--color-success)' : isUpcoming ? 'var(--color-brand-500)' : 'var(--text-tertiary)',
+                    }}
+                  >
+                    {isCompleted
+                      ? t('loans.statusCompleted')
+                      : isUpcoming
+                        ? t('installments.upcoming')
+                        : t('installments.future')}
+                  </p>
+                </div>
+                <span
+                  className="fin-number text-xs ltr-nums"
+                  style={{ color: isCompleted ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+                >
+                  {formatAmount(payment.amount)}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -376,7 +373,7 @@ export default function InstallmentsPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useToast()
-  const { formatAmount } = useCurrency()
+  const { currency: defaultCurrency, formatAmount } = useCurrency()
   const isRtl = i18n.language === 'he'
 
   useEffect(() => {
@@ -503,7 +500,7 @@ export default function InstallmentsPage() {
   // ---- Modal helpers ----
   const openCreateModal = () => {
     setEditingEntry(null)
-    setFormData(EMPTY_FORM)
+    setFormData({ ...EMPTY_FORM, currency: defaultCurrency })
     setFormErrors({})
     setModalOpen(true)
   }
@@ -519,6 +516,8 @@ export default function InstallmentsPage() {
       day_of_month: String(entry.day_of_month),
       description: entry.description ?? '',
       category_id: entry.category_id ?? '',
+      currency: entry.currency ?? defaultCurrency,
+      first_payment_made: false,
     })
     setFormErrors({})
     setModalOpen(true)
@@ -535,9 +534,9 @@ export default function InstallmentsPage() {
   const closeMarkPaymentDialog = useCallback(() => setMarkPaymentTarget(null), [])
 
   // Modal accessibility (Escape key, focus trap, aria)
-  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
-  const { panelRef: deletePanelRef } = useModalA11y(!!deleteTarget, closeDeleteDialog)
-  const { panelRef: markPaymentPanelRef } = useModalA11y(!!markPaymentTarget, closeMarkPaymentDialog)
+  const { panelRef: modalPanelRef, closing: modalClosing, requestClose: requestModalClose } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: deletePanelRef, closing: deleteClosing, requestClose: requestDeleteClose } = useModalA11y(!!deleteTarget, closeDeleteDialog)
+  const { panelRef: markPaymentPanelRef, closing: markPaymentClosing, requestClose: requestMarkPaymentClose } = useModalA11y(!!markPaymentTarget, closeMarkPaymentDialog)
 
   // ---- Form validation & submit ----
   const validateForm = (): boolean => {
@@ -567,11 +566,13 @@ export default function InstallmentsPage() {
       day_of_month: parseInt(formData.day_of_month),
       description: formData.description || undefined,
       category_id: formData.category_id || undefined,
+      currency: formData.currency,
     }
 
     if (editingEntry) {
       updateMutation.mutate({ id: editingEntry.id, data: payload })
     } else {
+      payload.first_payment_made = formData.first_payment_made
       createMutation.mutate(payload)
     }
   }
@@ -603,8 +604,7 @@ export default function InstallmentsPage() {
       <div className="animate-fade-in-up stagger-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <h1
-            className="text-[1.75rem] font-extrabold tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
+            className="gradient-heading text-[1.75rem] font-extrabold tracking-tight"
           >
             {t('installments.title')}
           </h1>
@@ -613,8 +613,8 @@ export default function InstallmentsPage() {
             <span
               className="inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-bold text-white ltr-nums"
               style={{
-                background: 'linear-gradient(135deg, #3B82F6, #6366F1)',
-                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+                backgroundColor: 'var(--color-brand-500)',
+                boxShadow: 'var(--shadow-xs)',
               }}
             >
               {summaryData.activeCount}
@@ -642,9 +642,9 @@ export default function InstallmentsPage() {
           >
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)' }}
+              style={{ backgroundColor: 'rgba(67, 24, 255, 0.1)' }}
             >
-              <CreditCard className="h-5 w-5" style={{ color: '#3B82F6' }} />
+              <CreditCard className="h-5 w-5" style={{ color: 'var(--color-brand-500)' }} />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
@@ -662,9 +662,9 @@ export default function InstallmentsPage() {
           >
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-              style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+              style={{ backgroundColor: 'rgba(238, 93, 80, 0.1)' }}
             >
-              <ArrowDownCircle className="h-5 w-5" style={{ color: '#EF4444' }} />
+              <ArrowDownCircle className="h-5 w-5" style={{ color: 'var(--color-danger)' }} />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
@@ -682,9 +682,9 @@ export default function InstallmentsPage() {
           >
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-              style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}
+              style={{ backgroundColor: 'rgba(5, 205, 153, 0.1)' }}
             >
-              <ArrowUpCircle className="h-5 w-5" style={{ color: '#10B981' }} />
+              <ArrowUpCircle className="h-5 w-5" style={{ color: 'var(--color-success)' }} />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
@@ -704,7 +704,7 @@ export default function InstallmentsPage() {
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
               style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)' }}
             >
-              <CalendarDays className="h-5 w-5" style={{ color: '#F59E0B' }} />
+              <CalendarDays className="h-5 w-5" style={{ color: 'var(--color-warning)' }} />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
@@ -781,8 +781,8 @@ export default function InstallmentsPage() {
           <div
             className="empty-float mb-6 flex h-20 w-20 items-center justify-center rounded-3xl"
             style={{
-              background: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.1)',
+              background: 'rgba(67, 24, 255, 0.08)',
+              border: '1px solid rgba(67, 24, 255, 0.1)',
             }}
           >
             <CreditCard className="h-9 w-9" style={{ color: 'var(--border-focus)' }} />
@@ -812,7 +812,7 @@ export default function InstallmentsPage() {
         <div className="animate-fade-in-up stagger-2 card flex flex-col items-center justify-center px-6 py-16">
           <div
             className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ backgroundColor: 'rgba(59, 130, 246, 0.08)' }}
+            style={{ backgroundColor: 'rgba(67, 24, 255, 0.08)' }}
           >
             <CreditCard className="h-6 w-6" style={{ color: 'var(--border-focus)' }} />
           </div>
@@ -829,32 +829,32 @@ export default function InstallmentsPage() {
             const nextPaymentSoon = inst.next_payment_date && isWithin7Days(inst.next_payment_date)
 
             // Status-based accent color
-            const accentGradient = inst.status === 'completed'
-              ? 'linear-gradient(90deg, #34D399, #10B981)'
+            const accentColor = inst.status === 'completed'
+              ? 'var(--color-success)'
               : inst.status === 'overdue'
-                ? 'linear-gradient(90deg, #F87171, #EF4444)'
+                ? 'var(--color-danger)'
                 : inst.status === 'pending'
-                  ? 'linear-gradient(90deg, #9CA3AF, #6B7280)'
-                  : 'linear-gradient(90deg, #60A5FA, #3B82F6)'
+                  ? 'var(--text-tertiary)'
+                  : 'var(--color-brand-500)'
 
             return (
               <div
                 key={inst.id}
-                className="card card-hover overflow-hidden"
-                style={{ animationDelay: `${index * 40}ms` }}
+                className="row-enter card card-lift overflow-hidden transition-all duration-300"
+                style={{ '--row-index': Math.min(index, 15), animationDelay: `${index * 40}ms` } as CSSProperties}
               >
                 {/* Status accent bar */}
                 <div
-                  className="h-1"
-                  style={{ background: accentGradient }}
+                  className="h-1.5"
+                  style={{ backgroundColor: accentColor }}
                 />
 
                 <div className="p-5">
-                  {/* Card header: name + status badge */}
-                  <div className="mb-3 flex items-start justify-between gap-2">
+                  {/* Card header */}
+                  <div className="mb-3 flex w-full items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <h3
-                        className="truncate text-sm font-bold"
+                        className="truncate text-[15px] font-bold"
                         style={{ color: 'var(--text-primary)' }}
                         title={inst.name}
                       >
@@ -866,7 +866,7 @@ export default function InstallmentsPage() {
                         <span
                           className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
                           style={{
-                            backgroundColor: isIncome ? '#10B98110' : '#EF444410',
+                            backgroundColor: isIncome ? 'color-mix(in srgb, var(--color-success) 6%, transparent)' : 'color-mix(in srgb, var(--color-danger) 6%, transparent)',
                             color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
                           }}
                         >
@@ -956,12 +956,12 @@ export default function InstallmentsPage() {
                             'mt-0.5 inline-flex items-center gap-1 font-bold ltr-nums',
                           )}
                           style={{
-                            color: nextPaymentSoon ? '#F59E0B' : 'var(--text-primary)',
+                            color: nextPaymentSoon ? 'var(--color-warning)' : 'var(--text-primary)',
                           }}
                         >
                           <CalendarDays
                             className="h-3 w-3"
-                            style={{ color: nextPaymentSoon ? '#F59E0B' : 'var(--border-focus)' }}
+                            style={{ color: nextPaymentSoon ? 'var(--color-warning)' : 'var(--border-focus)' }}
                           />
                           {formatDate(inst.next_payment_date, isRtl ? 'he-IL' : 'en-US')}
                         </span>
@@ -1012,40 +1012,42 @@ export default function InstallmentsPage() {
                     </p>
                   )}
 
+                  {/* View Details toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isExpanded ? null : inst.id)}
+                    aria-expanded={isExpanded}
+                    className="btn-press mb-3 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-all"
+                    style={{
+                      borderColor: isExpanded ? 'var(--color-brand-500)' : 'var(--border-primary)',
+                      backgroundColor: isExpanded ? 'rgba(67, 24, 255, 0.08)' : 'transparent',
+                      color: isExpanded ? 'var(--color-brand-500)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <ListOrdered className="h-3.5 w-3.5" />
+                    {isExpanded ? t('installments.hideSchedule') : t('installments.viewSchedule')}
+                    <span
+                      className="inline-flex transition-transform duration-300"
+                      style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </span>
+                  </button>
+
                   {/* Actions */}
                   <div
                     className="flex flex-wrap items-center justify-between gap-2 border-t pt-3"
                     style={{ borderColor: 'var(--border-primary)' }}
                   >
                     <div className="flex items-center gap-2">
-                      {/* Payment schedule toggle */}
-                      <button
-                        onClick={() =>
-                          setExpandedId(isExpanded ? null : inst.id)
-                        }
-                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
-                        style={{
-                          color: 'var(--border-focus)',
-                          backgroundColor: isExpanded ? 'rgba(59, 130, 246, 0.06)' : 'transparent',
-                        }}
-                        aria-expanded={isExpanded}
-                      >
-                        {isExpanded ? (
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        )}
-                        {t('installments.schedule')}
-                      </button>
-
                       {/* Mark Payment button */}
                       {inst.payments_completed < inst.number_of_payments && (
                         <button
                           onClick={() => setMarkPaymentTarget(inst)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                          className="btn-press inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
                           style={{
-                            background: 'linear-gradient(135deg, #34D399, #10B981)',
-                            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
+                            backgroundColor: 'var(--color-success)',
+                            boxShadow: 'var(--shadow-xs)',
                           }}
                         >
                           <Check className="h-3.5 w-3.5" />
@@ -1058,7 +1060,7 @@ export default function InstallmentsPage() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEditModal(inst)}
-                        className="action-btn action-btn-edit rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="btn-press action-btn action-btn-edit rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.edit')}
                         aria-label={t('common.edit')}
@@ -1067,7 +1069,7 @@ export default function InstallmentsPage() {
                       </button>
                       <button
                         onClick={() => setDeleteTarget(inst)}
-                        className="action-btn action-btn-delete rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="btn-press action-btn action-btn-delete rounded-lg p-2 transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.delete')}
                         aria-label={t('common.delete')}
@@ -1098,12 +1100,12 @@ export default function InstallmentsPage() {
           ================================================================== */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${modalClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="inst-modal-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal()
+            if (e.target === e.currentTarget) requestModalClose()
           }}
         >
           {/* Backdrop */}
@@ -1112,7 +1114,7 @@ export default function InstallmentsPage() {
           {/* Panel */}
           <div
             ref={modalPanelRef}
-            className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
+            className="modal-panel modal-form-layout relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1123,13 +1125,13 @@ export default function InstallmentsPage() {
             <div
               className="h-1"
               style={{
-                background: formData.type === 'income'
-                  ? 'linear-gradient(90deg, #34D399, #10B981)'
-                  : 'linear-gradient(90deg, #F87171, #EF4444)',
+                backgroundColor: formData.type === 'income'
+                  ? 'var(--color-success)'
+                  : 'var(--color-danger)',
               }}
             />
 
-            <div className="p-6">
+            <div className="modal-body p-6">
               {/* Header */}
               <div className="mb-6 flex items-center justify-between">
                 <h2
@@ -1140,7 +1142,7 @@ export default function InstallmentsPage() {
                   {editingEntry ? t('common.edit') : t('installments.add')}
                 </h2>
                 <button
-                  onClick={closeModal}
+                  onClick={requestModalClose}
                   className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
                   style={{ color: 'var(--text-tertiary)' }}
                   aria-label={t('common.cancel')}
@@ -1149,7 +1151,7 @@ export default function InstallmentsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleFormSubmit} className="space-y-5">
+              <form id="installment-form" onSubmit={handleFormSubmit} className="space-y-5">
                 {/* Type toggle */}
                 <div>
                   <label
@@ -1214,11 +1216,10 @@ export default function InstallmentsPage() {
                     className={cn(
                       'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
                       'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                      formErrors.name && 'border-red-400',
-                    )}
+                                          )}
                     style={{
                       backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.name ? undefined : 'var(--border-primary)',
+                      borderColor: formErrors.name ? 'var(--border-danger)' : 'var(--border-primary)',
                       color: 'var(--text-primary)',
                     }}
                     placeholder={t('fixed.name')}
@@ -1252,11 +1253,10 @@ export default function InstallmentsPage() {
                       className={cn(
                         'amount-input w-full rounded-xl border px-4 py-3 outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.total_amount && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.total_amount ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.total_amount ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: formData.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                       }}
                       placeholder="0.00"
@@ -1286,11 +1286,10 @@ export default function InstallmentsPage() {
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.number_of_payments && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.number_of_payments ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.number_of_payments ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.number_of_payments ? 'inst-num-payments-error' : undefined}
@@ -1334,20 +1333,18 @@ export default function InstallmentsPage() {
                     >
                       {t('fixed.startDate')} *
                     </label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={formData.start_date}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, start_date: e.target.value }))
+                      onChange={(val) =>
+                        setFormData((prev) => ({ ...prev, start_date: val }))
                       }
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.start_date && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.start_date ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.start_date ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.start_date ? 'inst-start-date-error' : undefined}
@@ -1377,11 +1374,10 @@ export default function InstallmentsPage() {
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.day_of_month && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.day_of_month ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.day_of_month ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.day_of_month ? 'inst-day-error' : undefined}
@@ -1394,6 +1390,31 @@ export default function InstallmentsPage() {
                     )}
                   </div>
                 </div>
+
+                {/* First payment already made - only show on create, not edit */}
+                {!editingEntry && (
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="first_payment_made"
+                      checked={formData.first_payment_made}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, first_payment_made: e.target.checked }))
+                      }
+                      className="h-4 w-4 rounded border accent-[var(--color-brand-500)]"
+                      style={{
+                        borderColor: 'var(--border-primary)',
+                      }}
+                    />
+                    <label
+                      htmlFor="first_payment_made"
+                      className="text-sm font-medium"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {t('installments.firstPaymentMade')}
+                    </label>
+                  </div>
+                )}
 
                 {/* Category */}
                 <div>
@@ -1427,6 +1448,23 @@ export default function InstallmentsPage() {
                   </select>
                 </div>
 
+                {/* Currency */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('currency.label')}
+                  </label>
+                  <CurrencySelector
+                    value={formData.currency}
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, currency: val }))
+                    }
+                    className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
+                  />
+                </div>
+
                 {/* Description */}
                 <div>
                   <label
@@ -1454,30 +1492,34 @@ export default function InstallmentsPage() {
                   />
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
-                    style={{
-                      borderColor: 'var(--border-primary)',
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'var(--bg-input)',
-                    }}
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isMutating}
-                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {t('common.save')}
-                  </button>
-                </div>
               </form>
+            </div>
+            {/* Sticky footer */}
+            <div className="modal-footer flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={requestModalClose}
+                className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                style={{
+                  borderColor: 'var(--border-primary)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-input)',
+                }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const form = document.getElementById('installment-form') as HTMLFormElement
+                  form?.requestSubmit()
+                }}
+                disabled={isMutating}
+                className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('common.save')}
+              </button>
             </div>
           </div>
         </div>
@@ -1488,12 +1530,12 @@ export default function InstallmentsPage() {
           ================================================================== */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${deleteClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="inst-delete-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteTarget(null)
+            if (e.target === e.currentTarget) requestDeleteClose()
           }}
         >
           {/* Backdrop */}
@@ -1502,7 +1544,7 @@ export default function InstallmentsPage() {
           {/* Panel */}
           <div
             ref={deletePanelRef}
-            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
+            className="modal-panel relative z-10 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1512,7 +1554,7 @@ export default function InstallmentsPage() {
             {/* Red accent bar */}
             <div
               className="h-1"
-              style={{ background: 'linear-gradient(90deg, #F87171, #EF4444, #DC2626)' }}
+              style={{ backgroundColor: 'var(--color-danger)' }}
             />
 
             <div className="p-6">
@@ -1556,7 +1598,7 @@ export default function InstallmentsPage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setDeleteTarget(null)}
+                  onClick={requestDeleteClose}
                   className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
                   style={{
                     borderColor: 'var(--border-primary)',
@@ -1571,8 +1613,8 @@ export default function InstallmentsPage() {
                   disabled={deleteMutation.isPending}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
                   style={{
-                    background: 'linear-gradient(135deg, #F87171, #EF4444)',
-                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                    backgroundColor: 'var(--color-danger)',
+                    boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   {deleteMutation.isPending && (
@@ -1591,12 +1633,12 @@ export default function InstallmentsPage() {
           ================================================================== */}
       {markPaymentTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${markPaymentClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="inst-mark-payment-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setMarkPaymentTarget(null)
+            if (e.target === e.currentTarget) requestMarkPaymentClose()
           }}
         >
           {/* Backdrop */}
@@ -1605,7 +1647,7 @@ export default function InstallmentsPage() {
           {/* Panel */}
           <div
             ref={markPaymentPanelRef}
-            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
+            className="modal-panel relative z-10 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1615,16 +1657,16 @@ export default function InstallmentsPage() {
             {/* Green accent bar */}
             <div
               className="h-1"
-              style={{ background: 'linear-gradient(90deg, #34D399, #10B981, #059669)' }}
+              style={{ backgroundColor: 'var(--color-success)' }}
             />
 
             <div className="p-6">
               <div className="mb-5 flex flex-col items-center text-center">
                 <div
                   className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
-                  style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}
+                  style={{ backgroundColor: 'rgba(5, 205, 153, 0.1)' }}
                 >
-                  <CheckCircle2 className="h-6 w-6" style={{ color: '#10B981' }} />
+                  <CheckCircle2 className="h-6 w-6" style={{ color: 'var(--color-success)' }} />
                 </div>
                 <h3
                   id="inst-mark-payment-title"
@@ -1660,7 +1702,7 @@ export default function InstallmentsPage() {
                 </p>
                 <p
                   className="mt-1 fin-number text-base ltr-nums"
-                  style={{ color: '#10B981' }}
+                  style={{ color: 'var(--color-success)' }}
                 >
                   {formatAmount(markPaymentTarget.monthly_amount, markPaymentTarget.currency)}
                 </p>
@@ -1668,7 +1710,7 @@ export default function InstallmentsPage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setMarkPaymentTarget(null)}
+                  onClick={requestMarkPaymentClose}
                   className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
                   style={{
                     borderColor: 'var(--border-primary)',
@@ -1683,8 +1725,8 @@ export default function InstallmentsPage() {
                   disabled={markPaidMutation.isPending}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
                   style={{
-                    background: 'linear-gradient(135deg, #34D399, #10B981)',
-                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                    backgroundColor: 'var(--color-success)',
+                    boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   {markPaidMutation.isPending && (

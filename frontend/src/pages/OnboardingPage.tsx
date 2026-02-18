@@ -21,6 +21,13 @@ import {
   ToggleRight,
   Plus,
   User as UserIcon,
+  Target,
+  Wallet,
+  Calendar,
+  StickyNote,
+  Phone,
+  Mail,
+  UserCircle,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { settingsApi } from '@/api/settings'
@@ -30,11 +37,14 @@ import { fixedApi } from '@/api/fixed'
 import { authApi } from '@/api/auth'
 import type { Category } from '@/types'
 import type { CreateFixedData } from '@/api/fixed'
+import DatePicker from '@/components/ui/DatePicker'
 import { cn } from '@/lib/utils'
 
+// ===== CONSTANTS =====
 const STORAGE_KEY = 'onboarding_progress'
 const TOTAL_STEPS = 7
 
+// ===== INTERFACES =====
 interface FixedItem {
   key: string
   nameKey: string
@@ -58,6 +68,7 @@ interface OnboardingState {
   fixedItemsCreated: number
 }
 
+// ===== STATE HELPERS =====
 function getDefaultState(): OnboardingState {
   const today = new Date().toISOString().split('T')[0]
   return {
@@ -105,18 +116,21 @@ function clearState(): void {
   localStorage.removeItem(STORAGE_KEY)
 }
 
+// ===== CURRENCY OPTIONS =====
 const CURRENCY_OPTIONS = [
   { code: 'ILS', symbol: '\u20AA', flag: '\uD83C\uDDEE\uD83C\uDDF1', nameKey: 'currencyILS' },
   { code: 'USD', symbol: '$', flag: '\uD83C\uDDFA\uD83C\uDDF8', nameKey: 'currencyUSD' },
   { code: 'EUR', symbol: '\u20AC', flag: '\uD83C\uDDEA\uD83C\uDDFA', nameKey: 'currencyEUR' },
 ]
 
+// ===== MAIN COMPONENT =====
 export default function OnboardingPage() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { theme, setTheme } = useTheme()
   const isRtl = i18n.language === 'he'
 
+  // --- State ---
   const [state, setState] = useState<OnboardingState>(loadState)
   const [direction, setDirection] = useState<'next' | 'prev'>('next')
   const [isAnimating, setIsAnimating] = useState(false)
@@ -140,6 +154,7 @@ export default function OnboardingPage() {
 
   const currentStep = state.currentStep
 
+  // --- Effects ---
   useEffect(() => {
     document.title = t('pageTitle.onboarding')
   }, [t])
@@ -152,7 +167,6 @@ export default function OnboardingPage() {
         full_name: user.full_name || '',
         phone_number: user.phone_number || '',
       })
-      // Pre-fill state if we have data and state is still empty
       setState((prev) => ({
         ...prev,
         fullName: prev.fullName || user.full_name || '',
@@ -186,7 +200,7 @@ export default function OnboardingPage() {
   // Generate confetti on final step
   useEffect(() => {
     if (currentStep === 6) {
-      const colors = ['#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B']
+      const colors = ['#4318FF', '#05CD99', '#EE5D50']
       const pieces = Array.from({ length: 50 }, (_, i) => ({
         id: i,
         left: Math.random() * 100,
@@ -198,6 +212,7 @@ export default function OnboardingPage() {
     }
   }, [currentStep])
 
+  // --- Callbacks ---
   const updateState = useCallback((partial: Partial<OnboardingState>) => {
     setState((prev) => ({ ...prev, ...partial }))
   }, [])
@@ -212,7 +227,6 @@ export default function OnboardingPage() {
     setTimeout(() => {
       setState((prev) => ({ ...prev, currentStep: step }))
       setIsAnimating(false)
-      // Scroll to top of step
       if (stepRef.current) {
         stepRef.current.scrollTo({ top: 0, behavior: 'smooth' })
       }
@@ -231,7 +245,7 @@ export default function OnboardingPage() {
     }
   }, [currentStep, goToStep])
 
-  // Step 2 handlers
+  // --- Handlers ---
   const handleLanguageChange = (lang: string) => {
     i18n.changeLanguage(lang)
     document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr'
@@ -242,7 +256,6 @@ export default function OnboardingPage() {
     setTheme(newTheme)
   }
 
-  // Step 3 handler
   const handleCurrencyChange = (currency: string) => {
     updateState({ currency })
   }
@@ -250,7 +263,6 @@ export default function OnboardingPage() {
   // Step 1 - Save personal info
   const handleSavePersonalInfo = async () => {
     if (!state.fullName && !state.phoneNumber) {
-      // Nothing to save, just proceed
       goNext()
       return
     }
@@ -264,14 +276,13 @@ export default function OnboardingPage() {
       })
       goNext()
     } catch {
-      // If the update fails, still let them proceed
       goNext()
     } finally {
       setIsSaving(false)
     }
   }
 
-  // Step 3 - Save currency + balance (merged step)
+  // Step 3 - Save currency + balance
   const handleSaveCurrencyBalance = async () => {
     if (!state.balanceAmount || isNaN(Number(state.balanceAmount))) {
       setBalanceError(true)
@@ -373,7 +384,6 @@ export default function OnboardingPage() {
           start_date: today,
         }
 
-        // Try to find a matching category
         if (item.categoryId) {
           data.category_id = item.categoryId
         }
@@ -402,7 +412,6 @@ export default function OnboardingPage() {
         onboarding_completed: true,
       })
       clearState()
-      // Set flag so ProtectedRoute doesn't re-check and redirect back
       sessionStorage.setItem('onboarding_completed', 'true')
       navigate('/dashboard', { replace: true })
     } catch {
@@ -415,7 +424,7 @@ export default function OnboardingPage() {
   // Currency symbol helper
   const currencySymbol = CURRENCY_OPTIONS.find((c) => c.code === state.currency)?.symbol || '\u20AA'
 
-  // Step labels for progress
+  // Step icons for progress bar
   const stepIcons = [
     <PartyPopper key="s0" className="h-4 w-4" />,
     <UserIcon key="s1" className="h-4 w-4" />,
@@ -426,49 +435,71 @@ export default function OnboardingPage() {
     <Check key="s6" className="h-4 w-4" />,
   ]
 
-  // ========== RENDER HELPERS ==========
-
-  // Step 0: Welcome
+  // ====================================================================
+  //  STEP 0 -- WELCOME
+  // ====================================================================
   const renderWelcome = () => (
-    <div className="flex flex-col items-center text-center">
-      {/* Logo */}
-      <div className="onboarding-logo-pulse mb-6 overflow-hidden rounded-2xl shadow-2xl ring-2 ring-white/20">
-        <img
-          src="/logo.jpeg"
-          alt={t('app.company')}
-          className="h-28 w-28 object-cover"
+    <div className="flex flex-col items-center text-center px-2">
+      {/* Logo with animated glow ring */}
+      <div className="relative mb-10">
+        {/* Outer glow ring */}
+        <div
+          className="absolute -inset-3 rounded-[2rem] opacity-60"
+          style={{
+            backgroundColor: 'rgba(67, 24, 255, 0.06)',
+            filter: 'blur(16px)',
+            animation: 'logoPulse 3s ease-in-out infinite',
+          }}
         />
+        <div
+          className="onboarding-logo-pulse relative overflow-hidden rounded-3xl"
+          style={{
+            boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+          }}
+        >
+          <img
+            src="/logo.webp"
+            alt={t('app.company')}
+            className="h-36 w-36 object-cover"
+          />
+        </div>
       </div>
 
+      {/* Welcome heading */}
       <h1
-        className="mb-3 text-4xl font-bold tracking-tight"
+        className="mb-3 text-[2.75rem] font-extrabold tracking-tight leading-[1.1]"
         style={{ color: 'var(--text-primary)' }}
       >
         {t('onboarding.welcome')}
       </h1>
 
-      <p className="auth-gradient-text mb-2 text-xl font-semibold">
+      {/* Brand gradient subtitle */}
+      <p className="auth-gradient-text mb-3 text-xl font-bold">
         {t('onboarding.welcomeDesc')}
       </p>
 
+      {/* Sub-description */}
       <p
-        className="mb-10 max-w-md text-sm leading-relaxed"
+        className="mb-12 max-w-md text-base leading-relaxed"
         style={{ color: 'var(--text-secondary)' }}
       >
         {t('onboarding.welcomeSubDesc')}
       </p>
 
+      {/* CTA Button with gradient */}
       <button
         onClick={goNext}
         className={cn(
-          'group flex items-center gap-3 rounded-xl px-8 py-4',
-          'text-base font-semibold text-white',
+          'group relative flex items-center gap-3 rounded-2xl px-12 py-4',
+          'text-base font-bold text-white',
           'onboarding-btn-gradient',
           'transition-all duration-300',
-          'hover:scale-105 hover:shadow-lg',
+          'hover:scale-[1.04] hover:shadow-2xl',
           'active:scale-[0.98]',
         )}
+        style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}
       >
+        <Target className="h-5 w-5" />
         {t('onboarding.letsStart')}
         <ChevronRight className={cn(
           'h-5 w-5 transition-transform duration-300 group-hover:translate-x-1',
@@ -478,28 +509,42 @@ export default function OnboardingPage() {
     </div>
   )
 
-  // Step 1: Personal Info (NEW)
+  // ====================================================================
+  //  STEP 1 -- PERSONAL INFO
+  // ====================================================================
   const renderPersonalInfo = () => (
     <div className="space-y-8">
+      {/* Header */}
       <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(67, 24, 255, 0.08)',
+            border: '1px solid rgba(67, 24, 255, 0.15)',
+          }}
+        >
+          <UserCircle className="h-7 w-7" style={{ color: 'var(--color-brand-500)' }} />
+        </div>
         <h2
-          className="mb-2 text-2xl font-bold"
+          className="mb-2 text-2xl font-bold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('onboarding.stepPersonalInfo')}
         </h2>
-        <p style={{ color: 'var(--text-secondary)' }} className="text-sm">
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
           {t('onboarding.stepPersonalInfoDesc')}
         </p>
       </div>
 
+      {/* Form fields */}
       <div className="mx-auto max-w-sm space-y-5">
         {/* Full Name */}
         <div>
           <label
-            className="mb-2 block text-sm font-medium"
+            className="mb-2 flex items-center gap-2 text-sm font-medium"
             style={{ color: 'var(--text-secondary)' }}
           >
+            <UserIcon className="h-3.5 w-3.5" style={{ color: 'var(--text-tertiary)' }} />
             {t('onboarding.fullName')}
           </label>
           <input
@@ -507,7 +552,7 @@ export default function OnboardingPage() {
             value={state.fullName}
             onChange={(e) => updateState({ fullName: e.target.value })}
             className={cn(
-              'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+              'w-full rounded-xl border px-4 py-3.5 text-sm outline-none transition-all duration-200',
               'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
             )}
             style={{
@@ -522,9 +567,10 @@ export default function OnboardingPage() {
         {/* Phone Number */}
         <div>
           <label
-            className="mb-2 block text-sm font-medium"
+            className="mb-2 flex items-center gap-2 text-sm font-medium"
             style={{ color: 'var(--text-secondary)' }}
           >
+            <Phone className="h-3.5 w-3.5" style={{ color: 'var(--text-tertiary)' }} />
             {t('onboarding.phoneNumber')}
           </label>
           <input
@@ -532,7 +578,7 @@ export default function OnboardingPage() {
             value={state.phoneNumber}
             onChange={(e) => updateState({ phoneNumber: e.target.value })}
             className={cn(
-              'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+              'w-full rounded-xl border px-4 py-3.5 text-sm outline-none transition-all duration-200',
               'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
             )}
             style={{
@@ -548,9 +594,10 @@ export default function OnboardingPage() {
         {/* Email (readonly) */}
         <div>
           <label
-            className="mb-2 block text-sm font-medium"
+            className="mb-2 flex items-center gap-2 text-sm font-medium"
             style={{ color: 'var(--text-secondary)' }}
           >
+            <Mail className="h-3.5 w-3.5" style={{ color: 'var(--text-tertiary)' }} />
             {t('onboarding.emailLabel')}
           </label>
           <input
@@ -558,7 +605,7 @@ export default function OnboardingPage() {
             value={userData.email || ''}
             readOnly
             className={cn(
-              'w-full rounded-xl border px-4 py-3 text-sm outline-none cursor-not-allowed opacity-60',
+              'w-full rounded-xl border px-4 py-3.5 text-sm outline-none cursor-not-allowed opacity-60',
             )}
             style={{
               backgroundColor: 'var(--bg-tertiary)',
@@ -568,7 +615,7 @@ export default function OnboardingPage() {
             dir="ltr"
           />
           <p
-            className="mt-1 text-xs"
+            className="mt-1.5 text-xs"
             style={{ color: 'var(--text-tertiary)' }}
           >
             {t('onboarding.emailReadonly')}
@@ -577,7 +624,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Skip link */}
-      <div className="text-center">
+      <div className="text-center pt-2">
         <button
           onClick={goNext}
           className="text-sm font-medium transition-colors hover:underline underline-offset-4"
@@ -589,17 +636,29 @@ export default function OnboardingPage() {
     </div>
   )
 
-  // Step 2: Language & Theme
+  // ====================================================================
+  //  STEP 2 -- LANGUAGE & THEME
+  // ====================================================================
   const renderLanguageTheme = () => (
     <div className="space-y-8">
+      {/* Header */}
       <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(67, 24, 255, 0.08)',
+            border: '1px solid rgba(217, 70, 239, 0.15)',
+          }}
+        >
+          <Palette className="h-7 w-7" style={{ color: 'var(--color-accent-magenta)' }} />
+        </div>
         <h2
-          className="mb-2 text-2xl font-bold"
+          className="mb-2 text-2xl font-bold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('onboarding.stepLanguageTheme')}
         </h2>
-        <p style={{ color: 'var(--text-secondary)' }} className="text-sm">
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
           {t('onboarding.stepLanguageThemeDesc')}
         </p>
       </div>
@@ -607,10 +666,10 @@ export default function OnboardingPage() {
       {/* Language Selection */}
       <div>
         <label
-          className="mb-3 block text-sm font-semibold"
+          className="mb-3 flex items-center gap-2 text-sm font-semibold"
           style={{ color: 'var(--text-primary)' }}
         >
-          <Globe className="mb-0.5 inline-block h-4 w-4" />{' '}
+          <Globe className="h-4 w-4" style={{ color: 'var(--text-tertiary)' }} />
           {t('onboarding.selectLanguage')}
         </label>
         <div className="grid grid-cols-2 gap-3">
@@ -622,14 +681,27 @@ export default function OnboardingPage() {
               key={lang.code}
               onClick={() => handleLanguageChange(lang.code)}
               className={cn(
-                'flex items-center justify-center gap-3 rounded-xl border-2 px-5 py-4 text-sm font-medium transition-all duration-200',
+                'group relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 px-5 py-5 transition-all duration-200',
                 i18n.language === lang.code
                   ? 'onboarding-card-selected'
                   : 'onboarding-card-unselected hover:border-[var(--border-focus)]'
               )}
             >
-              <span className="text-2xl">{lang.flag}</span>
-              <span>{lang.label}</span>
+              {i18n.language === lang.code && (
+                <div
+                  className="absolute top-2.5 end-2.5 flex h-5 w-5 items-center justify-center rounded-full"
+                  style={{ backgroundColor: 'var(--color-brand-500)' }}
+                >
+                  <Check className="h-3 w-3 text-white" />
+                </div>
+              )}
+              <span className="text-3xl">{lang.flag}</span>
+              <span
+                className="text-sm font-semibold"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {lang.label}
+              </span>
             </button>
           ))}
         </div>
@@ -638,10 +710,10 @@ export default function OnboardingPage() {
       {/* Theme Selection */}
       <div>
         <label
-          className="mb-3 block text-sm font-semibold"
+          className="mb-3 flex items-center gap-2 text-sm font-semibold"
           style={{ color: 'var(--text-primary)' }}
         >
-          <Palette className="mb-0.5 inline-block h-4 w-4" />{' '}
+          <Palette className="h-4 w-4" style={{ color: 'var(--text-tertiary)' }} />
           {t('onboarding.selectTheme')}
         </label>
         <div className="grid grid-cols-3 gap-3">
@@ -654,13 +726,29 @@ export default function OnboardingPage() {
               key={opt.value}
               onClick={() => handleThemeChange(opt.value)}
               className={cn(
-                'flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-5 text-center transition-all duration-200',
+                'group relative flex flex-col items-center gap-2.5 rounded-2xl border-2 px-4 py-6 text-center transition-all duration-200',
                 theme === opt.value
                   ? 'onboarding-card-selected'
                   : 'onboarding-card-unselected hover:border-[var(--border-focus)]'
               )}
             >
-              <div style={{ color: theme === opt.value ? 'var(--color-brand-600)' : 'var(--text-tertiary)' }}>
+              {theme === opt.value && (
+                <div
+                  className="absolute top-2 end-2 flex h-5 w-5 items-center justify-center rounded-full"
+                  style={{ backgroundColor: 'var(--color-brand-500)' }}
+                >
+                  <Check className="h-3 w-3 text-white" />
+                </div>
+              )}
+              <div
+                className={cn(
+                  'flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200',
+                )}
+                style={{
+                  backgroundColor: theme === opt.value ? 'rgba(67, 24, 255, 0.1)' : 'var(--bg-tertiary)',
+                  color: theme === opt.value ? 'var(--color-brand-500)' : 'var(--text-tertiary)',
+                }}
+              >
                 {opt.icon}
               </div>
               <span
@@ -682,44 +770,64 @@ export default function OnboardingPage() {
     </div>
   )
 
-  // Step 3: Currency + Balance (MERGED)
+  // ====================================================================
+  //  STEP 3 -- CURRENCY & BALANCE
+  // ====================================================================
   const renderCurrencyBalance = () => (
     <div className="space-y-8">
+      {/* Header */}
       <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(67, 24, 255, 0.08)',
+            border: '1px solid rgba(0, 212, 255, 0.15)',
+          }}
+        >
+          <Wallet className="h-7 w-7" style={{ color: 'var(--color-accent-cyan)' }} />
+        </div>
         <h2
-          className="mb-2 text-2xl font-bold"
+          className="mb-2 text-2xl font-bold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('onboarding.stepCurrencyBalance')}
         </h2>
-        <p style={{ color: 'var(--text-secondary)' }} className="text-sm">
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
           {t('onboarding.stepCurrencyBalanceDesc')}
         </p>
       </div>
 
-      {/* Currency Selection */}
+      {/* Currency cards */}
       <div className="grid grid-cols-3 gap-3">
         {CURRENCY_OPTIONS.map((cur) => (
           <button
             key={cur.code}
             onClick={() => handleCurrencyChange(cur.code)}
             className={cn(
-              'flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 transition-all duration-200',
+              'group relative flex flex-col items-center gap-3 rounded-2xl border-2 px-4 py-5 transition-all duration-200',
               state.currency === cur.code
                 ? 'onboarding-card-selected'
                 : 'onboarding-card-unselected hover:border-[var(--border-focus)]'
             )}
           >
-            <span className="text-2xl">{cur.flag}</span>
+            {state.currency === cur.code && (
+              <div
+                className="absolute top-2 end-2 flex h-5 w-5 items-center justify-center rounded-full"
+                style={{ backgroundColor: 'var(--color-brand-500)' }}
+              >
+                <Check className="h-3 w-3 text-white" />
+              </div>
+            )}
+            <span className="text-3xl">{cur.flag}</span>
             <div className="text-center">
               <p
-                className="text-lg font-bold"
+                className="text-xl font-bold ltr-nums"
                 style={{ color: 'var(--text-primary)' }}
               >
                 {cur.symbol}
               </p>
               <p
-                className="text-xs"
+                className="mt-0.5 text-xs font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t(`onboarding.${cur.nameKey}`)}
@@ -729,20 +837,28 @@ export default function OnboardingPage() {
         ))}
       </div>
 
-      {/* Balance Input */}
+      {/* Divider */}
+      <div className="flex items-center gap-4">
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-primary)' }} />
+        <Coins className="h-4 w-4" style={{ color: 'var(--text-tertiary)' }} />
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-primary)' }} />
+      </div>
+
+      {/* Balance inputs */}
       <div className="mx-auto max-w-sm space-y-5">
         {/* Amount - REQUIRED */}
         <div>
           <label
-            className="mb-2 block text-sm font-medium"
+            className="mb-2 flex items-center gap-2 text-sm font-medium"
             style={{ color: 'var(--text-secondary)' }}
           >
-            {t('onboarding.balanceAmount')} <span className="text-red-500">*</span>
+            <Wallet className="h-3.5 w-3.5" style={{ color: 'var(--text-tertiary)' }} />
+            {t('onboarding.balanceAmount')} <span style={{ color: 'var(--color-expense)' }}>*</span>
           </label>
           <div className="relative">
             <span
               className={cn(
-                'pointer-events-none absolute top-1/2 -translate-y-1/2 text-lg font-semibold',
+                'pointer-events-none absolute top-1/2 -translate-y-1/2 text-lg font-bold ltr-nums',
                 'start-4'
               )}
               style={{ color: 'var(--text-tertiary)' }}
@@ -772,7 +888,7 @@ export default function OnboardingPage() {
             />
           </div>
           {balanceError && (
-            <p className="mt-2 text-sm text-red-500">
+            <p className="mt-2 text-sm" style={{ color: 'var(--color-expense)' }}>
               {t('onboarding.balanceRequired')}
             </p>
           )}
@@ -781,17 +897,17 @@ export default function OnboardingPage() {
         {/* Date */}
         <div>
           <label
-            className="mb-2 block text-sm font-medium"
+            className="mb-2 flex items-center gap-2 text-sm font-medium"
             style={{ color: 'var(--text-secondary)' }}
           >
+            <Calendar className="h-3.5 w-3.5" style={{ color: 'var(--text-tertiary)' }} />
             {t('onboarding.balanceDate')}
           </label>
-          <input
-            type="date"
+          <DatePicker
             value={state.balanceDate}
-            onChange={(e) => updateState({ balanceDate: e.target.value })}
+            onChange={(val) => updateState({ balanceDate: val })}
             className={cn(
-              'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+              'w-full rounded-xl border px-4 py-3.5 text-sm outline-none transition-all duration-200',
               'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
             )}
             style={{
@@ -805,9 +921,10 @@ export default function OnboardingPage() {
         {/* Notes */}
         <div>
           <label
-            className="mb-2 block text-sm font-medium"
+            className="mb-2 flex items-center gap-2 text-sm font-medium"
             style={{ color: 'var(--text-secondary)' }}
           >
+            <StickyNote className="h-3.5 w-3.5" style={{ color: 'var(--text-tertiary)' }} />
             {t('onboarding.balanceNotes')}
           </label>
           <input
@@ -815,7 +932,7 @@ export default function OnboardingPage() {
             value={state.balanceNotes}
             onChange={(e) => updateState({ balanceNotes: e.target.value })}
             className={cn(
-              'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+              'w-full rounded-xl border px-4 py-3.5 text-sm outline-none transition-all duration-200',
               'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
             )}
             style={{
@@ -830,7 +947,9 @@ export default function OnboardingPage() {
     </div>
   )
 
-  // Step 4: Categories
+  // ====================================================================
+  //  STEP 4 -- CATEGORIES
+  // ====================================================================
   const renderCategories = () => {
     const incomeCategories = categories.filter((c) => c.type === 'income')
     const expenseCategories = categories.filter((c) => c.type === 'expense')
@@ -848,7 +967,8 @@ export default function OnboardingPage() {
               setShowing(true)
             }}
             className={cn(
-              'mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm transition-all duration-200 hover:border-[var(--border-focus)]'
+              'mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium',
+              'transition-all duration-200 hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]'
             )}
             style={{
               borderColor: 'var(--border-primary)',
@@ -863,7 +983,7 @@ export default function OnboardingPage() {
 
       return (
         <div
-          className="mt-2 space-y-2 rounded-lg border p-3"
+          className="mt-3 space-y-2.5 rounded-xl border p-4"
           style={{
             backgroundColor: 'var(--bg-tertiary)',
             borderColor: 'var(--border-primary)',
@@ -874,7 +994,7 @@ export default function OnboardingPage() {
             value={newCatName}
             onChange={(e) => setNewCatName(e.target.value)}
             className={cn(
-              'w-full rounded-lg border px-3 py-2 text-sm outline-none transition-all duration-200',
+              'w-full rounded-lg border px-3.5 py-2.5 text-sm outline-none transition-all duration-200',
               'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
             )}
             style={{
@@ -890,7 +1010,7 @@ export default function OnboardingPage() {
             value={newCatNameHe}
             onChange={(e) => setNewCatNameHe(e.target.value)}
             className={cn(
-              'w-full rounded-lg border px-3 py-2 text-sm outline-none transition-all duration-200',
+              'w-full rounded-lg border px-3.5 py-2.5 text-sm outline-none transition-all duration-200',
               'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
             )}
             style={{
@@ -900,12 +1020,12 @@ export default function OnboardingPage() {
             }}
             placeholder={t('onboarding.newCategoryNameHe')}
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => handleCreateCategory(type)}
               disabled={isCreatingCategory || !newCatName.trim() || !newCatNameHe.trim()}
               className={cn(
-                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all duration-200',
+                'flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white transition-all duration-200',
                 'onboarding-btn-gradient',
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
@@ -931,21 +1051,34 @@ export default function OnboardingPage() {
 
     return (
       <div className="space-y-6">
+        {/* Header */}
         <div className="text-center">
+          <div
+            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+            style={{
+              backgroundColor: 'rgba(5, 205, 153, 0.08)',
+              border: '1px solid rgba(5, 205, 153, 0.15)',
+            }}
+          >
+            <Tags className="h-7 w-7" style={{ color: 'var(--color-income)' }} />
+          </div>
           <h2
-            className="mb-2 text-2xl font-bold"
+            className="mb-2 text-2xl font-bold tracking-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             {t('onboarding.stepCategories')}
           </h2>
-          <p style={{ color: 'var(--text-secondary)' }} className="text-sm">
+          <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
             {t('onboarding.stepCategoriesDesc')}
           </p>
         </div>
 
         {isLoadingCategories ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--color-brand-600)' }} />
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-7 w-7 animate-spin" style={{ color: 'var(--color-brand-500)' }} />
+              <span className="text-sm" style={{ color: 'var(--text-tertiary)' }}>Loading categories...</span>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -955,7 +1088,10 @@ export default function OnboardingPage() {
                 className="mb-3 flex items-center gap-2 text-sm font-semibold"
                 style={{ color: 'var(--color-income)' }}
               >
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-income)' }} />
+                <div
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: 'var(--color-income)' }}
+                />
                 {t('onboarding.incomeCategories')} ({incomeCategories.filter((c) => !c.is_archived).length})
               </h3>
               <div className="space-y-2">
@@ -964,27 +1100,28 @@ export default function OnboardingPage() {
                     key={cat.id}
                     onClick={() => toggleCategory(cat.id, cat.is_archived)}
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-start transition-all duration-200',
+                      'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-start transition-all duration-200',
                       cat.is_archived
                         ? 'opacity-50'
-                        : ''
+                        : 'hover:shadow-sm'
                     )}
                     style={{
                       backgroundColor: cat.is_archived ? 'var(--bg-tertiary)' : 'var(--bg-card)',
-                      borderColor: cat.is_archived ? 'var(--border-primary)' : 'rgba(16, 185, 129, 0.3)',
+                      borderColor: cat.is_archived ? 'var(--border-primary)' : 'rgba(5, 205, 153, 0.25)',
                     }}
                   >
-                    <span className="text-base">{cat.icon}</span>
+                    <span className="text-lg">{cat.icon}</span>
                     <span
-                      className={cn('flex-1 text-sm', cat.is_archived ? 'line-through' : 'font-medium')}
+                      className={cn('flex-1 text-sm truncate', cat.is_archived ? 'line-through' : 'font-medium')}
                       style={{ color: 'var(--text-primary)' }}
+                      title={i18n.language === 'he' ? cat.name_he : cat.name}
                     >
                       {i18n.language === 'he' ? cat.name_he : cat.name}
                     </span>
                     {cat.is_archived ? (
-                      <ToggleLeft className="h-5 w-5" style={{ color: 'var(--text-tertiary)' }} />
+                      <ToggleLeft className="h-5 w-5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
                     ) : (
-                      <ToggleRight className="h-5 w-5" style={{ color: 'var(--color-income)' }} />
+                      <ToggleRight className="h-5 w-5 shrink-0" style={{ color: 'var(--color-income)' }} />
                     )}
                   </button>
                 ))}
@@ -998,7 +1135,10 @@ export default function OnboardingPage() {
                 className="mb-3 flex items-center gap-2 text-sm font-semibold"
                 style={{ color: 'var(--color-expense)' }}
               >
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-expense)' }} />
+                <div
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: 'var(--color-expense)' }}
+                />
                 {t('onboarding.expenseCategories')} ({expenseCategories.filter((c) => !c.is_archived).length})
               </h3>
               <div className="space-y-2">
@@ -1007,27 +1147,28 @@ export default function OnboardingPage() {
                     key={cat.id}
                     onClick={() => toggleCategory(cat.id, cat.is_archived)}
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-start transition-all duration-200',
+                      'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-start transition-all duration-200',
                       cat.is_archived
                         ? 'opacity-50'
-                        : ''
+                        : 'hover:shadow-sm'
                     )}
                     style={{
                       backgroundColor: cat.is_archived ? 'var(--bg-tertiary)' : 'var(--bg-card)',
-                      borderColor: cat.is_archived ? 'var(--border-primary)' : 'rgba(239, 68, 68, 0.3)',
+                      borderColor: cat.is_archived ? 'var(--border-primary)' : 'rgba(238, 93, 80, 0.2)',
                     }}
                   >
-                    <span className="text-base">{cat.icon}</span>
+                    <span className="text-lg">{cat.icon}</span>
                     <span
-                      className={cn('flex-1 text-sm', cat.is_archived ? 'line-through' : 'font-medium')}
+                      className={cn('flex-1 text-sm truncate', cat.is_archived ? 'line-through' : 'font-medium')}
                       style={{ color: 'var(--text-primary)' }}
+                      title={i18n.language === 'he' ? cat.name_he : cat.name}
                     >
                       {i18n.language === 'he' ? cat.name_he : cat.name}
                     </span>
                     {cat.is_archived ? (
-                      <ToggleLeft className="h-5 w-5" style={{ color: 'var(--text-tertiary)' }} />
+                      <ToggleLeft className="h-5 w-5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
                     ) : (
-                      <ToggleRight className="h-5 w-5" style={{ color: 'var(--color-expense)' }} />
+                      <ToggleRight className="h-5 w-5 shrink-0" style={{ color: 'var(--color-expense)' }} />
                     )}
                   </button>
                 ))}
@@ -1037,62 +1178,81 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Reassurance message */}
-        <p className="mx-auto max-w-md text-center text-xs leading-relaxed rounded-lg px-4 py-3"
-           style={{
-             backgroundColor: 'rgba(59, 130, 246, 0.06)',
-             color: 'var(--text-secondary)',
-             border: '1px solid rgba(59, 130, 246, 0.1)'
-           }}>
-          {t('onboarding.canChangeLater')}
-        </p>
+        {/* Reassurance pill */}
+        <div
+          className="mx-auto max-w-md rounded-xl px-5 py-3.5 text-center"
+          style={{
+            backgroundColor: 'rgba(67, 24, 255, 0.05)',
+            border: '1px solid rgba(67, 24, 255, 0.1)',
+          }}
+        >
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            {t('onboarding.canChangeLater')}
+          </p>
+        </div>
       </div>
     )
   }
 
-  // Step 5: Fixed Income/Expenses
+  // ====================================================================
+  //  STEP 5 -- FIXED INCOME / EXPENSES
+  // ====================================================================
   const renderFixed = () => (
     <div className="space-y-6">
+      {/* Header */}
       <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.08)',
+            border: '1px solid rgba(245, 158, 11, 0.15)',
+          }}
+        >
+          <CalendarClock className="h-7 w-7" style={{ color: 'var(--color-accent-amber)' }} />
+        </div>
         <h2
-          className="mb-2 text-2xl font-bold"
+          className="mb-2 text-2xl font-bold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('onboarding.stepFixed')}
         </h2>
-        <p style={{ color: 'var(--text-secondary)' }} className="text-sm">
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
           {t('onboarding.stepFixedDesc')}
         </p>
       </div>
 
+      {/* Fixed items list */}
       <div className="mx-auto max-w-lg space-y-3">
-        {state.fixedItems.map((item) => (
+        {state.fixedItems.map((item, idx) => (
           <div
             key={item.key}
             className={cn(
-              'rounded-xl border p-4 transition-all duration-200',
+              'rounded-2xl border p-5 transition-all duration-300',
+              'animate-fade-in-up',
               item.enabled
                 ? 'onboarding-fixed-enabled'
                 : ''
             )}
             style={{
+              animationDelay: `${idx * 50}ms`,
               backgroundColor: item.enabled ? 'var(--bg-card)' : 'var(--bg-tertiary)',
               borderColor: item.enabled
                 ? item.type === 'income'
-                  ? 'rgba(16, 185, 129, 0.3)'
-                  : 'rgba(239, 68, 68, 0.3)'
+                  ? 'rgba(5, 205, 153, 0.25)'
+                  : 'rgba(238, 93, 80, 0.2)'
                 : 'var(--border-primary)',
             }}
           >
-            {/* Header row */}
-            <div className="mb-3 flex items-center gap-3">
+            {/* Header row with toggle */}
+            <div className="flex items-center gap-3">
+              {/* Checkbox toggle */}
               <button
                 onClick={() => toggleFixedItem(item.key)}
-                className="shrink-0"
+                className="shrink-0 transition-transform duration-200 hover:scale-110 active:scale-95"
               >
                 {item.enabled ? (
                   <div
-                    className="flex h-6 w-6 items-center justify-center rounded-md"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg shadow-sm"
                     style={{
                       backgroundColor: item.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                     }}
@@ -1101,22 +1261,27 @@ export default function OnboardingPage() {
                   </div>
                 ) : (
                   <div
-                    className="h-6 w-6 rounded-md border-2"
+                    className="h-7 w-7 rounded-lg border-2 transition-colors duration-200 hover:border-[var(--border-focus)]"
                     style={{ borderColor: 'var(--border-primary)' }}
                   />
                 )}
               </button>
 
+              {/* Item name */}
               <span
-                className={cn('flex-1 text-sm font-semibold', !item.enabled && 'opacity-50')}
+                className={cn(
+                  'flex-1 text-sm font-semibold transition-opacity duration-200',
+                  !item.enabled && 'opacity-50'
+                )}
                 style={{ color: 'var(--text-primary)' }}
               >
                 {t(`onboarding.${item.nameKey}`)}
               </span>
 
+              {/* Type badge */}
               <span
                 className={cn(
-                  'rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
+                  'rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider',
                   item.type === 'income'
                     ? 'badge-income'
                     : 'badge-expense'
@@ -1126,12 +1291,12 @@ export default function OnboardingPage() {
               </span>
             </div>
 
-            {/* Input fields - visible when enabled */}
+            {/* Expanded fields when enabled */}
             {item.enabled && (
-              <div className="mt-3 flex items-end gap-3">
+              <div className="mt-4 flex items-end gap-3 animate-fade-in">
                 <div className="flex-1">
                   <label
-                    className="mb-1 block text-[11px] font-medium"
+                    className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider"
                     style={{ color: 'var(--text-tertiary)' }}
                   >
                     {t('onboarding.fixedAmount')}
@@ -1139,7 +1304,7 @@ export default function OnboardingPage() {
                   <div className="relative">
                     <span
                       className={cn(
-                        'pointer-events-none absolute top-1/2 -translate-y-1/2 text-sm font-semibold',
+                        'pointer-events-none absolute top-1/2 -translate-y-1/2 text-sm font-bold ltr-nums',
                         'start-3'
                       )}
                       style={{ color: 'var(--text-tertiary)' }}
@@ -1152,7 +1317,7 @@ export default function OnboardingPage() {
                       value={item.amount}
                       onChange={(e) => updateFixedItem(item.key, 'amount', e.target.value)}
                       className={cn(
-                        'w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition-all duration-200',
+                        'w-full rounded-xl border px-3 py-3 text-sm font-semibold outline-none transition-all duration-200',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
                         'ps-9'
                       )}
@@ -1168,7 +1333,7 @@ export default function OnboardingPage() {
 
                 <div className="w-24">
                   <label
-                    className="mb-1 block text-[11px] font-medium"
+                    className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider"
                     style={{ color: 'var(--text-tertiary)' }}
                   >
                     {t('onboarding.fixedDayOfMonth')}
@@ -1180,7 +1345,7 @@ export default function OnboardingPage() {
                     value={item.dayOfMonth}
                     onChange={(e) => updateFixedItem(item.key, 'dayOfMonth', Number(e.target.value))}
                     className={cn(
-                      'w-full rounded-lg border px-3 py-2.5 text-center text-sm outline-none transition-all duration-200',
+                      'w-full rounded-xl border px-3 py-3 text-center text-sm font-semibold outline-none transition-all duration-200',
                       'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
                     )}
                     style={{
@@ -1196,17 +1361,20 @@ export default function OnboardingPage() {
         ))}
       </div>
 
-      {/* Reassurance message */}
-      <p className="mx-auto max-w-md text-center text-xs leading-relaxed rounded-lg px-4 py-3"
-         style={{
-           backgroundColor: 'rgba(59, 130, 246, 0.06)',
-           color: 'var(--text-secondary)',
-           border: '1px solid rgba(59, 130, 246, 0.1)'
-         }}>
-        {t('onboarding.canChangeFixedLater')}
-      </p>
+      {/* Reassurance pill */}
+      <div
+        className="mx-auto max-w-md rounded-xl px-5 py-3.5 text-center"
+        style={{
+          backgroundColor: 'rgba(67, 24, 255, 0.05)',
+          border: '1px solid rgba(67, 24, 255, 0.1)',
+        }}
+      >
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          {t('onboarding.canChangeFixedLater')}
+        </p>
+      </div>
 
-      {/* Skip button - GHOST STYLE, NOT gradient */}
+      {/* Skip link */}
       <div className="text-center">
         <button
           onClick={goNext}
@@ -1219,7 +1387,9 @@ export default function OnboardingPage() {
     </div>
   )
 
-  // Step 6: Done
+  // ====================================================================
+  //  STEP 6 -- DONE
+  // ====================================================================
   const renderDone = () => {
     const activeCategories = categories.filter((c) => !c.is_archived).length
     const enabledFixed = state.fixedItems.filter((item) => item.enabled && Number(item.amount) > 0).length
@@ -1248,18 +1418,20 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        <div className="onboarding-done-icon mb-6 flex h-20 w-20 items-center justify-center rounded-full">
-          <Check className="h-10 w-10 text-white" />
+        {/* Animated success icon */}
+        <div className="onboarding-done-icon mb-8 flex h-24 w-24 items-center justify-center rounded-full">
+          <Check className="h-12 w-12 text-white" />
         </div>
 
+        {/* Title */}
         <h2
-          className="mb-2 text-3xl font-bold"
+          className="mb-3 text-[2.25rem] font-extrabold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           {t('onboarding.stepDoneTitle')}
         </h2>
         <p
-          className="mb-8 text-sm"
+          className="mb-8 max-w-sm text-base leading-relaxed"
           style={{ color: 'var(--text-secondary)' }}
         >
           {t('onboarding.stepDoneDesc')}
@@ -1267,57 +1439,76 @@ export default function OnboardingPage() {
 
         {/* Summary card */}
         <div
-          className="mb-8 w-full max-w-sm rounded-xl border p-5"
+          className="mb-8 w-full max-w-sm overflow-hidden rounded-2xl border"
           style={{
             backgroundColor: 'var(--bg-card)',
             borderColor: 'var(--border-primary)',
           }}
         >
-          <h3
-            className="mb-4 text-sm font-semibold"
-            style={{ color: 'var(--text-primary)' }}
+          {/* Card header with gradient accent */}
+          <div
+            className="px-6 py-4"
+            style={{
+              backgroundColor: 'rgba(67, 24, 255, 0.06)',
+              borderBottom: '1px solid var(--border-primary)',
+            }}
           >
-            {t('onboarding.setupSummary')}
-          </h3>
-          <div className="space-y-3">
+            <h3
+              className="text-sm font-semibold"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {t('onboarding.setupSummary')}
+            </h3>
+          </div>
+
+          {/* Summary rows */}
+          <div className="divide-y px-6" style={{ borderColor: 'var(--border-primary)' }}>
             {state.fullName && (
               <SummaryRow
+                icon={<UserIcon className="h-3.5 w-3.5" />}
                 label={t('onboarding.summaryName')}
                 value={state.fullName}
               />
             )}
             {state.phoneNumber && (
               <SummaryRow
+                icon={<Phone className="h-3.5 w-3.5" />}
                 label={t('onboarding.summaryPhone')}
                 value={state.phoneNumber}
               />
             )}
             <SummaryRow
+              icon={<Globe className="h-3.5 w-3.5" />}
               label={t('onboarding.summaryLanguage')}
               value={i18n.language === 'he' ? '\u05E2\u05D1\u05E8\u05D9\u05EA' : 'English'}
             />
             <SummaryRow
+              icon={<Palette className="h-3.5 w-3.5" />}
               label={t('onboarding.summaryTheme')}
               value={themeLabel}
             />
             <SummaryRow
+              icon={<Coins className="h-3.5 w-3.5" />}
               label={t('onboarding.summaryCurrency')}
               value={`${currencySymbol} (${state.currency})`}
             />
             {state.balanceAmount && (
               <SummaryRow
+                icon={<Wallet className="h-3.5 w-3.5" />}
                 label={t('onboarding.summaryBalance')}
                 value={`${currencySymbol}${Number(state.balanceAmount).toLocaleString()}`}
               />
             )}
             {activeCategories > 0 && (
               <SummaryRow
+                icon={<Tags className="h-3.5 w-3.5" />}
                 label={t('onboarding.summaryCategories')}
                 value={String(activeCategories)}
               />
             )}
             {(enabledFixed > 0 || state.fixedItemsCreated > 0) && (
               <SummaryRow
+                icon={<CalendarClock className="h-3.5 w-3.5" />}
                 label={t('onboarding.summaryFixed')}
                 value={String(state.fixedItemsCreated || enabledFixed)}
               />
@@ -1325,18 +1516,20 @@ export default function OnboardingPage() {
           </div>
         </div>
 
+        {/* CTA Button */}
         <button
           onClick={handleComplete}
           disabled={isSaving}
           className={cn(
-            'group flex items-center gap-3 rounded-xl px-8 py-4',
-            'text-base font-semibold text-white',
+            'group relative flex items-center gap-3 rounded-2xl px-10 py-4',
+            'text-base font-bold text-white',
             'onboarding-btn-gradient',
             'transition-all duration-300',
-            'hover:scale-105 hover:shadow-lg',
+            'hover:scale-[1.04] hover:shadow-2xl',
             'active:scale-[0.98]',
             'disabled:cursor-not-allowed disabled:opacity-60'
           )}
+          style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}
         >
           {isSaving && <Loader2 className="h-5 w-5 animate-spin" />}
           {t('onboarding.goToDashboard')}
@@ -1349,26 +1542,26 @@ export default function OnboardingPage() {
     )
   }
 
+  // ====================================================================
+  //  STEPS ARRAY
+  // ====================================================================
   const steps = [
-    renderWelcome,        // 0
-    renderPersonalInfo,   // 1 (NEW)
-    renderLanguageTheme,  // 2
-    renderCurrencyBalance,// 3 (MERGED)
-    renderCategories,     // 4
-    renderFixed,          // 5
-    renderDone,           // 6
+    renderWelcome,         // 0
+    renderPersonalInfo,    // 1
+    renderLanguageTheme,   // 2
+    renderCurrencyBalance, // 3
+    renderCategories,      // 4
+    renderFixed,           // 5
+    renderDone,            // 6
   ]
 
   // Handle "Next" button for steps that require saving
   const handleNext = async () => {
     if (currentStep === 1) {
-      // Personal info step - save personal info
       await handleSavePersonalInfo()
     } else if (currentStep === 3) {
-      // Currency + Balance step - save balance (REQUIRED)
       await handleSaveCurrencyBalance()
     } else if (currentStep === 5) {
-      // Fixed items step - save fixed items
       await handleSaveFixed()
     } else {
       goNext()
@@ -1379,6 +1572,9 @@ export default function OnboardingPage() {
   const showBackButton = currentStep > 0 && currentStep < TOTAL_STEPS - 1
   const showNextButton = currentStep > 0 && currentStep < TOTAL_STEPS - 1
 
+  // ====================================================================
+  //  MAIN RENDER
+  // ====================================================================
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
@@ -1388,13 +1584,19 @@ export default function OnboardingPage() {
       {/* Background decoration */}
       <div className="onboarding-bg-decoration" />
 
-      {/* Progress bar */}
+      {/* ---- Progress bar (steps 1-5 only) ---- */}
       {currentStep > 0 && currentStep < TOTAL_STEPS - 1 && (
-        <div className="sticky top-0 z-30 border-b backdrop-blur-md" style={{ borderColor: 'var(--border-primary)', backgroundColor: 'rgba(var(--bg-primary-rgb, 255, 255, 255), 0.85)' }}>
+        <div
+          className="sticky top-0 z-30 border-b backdrop-blur-md"
+          style={{
+            borderColor: 'var(--border-primary)',
+            backgroundColor: 'rgba(var(--bg-primary-rgb, 255, 255, 255), 0.85)',
+          }}
+        >
           <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 py-3">
-            {/* Step indicator text */}
+            {/* Step count text */}
             <span
-              className="shrink-0 text-xs font-medium"
+              className="shrink-0 text-xs font-medium tabular-nums"
               style={{ color: 'var(--text-tertiary)' }}
             >
               {t('onboarding.stepOf', { current: currentStep, total: TOTAL_STEPS - 2 })}
@@ -1410,11 +1612,11 @@ export default function OnboardingPage() {
                   }}
                   disabled={step > currentStep}
                   className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300',
+                    'flex h-9 w-9 items-center justify-center rounded-full transition-all duration-300',
                     step === currentStep
                       ? 'onboarding-dot-active scale-110'
                       : step < currentStep
-                        ? 'onboarding-dot-completed cursor-pointer hover:scale-105'
+                        ? 'onboarding-dot-completed cursor-pointer hover:scale-110'
                         : 'onboarding-dot-pending'
                   )}
                 >
@@ -1429,13 +1631,24 @@ export default function OnboardingPage() {
               ))}
             </div>
 
-            {/* Spacer for balance */}
+            {/* Balance spacer */}
             <span className="w-16 shrink-0" />
+          </div>
+
+          {/* Linear progress bar under dots */}
+          <div className="h-0.5 w-full" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+            <div
+              className="h-full transition-all duration-500 ease-out"
+              style={{
+                width: `${((currentStep) / (TOTAL_STEPS - 2)) * 100}%`,
+                backgroundColor: 'var(--color-brand-500)',
+              }}
+            />
           </div>
         </div>
       )}
 
-      {/* Main content */}
+      {/* ---- Main content ---- */}
       <div
         ref={stepRef}
         className="flex flex-1 items-center justify-center overflow-y-auto px-6 py-12"
@@ -1449,17 +1662,15 @@ export default function OnboardingPage() {
           )}
         >
           {/* Glassmorphism card */}
-          <div
-            className="onboarding-glass-card rounded-2xl p-8 sm:p-10"
-          >
-            {/* Error message */}
+          <div className="onboarding-glass-card rounded-2xl p-8 sm:p-10">
+            {/* Error banner */}
             {error && (
               <div
                 className="auth-error-animate mb-6 flex items-center gap-2.5 rounded-xl border px-4 py-3 text-sm"
                 style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.06)',
-                  borderColor: 'rgba(239, 68, 68, 0.15)',
-                  color: '#EF4444',
+                  backgroundColor: 'rgba(238, 93, 80, 0.06)',
+                  borderColor: 'rgba(238, 93, 80, 0.15)',
+                  color: 'var(--color-expense)',
                 }}
               >
                 <X className="h-4 w-4 shrink-0" />
@@ -1471,13 +1682,18 @@ export default function OnboardingPage() {
             {steps[currentStep]()}
           </div>
 
-          {/* Navigation buttons */}
+          {/* ---- Navigation buttons ---- */}
           {showNavigation && (
             <div className="mt-6 flex items-center justify-between px-2">
               {showBackButton ? (
                 <button
                   onClick={goPrev}
-                  className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 hover:bg-[var(--bg-hover)]"
+                  className={cn(
+                    'flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium',
+                    'transition-all duration-200',
+                    'hover:bg-[var(--bg-hover)]',
+                    'active:scale-[0.98]',
+                  )}
                   style={{ color: 'var(--text-secondary)' }}
                 >
                   {isRtl ? (
@@ -1496,21 +1712,22 @@ export default function OnboardingPage() {
                   onClick={handleNext}
                   disabled={isSaving}
                   className={cn(
-                    'flex items-center gap-2 rounded-xl px-6 py-2.5',
+                    'group flex items-center gap-2 rounded-xl px-7 py-3',
                     'text-sm font-semibold text-white',
                     'onboarding-btn-gradient',
                     'transition-all duration-200',
-                    'hover:opacity-90',
+                    'hover:shadow-lg hover:scale-[1.02]',
                     'active:scale-[0.98]',
                     'disabled:cursor-not-allowed disabled:opacity-60'
                   )}
+                  style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
                 >
                   {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                   {t('common.next')}
                   {isRtl ? (
-                    <ArrowLeft className="h-4 w-4" />
+                    <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
                   ) : (
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                   )}
                 </button>
               )}
@@ -1522,13 +1739,26 @@ export default function OnboardingPage() {
   )
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+// ===== SUMMARY ROW COMPONENT =====
+function SummaryRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+}) {
   return (
-    <div className="flex items-center justify-between">
+    <div
+      className="flex items-center justify-between py-3"
+      style={{ borderColor: 'var(--border-primary)' }}
+    >
       <span
-        className="text-xs"
+        className="flex items-center gap-2 text-xs"
         style={{ color: 'var(--text-tertiary)' }}
       >
+        {icon}
         {label}
       </span>
       <span

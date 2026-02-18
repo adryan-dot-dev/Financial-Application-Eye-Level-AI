@@ -13,6 +13,9 @@ from app.db.models import (  # noqa: F401
     User, Settings, Category, Transaction,
     FixedIncomeExpense, Installment, Loan,
     BankBalance, ExpectedIncome, Alert,
+    Subscription, Backup, Organization,
+    OrganizationMember, AuditLog, OrganizationSettings,
+    ForecastScenario,
 )
 
 config = context.config

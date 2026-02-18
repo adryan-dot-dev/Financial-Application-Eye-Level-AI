@@ -28,7 +28,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
       <div className="flex items-center gap-2.5">
         <img
-          src="/logo.jpeg"
+          src="/logo.webp"
           alt={t('app.company')}
           className="h-7 w-auto rounded-lg"
         />

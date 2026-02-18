@@ -42,6 +42,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "ip": request.client.host if request.client else "unknown",
             }
             
+            # M-4: Add request ID to response headers for debugging
+            response.headers["X-Request-ID"] = request_id
+
             if response.status_code >= 500:
                 logger.error(
                     f"{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)",

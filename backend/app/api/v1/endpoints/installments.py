@@ -8,11 +8,11 @@ from typing import List, Optional
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_data_context, get_base_currency, DataContext
 from app.api.v1.schemas.installment import (
     InstallmentCreate,
     InstallmentDetailResponse,
@@ -22,7 +22,14 @@ from app.api.v1.schemas.installment import (
 )
 from app.core.exceptions import NotFoundException
 from app.db.models import Category, Installment, Transaction, User
+from app.db.models.credit_card import CreditCard
 from app.db.session import get_db
+from app.services.audit_service import log_action
+from app.services.exchange_rate_service import prepare_currency_fields
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/installments", tags=["Installments"])
 
@@ -43,7 +50,7 @@ def _enrich_installment(inst: Installment, today: Optional[date] = None) -> Inst
     """Compute all derived/status fields for an installment and return the response model.
 
     Computed fields:
-    - status: "completed" | "pending" | "overdue" | "active"
+    - status: "completed" | "pending" | "overdue" | "due" | "active"
     - expected_payments_by_now: how many payments should have been made by today
     - is_on_track: payments_completed >= expected_payments_by_now
     - next_payment_date: date of next due payment (None if completed)
@@ -70,20 +77,7 @@ def _enrich_installment(inst: Installment, today: Optional[date] = None) -> Inst
         months_elapsed = 0
     expected_payments_by_now = max(0, min(months_elapsed, num_payments))
 
-    # --- status ---
-    if completed >= num_payments:
-        status = "completed"
-    elif today < start:
-        status = "pending"
-    elif completed < expected_payments_by_now:
-        status = "overdue"
-    else:
-        status = "active"
-
-    # --- is_on_track ---
-    is_on_track = completed >= expected_payments_by_now
-
-    # --- next_payment_date ---
+    # --- next_payment_date (computed before status so we can check "due") ---
     next_payment_num = completed + 1
     if next_payment_num > num_payments:
         next_payment_date = None
@@ -92,15 +86,44 @@ def _enrich_installment(inst: Installment, today: Optional[date] = None) -> Inst
         next_dt = start + relativedelta(months=next_payment_num - 1)
         next_payment_date = _safe_day(next_dt.year, next_dt.month, dom)
 
+    # --- status ---
+    if completed >= num_payments:
+        status = "completed"
+    elif today < start:
+        status = "pending"
+    elif completed < expected_payments_by_now:
+        status = "overdue"
+    elif next_payment_date is not None and next_payment_date == today:
+        status = "due"
+    else:
+        status = "active"
+
+    # --- is_on_track ---
+    is_on_track = completed >= expected_payments_by_now
+
     # --- end_date ---
     end_dt = start + relativedelta(months=num_payments - 1)
     end_date = _safe_day(end_dt.year, end_dt.month, dom)
 
     # --- remaining_amount ---
-    remaining_amount = max(
-        Decimal("0"),
-        inst.total_amount - (Decimal(str(completed)) * inst.monthly_amount),
-    )
+    # Use the same rounding-aware logic as the payment schedule: the last
+    # payment absorbs the rounding difference, so we cannot simply multiply
+    # monthly_amount * remaining_count.
+    remaining_count = num_payments - completed
+    if remaining_count <= 0:
+        remaining_amount = Decimal("0")
+    elif remaining_count == 1:
+        # Only one payment left -- it absorbs the rounding remainder
+        remaining_amount = max(
+            Decimal("0"),
+            inst.total_amount - (inst.monthly_amount * (num_payments - 1)),
+        )
+    else:
+        # More than one payment left: (remaining_count - 1) regular payments
+        # plus one last payment that absorbs the rounding difference
+        regular_remaining = inst.monthly_amount * (remaining_count - 1)
+        last_payment = inst.total_amount - (inst.monthly_amount * (num_payments - 1))
+        remaining_amount = max(Decimal("0"), regular_remaining + last_payment)
 
     # --- progress_percentage ---
     progress_percentage = round((completed / num_payments) * 100, 1) if num_payments > 0 else 0.0
@@ -129,8 +152,10 @@ def _build_schedule(inst: Installment) -> List[PaymentScheduleItem]:
 
         if i <= inst.payments_completed:
             status = "completed"
-        elif payment_date <= today:
-            status = "upcoming"
+        elif payment_date < today:
+            status = "overdue"
+        elif payment_date.year == today.year and payment_date.month == today.month:
+            status = "due"
         else:
             status = "future"
 
@@ -152,14 +177,20 @@ def _build_schedule(inst: Installment) -> List[PaymentScheduleItem]:
 
 @router.get("", response_model=List[InstallmentResponse])
 async def list_installments(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
+    query = (
         select(Installment)
-        .where(Installment.user_id == current_user.id)
+        .where(ctx.ownership_filter(Installment))
         .order_by(Installment.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
+    result = await db.execute(query)
     installments = result.scalars().all()
     today = date.today()
     return [_enrich_installment(inst, today) for inst in installments]
@@ -169,23 +200,71 @@ async def list_installments(
 async def create_installment(
     data: InstallmentCreate,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
+    base_currency: str = Depends(get_base_currency),
     db: AsyncSession = Depends(get_db),
 ):
     if data.category_id:
-        cat = await db.get(Category, data.category_id)
-        if not cat or cat.user_id != current_user.id:
+        cat_result = await db.execute(
+            select(Category).where(Category.id == data.category_id, ctx.ownership_filter(Category))
+        )
+        cat = cat_result.scalar_one_or_none()
+        if not cat:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
 
-    monthly_amount = _calc_monthly_amount(data.total_amount, data.number_of_payments)
+    if data.credit_card_id:
+        cc_result = await db.execute(
+            select(CreditCard).where(CreditCard.id == data.credit_card_id, ctx.ownership_filter(CreditCard))
+        )
+        if not cc_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Credit card not found or does not belong to you")
+
+    data_dict = data.model_dump()
+    first_payment_made = data_dict.pop("first_payment_made", False)
+
+    conv = await prepare_currency_fields(data.total_amount, data.currency, base_currency)
+    converted_total = conv["converted_amount"]
+    data_dict["total_amount"] = converted_total
+    data_dict["currency"] = base_currency
+    data_dict["original_amount"] = conv["original_amount"]
+    data_dict["original_currency"] = conv["original_currency"]
+    data_dict["exchange_rate"] = conv["exchange_rate"]
+
+    monthly_amount = _calc_monthly_amount(converted_total, data.number_of_payments)
+    payments_completed = 1 if first_payment_made else 0
     inst = Installment(
-        user_id=current_user.id,
+        **ctx.create_fields(),
         monthly_amount=monthly_amount,
-        payments_completed=0,
-        **data.model_dump(),
+        payments_completed=payments_completed,
+        **data_dict,
     )
     db.add(inst)
+
+    # If first payment already made, create a transaction for it
+    if first_payment_made:
+        await db.flush()  # Ensure inst.id is generated before referencing it
+        payment_date = inst.start_date
+        payment_date = _safe_day(payment_date.year, payment_date.month, data.day_of_month)
+
+        tx = Transaction(
+            **ctx.create_fields(),
+            amount=monthly_amount,
+            currency=base_currency,
+            type=data.type,
+            category_id=data.category_id,
+            description=f"Installment: {data.name} (1/{data.number_of_payments})",
+            date=payment_date,
+            entry_pattern="installment",
+            is_recurring=True,
+            installment_id=inst.id,
+            installment_number=1,
+        )
+        db.add(tx)
+
+    await log_action(db, user_id=current_user.id, action="create", entity_type="installment", entity_id=str(inst.id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(inst)
+    logger.info("User %s created installment %s", current_user.id, inst.id)
     return _enrich_installment(inst)
 
 
@@ -193,12 +272,13 @@ async def create_installment(
 async def get_installment(
     installment_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Installment).where(
             Installment.id == installment_id,
-            Installment.user_id == current_user.id,
+            ctx.ownership_filter(Installment),
         )
     )
     inst = result.scalar_one_or_none()
@@ -217,12 +297,13 @@ async def update_installment(
     installment_id: UUID,
     data: InstallmentUpdate,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Installment).where(
             Installment.id == installment_id,
-            Installment.user_id == current_user.id,
+            ctx.ownership_filter(Installment),
         )
     )
     inst = result.scalar_one_or_none()
@@ -231,14 +312,33 @@ async def update_installment(
 
     update_data = data.model_dump(exclude_unset=True)
     if "category_id" in update_data and update_data["category_id"]:
-        cat = await db.get(Category, update_data["category_id"])
-        if not cat or cat.user_id != current_user.id:
+        cat_result = await db.execute(
+            select(Category).where(Category.id == update_data["category_id"], ctx.ownership_filter(Category))
+        )
+        cat = cat_result.scalar_one_or_none()
+        if not cat:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+
+    if update_data.get("credit_card_id"):
+        cc_result = await db.execute(
+            select(CreditCard).where(CreditCard.id == update_data["credit_card_id"], ctx.ownership_filter(CreditCard))
+        )
+        if not cc_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Credit card not found or does not belong to you")
 
     for key, value in update_data.items():
         setattr(inst, key, value)
+
+    # Recalculate monthly_amount when total_amount or number_of_payments changed
+    if "total_amount" in update_data or "number_of_payments" in update_data:
+        inst.monthly_amount = _calc_monthly_amount(
+            inst.total_amount, inst.number_of_payments,
+        )
+
+    await log_action(db, user_id=current_user.id, action="update", entity_type="installment", entity_id=str(installment_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(inst)
+    logger.info("User %s updated installment %s", current_user.id, inst.id)
     return _enrich_installment(inst)
 
 
@@ -246,19 +346,22 @@ async def update_installment(
 async def delete_installment(
     installment_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Installment).where(
             Installment.id == installment_id,
-            Installment.user_id == current_user.id,
+            ctx.ownership_filter(Installment),
         )
     )
     inst = result.scalar_one_or_none()
     if not inst:
         raise NotFoundException("Installment not found")
     await db.delete(inst)
+    await log_action(db, user_id=current_user.id, action="delete", entity_type="installment", entity_id=str(installment_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
+    logger.info("User %s deleted installment %s", current_user.id, installment_id)
     return {"message": "Deleted successfully"}
 
 
@@ -266,12 +369,13 @@ async def delete_installment(
 async def mark_installment_paid(
     installment_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Installment).where(
             Installment.id == installment_id,
-            Installment.user_id == current_user.id,
+            ctx.ownership_filter(Installment),
         ).with_for_update()
     )
     inst = result.scalar_one_or_none()
@@ -297,7 +401,7 @@ async def mark_installment_paid(
     payment_date = _safe_day(payment_date.year, payment_date.month, inst.day_of_month)
 
     tx = Transaction(
-        user_id=current_user.id,
+        **ctx.create_fields(),
         amount=actual_amount,
         currency=inst.currency,
         type=inst.type,
@@ -311,8 +415,10 @@ async def mark_installment_paid(
     )
     db.add(tx)
 
+    await log_action(db, user_id=current_user.id, action="mark_paid", entity_type="installment", entity_id=str(installment_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(inst)
+    logger.info("User %s marked installment %s as paid", current_user.id, inst.id)
     return _enrich_installment(inst)
 
 
@@ -320,12 +426,13 @@ async def mark_installment_paid(
 async def reverse_installment_payment(
     installment_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Installment).where(
             Installment.id == installment_id,
-            Installment.user_id == current_user.id,
+            ctx.ownership_filter(Installment),
         ).with_for_update()
     )
     inst = result.scalar_one_or_none()
@@ -336,8 +443,10 @@ async def reverse_installment_payment(
         raise HTTPException(status_code=400, detail="No payments to reverse")
 
     inst.payments_completed -= 1
+    await log_action(db, user_id=current_user.id, action="reverse_payment", entity_type="installment", entity_id=str(installment_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(inst)
+    logger.info("User %s reversed payment on installment %s", current_user.id, inst.id)
     return _enrich_installment(inst)
 
 
@@ -345,12 +454,13 @@ async def reverse_installment_payment(
 async def get_installment_payments(
     installment_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Installment).where(
             Installment.id == installment_id,
-            Installment.user_id == current_user.id,
+            ctx.ownership_filter(Installment),
         )
     )
     inst = result.scalar_one_or_none()

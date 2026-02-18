@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_data_context, DataContext
 from app.api.v1.schemas.alert import (
     AlertListResponse,
     AlertResponse,
@@ -19,6 +19,7 @@ from app.api.v1.schemas.alert import (
 from app.core.exceptions import NotFoundException
 from app.db.models import Alert, User
 from app.db.session import get_db
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/alerts", tags=["Alerts"])
 @router.get("", response_model=AlertListResponse)
 async def list_alerts(
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
@@ -34,7 +36,7 @@ async def list_alerts(
     await db.execute(
         update(Alert)
         .where(
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
             Alert.is_dismissed == False,
             Alert.expires_at != None,
             Alert.expires_at <= now,
@@ -44,13 +46,14 @@ async def list_alerts(
 
     result = await db.execute(
         select(Alert).where(
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
             Alert.is_dismissed == False,
             or_(
                 Alert.snoozed_until == None,
                 Alert.snoozed_until <= now,
             ),
         ).order_by(Alert.created_at.desc())
+        .limit(100)
     )
     items = result.scalars().all()
 
@@ -61,12 +64,13 @@ async def list_alerts(
 @router.get("/unread", response_model=AlertUnreadCount)
 async def get_unread_count(
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
     result = await db.execute(
         select(func.count(Alert.id)).where(
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
             Alert.is_read == False,
             Alert.is_dismissed == False,
             or_(
@@ -82,12 +86,13 @@ async def get_unread_count(
 @router.put("/read-all", response_model=MarkAllReadResponse)
 async def mark_all_as_read(
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         update(Alert)
         .where(
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
             Alert.is_read == False,
             Alert.is_dismissed == False,
         )
@@ -95,6 +100,7 @@ async def mark_all_as_read(
         .returning(Alert.id)
     )
     updated_ids = result.scalars().all()
+    await log_action(db, user_id=current_user.id, action="read_all", entity_type="alert", details=f"marked {len(updated_ids)} alerts as read", user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     return MarkAllReadResponse(marked_count=len(updated_ids))
 
@@ -103,18 +109,20 @@ async def mark_all_as_read(
 async def mark_as_read(
     alert_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Alert).where(
             Alert.id == alert_id,
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
         )
     )
     alert = result.scalar_one_or_none()
     if not alert:
         raise NotFoundException("Alert not found")
     alert.is_read = True
+    await log_action(db, user_id=current_user.id, action="read", entity_type="alert", entity_id=str(alert_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(alert)
     return alert
@@ -124,18 +132,20 @@ async def mark_as_read(
 async def mark_as_unread(
     alert_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Alert).where(
             Alert.id == alert_id,
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
         )
     )
     alert = result.scalar_one_or_none()
     if not alert:
         raise NotFoundException("Alert not found")
     alert.is_read = False
+    await log_action(db, user_id=current_user.id, action="unread", entity_type="alert", entity_id=str(alert_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(alert)
     return alert
@@ -146,18 +156,20 @@ async def snooze_alert(
     alert_id: UUID,
     body: SnoozeRequest,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Alert).where(
             Alert.id == alert_id,
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
         )
     )
     alert = result.scalar_one_or_none()
     if not alert:
         raise NotFoundException("Alert not found")
     alert.snoozed_until = body.snooze_until
+    await log_action(db, user_id=current_user.id, action="snooze", entity_type="alert", entity_id=str(alert_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(alert)
     return alert
@@ -167,18 +179,20 @@ async def snooze_alert(
 async def dismiss_alert(
     alert_id: UUID,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Alert).where(
             Alert.id == alert_id,
-            Alert.user_id == current_user.id,
+            ctx.ownership_filter(Alert),
         )
     )
     alert = result.scalar_one_or_none()
     if not alert:
         raise NotFoundException("Alert not found")
     alert.is_dismissed = True
+    await log_action(db, user_id=current_user.id, action="dismiss", entity_type="alert", entity_id=str(alert_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(alert)
     return alert

@@ -11,10 +11,20 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import DataContext
 from app.db.models import Alert, Installment, Loan, Settings, Transaction
 from app.services.forecast_service import compute_monthly_forecast
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_ctx(user_id: Optional[UUID] = None, ctx: Optional[DataContext] = None) -> DataContext:
+    """Backward-compat helper: build a personal DataContext from user_id if ctx is missing."""
+    if ctx is not None:
+        return ctx
+    if user_id is not None:
+        return DataContext(user_id=user_id, organization_id=None, is_org_context=False)
+    raise ValueError("Either user_id or ctx must be provided")
 
 HEBREW_MONTHS = {
     1: "ינואר", 2: "פברואר", 3: "מרץ", 4: "אפריל",
@@ -76,25 +86,25 @@ def _build_negative_cashflow_alert(
 
     if closing < -warning_threshold:
         severity = "critical"
-        title = f"\U0001f6a8 יתרה שלילית צפויה - {hm} {year}"
+        title = f"יתרה שלילית צפויה - {hm} {year}"
         message = (
-            f"\u26a0\ufe0f היתרה הצפויה בסוף {hm} {year} היא {_fmt(closing)} \u20aa (מינוס!).\n\n"
-            f"\U0001f4ca פירוט:\n"
+            f"היתרה הצפויה בסוף {hm} {year} היא {_fmt(closing)} \u20aa (מינוס!).\n\n"
+            f"פירוט:\n"
             f"\u2022 הכנסות צפויות: {_fmt(income)} \u20aa\n"
             f"\u2022 הוצאות צפויות: {_fmt(expenses)} \u20aa\n"
             f"\u2022 הפרש: {_fmt(net)} \u20aa\n\n"
-            f"\U0001f4a1 מומלץ לבדוק הוצאות גדולות או לתכנן הכנסה נוספת."
+            f"מומלץ לבדוק הוצאות גדולות או לתכנן הכנסה נוספת."
         )
     else:
         severity = "warning"
-        title = f"\u26a0\ufe0f יתרה שלילית קלה צפויה - {hm} {year}"
+        title = f"יתרה שלילית קלה צפויה - {hm} {year}"
         message = (
             f"היתרה הצפויה בסוף {hm} {year} היא {_fmt(closing)} \u20aa.\n\n"
-            f"\U0001f4ca פירוט:\n"
+            f"פירוט:\n"
             f"\u2022 הכנסות צפויות: {_fmt(income)} \u20aa\n"
             f"\u2022 הוצאות צפויות: {_fmt(expenses)} \u20aa\n"
             f"\u2022 הפרש: {_fmt(net)} \u20aa\n\n"
-            f"\U0001f4a1 שימו לב - הפער קטן, ייתכן שניתן לסגור אותו."
+            f"שימו לב - הפער קטן, ייתכן שניתן לסגור אותו."
         )
 
     return severity, title, message
@@ -110,14 +120,14 @@ def _build_high_expenses_alert(
     hm = _hebrew_month(month_date)
     year = month_date.year
 
-    title = f"\U0001f4b8 חודש הוצאות גבוהות - {hm} {year}"
+    title = f"חודש הוצאות גבוהות - {hm} {year}"
     message = (
-        f"\u26a0\ufe0f בחודש {hm} {year} צפויות הוצאות גבוהות מהרגיל.\n\n"
-        f"\U0001f4ca פירוט:\n"
+        f"בחודש {hm} {year} צפויות הוצאות גבוהות מהרגיל.\n\n"
+        f"פירוט:\n"
         f"\u2022 הכנסות: {_fmt(income)} \u20aa\n"
         f"\u2022 הוצאות: {_fmt(expenses)} \u20aa\n"
         f"\u2022 הפרש נטו: {_fmt(net)} \u20aa\n\n"
-        f"\U0001f4a1 כדאי לבחון אילו הוצאות ניתן לדחות או לצמצם."
+        f"כדאי לבחון אילו הוצאות ניתן לדחות או לצמצם."
     )
 
     return title, message
@@ -133,13 +143,13 @@ def _build_approaching_negative_alert(
     hm = _hebrew_month(month_date)
     year = month_date.year
 
-    title = f"\u2139\ufe0f יתרה נמוכה צפויה - {hm} {year}"
+    title = f"יתרה נמוכה צפויה - {hm} {year}"
     message = (
         f"היתרה הצפויה בסוף {hm} {year} היא {_fmt(closing)} \u20aa בלבד.\n\n"
-        f"\U0001f4ca פירוט:\n"
+        f"פירוט:\n"
         f"\u2022 הכנסות: {_fmt(income)} \u20aa\n"
         f"\u2022 הוצאות: {_fmt(expenses)} \u20aa\n\n"
-        f"\U0001f4a1 מומלץ לעקוב מקרוב ולהיות ערוכים למקרה של הוצאה לא צפויה."
+        f"מומלץ לעקוב מקרוב ולהיות ערוכים למקרה של הוצאה לא צפויה."
     )
 
     return title, message
@@ -158,13 +168,13 @@ def _build_high_single_expense_alert(
     hm = _hebrew_month(tx_date)
     desc = tx_description or "ללא תיאור"
 
-    title = f"\U0001f4b8 הוצאה גדולה - {_fmt(tx_amount)} \u20aa"
+    title = f"הוצאה גדולה - {_fmt(tx_amount)} \u20aa"
     message = (
-        f"\u26a0\ufe0f נרשמה הוצאה חד-פעמית גבוהה:\n\n"
+        f"נרשמה הוצאה חד-פעמית גבוהה:\n\n"
         f"\u2022 סכום: {_fmt(tx_amount)} \u20aa\n"
         f"\u2022 תיאור: {desc}\n"
         f"\u2022 תאריך: {tx_date.strftime('%d/%m/%Y')}\n\n"
-        f"\U0001f4a1 כדאי לוודא שהוצאה זו מתוכננת ולעדכן את התקציב בהתאם."
+        f"כדאי לוודא שהוצאה זו מתוכננת ולעדכן את התקציב בהתאם."
     )
 
     return title, message
@@ -179,13 +189,13 @@ def _build_high_income_alert(
     hm = _hebrew_month(month_date)
     year = month_date.year
 
-    title = f"\U0001f4b0 הכנסה חריגה לטובה - {hm} {year}"
+    title = f"הכנסה חריגה לטובה - {hm} {year}"
     message = (
-        f"\u2139\ufe0f ההכנסות בחודש {hm} {year} גבוהות מהממוצע.\n\n"
-        f"\U0001f4ca פירוט:\n"
+        f"ההכנסות בחודש {hm} {year} גבוהות מהממוצע.\n\n"
+        f"פירוט:\n"
         f"\u2022 הכנסות החודש: {_fmt(current_month_income)} \u20aa\n"
         f"\u2022 ממוצע 3 חודשים אחרונים: {_fmt(avg_income)} \u20aa\n\n"
-        f"\U0001f4a1 הזדמנות מצוינת לחסוך או להקדים תשלומים."
+        f"הזדמנות מצוינת לחסוך או להקדים תשלומים."
     )
 
     return title, message
@@ -200,14 +210,14 @@ def _build_payment_overdue_alert(
     """Build title and message for an overdue payment alert."""
     type_label = "הלוואה" if entity_type == "loan" else "תשלום"
 
-    title = f"\U0001f6a8 תשלום באיחור - {entity_name}"
+    title = f"תשלום באיחור - {entity_name}"
     message = (
-        f"\U0001f6a8 {type_label} שהיה אמור להתבצע לא שולם!\n\n"
-        f"\U0001f4c5 פירוט:\n"
+        f"{type_label} שהיה אמור להתבצע לא שולם!\n\n"
+        f"פירוט:\n"
         f"\u2022 שם: {entity_name}\n"
         f"\u2022 סכום: {_fmt(amount)} \u20aa\n"
         f"\u2022 תאריך יעד: {payment_date.strftime('%d/%m/%Y')}\n\n"
-        f"\u26a0\ufe0f יש לטפל בתשלום זה בהקדם האפשרי."
+        f"יש לטפל בתשלום זה בהקדם האפשרי."
     )
 
     return title, message
@@ -222,14 +232,14 @@ def _build_upcoming_payment_alert(
     """Build title and message for an upcoming payment alert."""
     type_label = "הלוואה" if entity_type == "loan" else "תשלום"
 
-    title = f"\U0001f4c5 תשלום קרוב - {entity_name}"
+    title = f"תשלום קרוב - {entity_name}"
     message = (
-        f"\u2139\ufe0f {type_label} מתקרב לתאריך התשלום.\n\n"
-        f"\U0001f4c5 פירוט:\n"
+        f"{type_label} מתקרב לתאריך התשלום.\n\n"
+        f"פירוט:\n"
         f"\u2022 שם: {entity_name}\n"
         f"\u2022 סכום: {_fmt(amount)} \u20aa\n"
         f"\u2022 תאריך תשלום: {payment_date.strftime('%d/%m/%Y')}\n\n"
-        f"\U0001f4a1 ודאו שיש מספיק יתרה בחשבון."
+        f"ודאו שיש מספיק יתרה בחשבון."
     )
 
     return title, message
@@ -241,13 +251,13 @@ def _build_loan_ending_soon_alert(
     monthly_payment: Decimal,
 ) -> Tuple[str, str]:
     """Build title and message for loan ending soon alert."""
-    title = f"\U0001f3e6 הלוואה מסתיימת בקרוב - {loan_name}"
+    title = f"הלוואה מסתיימת בקרוב - {loan_name}"
     message = (
-        f"\u2139\ufe0f ההלוואה \"{loan_name}\" מתקרבת לסיום.\n\n"
-        f"\U0001f4ca פירוט:\n"
+        f"ההלוואה \"{loan_name}\" מתקרבת לסיום.\n\n"
+        f"פירוט:\n"
         f"\u2022 תשלומים שנותרו: {remaining_payments}\n"
         f"\u2022 תשלום חודשי: {_fmt(monthly_payment)} \u20aa\n\n"
-        f"\U0001f4a1 בקרוב תתפנה תקציב חודשי נוסף!"
+        f"בקרוב תתפנה תקציב חודשי נוסף!"
     )
 
     return title, message
@@ -259,13 +269,13 @@ def _build_installment_ending_soon_alert(
     monthly_amount: Decimal,
 ) -> Tuple[str, str]:
     """Build title and message for installment ending soon alert."""
-    title = f"\U0001f4c5 תשלומים מסתיימים בקרוב - {inst_name}"
+    title = f"תשלומים מסתיימים בקרוב - {inst_name}"
     message = (
-        f"\u2139\ufe0f פריסת התשלומים \"{inst_name}\" מתקרבת לסיום.\n\n"
-        f"\U0001f4ca פירוט:\n"
+        f"פריסת התשלומים \"{inst_name}\" מתקרבת לסיום.\n\n"
+        f"פירוט:\n"
         f"\u2022 תשלומים שנותרו: {remaining_payments}\n"
         f"\u2022 תשלום חודשי: {_fmt(monthly_amount)} \u20aa\n\n"
-        f"\U0001f4a1 בקרוב תתפנה הוצאה חודשית קבועה."
+        f"בקרוב תתפנה הוצאה חודשית קבועה."
     )
 
     return title, message
@@ -279,8 +289,10 @@ async def _generate_high_single_expense_alerts(
     db: AsyncSession,
     user_id: UUID,
     existing_map: Dict[str, Alert],
+    ctx: Optional[DataContext] = None,
 ) -> List[Alert]:
     """Generate alerts for single transactions > 5,000 ILS in the current month."""
+    ctx = _ensure_ctx(user_id=user_id, ctx=ctx)
     today = date.today()
     month_start = today.replace(day=1)
     last_day = calendar.monthrange(today.year, today.month)[1]
@@ -288,7 +300,7 @@ async def _generate_high_single_expense_alerts(
 
     result = await db.execute(
         select(Transaction).where(
-            Transaction.user_id == user_id,
+            ctx.ownership_filter(Transaction),
             Transaction.type == "expense",
             Transaction.amount > Decimal("5000"),
             Transaction.date >= month_start,
@@ -313,6 +325,7 @@ async def _generate_high_single_expense_alerts(
         else:
             alert = Alert(
                 user_id=user_id,
+                organization_id=ctx.organization_id,
                 alert_type="high_single_expense",
                 severity="warning",
                 title=title,
@@ -334,8 +347,10 @@ async def _generate_high_income_alert(
     db: AsyncSession,
     user_id: UUID,
     existing_map: Dict[str, Alert],
+    ctx: Optional[DataContext] = None,
 ) -> List[Alert]:
     """Generate alert if current month income is unusually high vs 3-month average."""
+    ctx = _ensure_ctx(user_id=user_id, ctx=ctx)
     today = date.today()
     current_month_start = today.replace(day=1)
     last_day = calendar.monthrange(today.year, today.month)[1]
@@ -344,7 +359,7 @@ async def _generate_high_income_alert(
     # Calculate income for current month
     result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0"))).where(
-            Transaction.user_id == user_id,
+            ctx.ownership_filter(Transaction),
             Transaction.type == "income",
             Transaction.date >= current_month_start,
             Transaction.date <= current_month_end,
@@ -361,7 +376,7 @@ async def _generate_high_income_alert(
 
     result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0"))).where(
-            Transaction.user_id == user_id,
+            ctx.ownership_filter(Transaction),
             Transaction.type == "income",
             Transaction.date >= three_months_ago_start,
             Transaction.date <= prev_month_end,
@@ -387,6 +402,7 @@ async def _generate_high_income_alert(
     else:
         alert = Alert(
             user_id=user_id,
+            organization_id=ctx.organization_id,
             alert_type="high_income",
             severity="info",
             title=title,
@@ -407,15 +423,17 @@ async def _generate_payment_overdue_alerts(
     db: AsyncSession,
     user_id: UUID,
     existing_map: Dict[str, Alert],
+    ctx: Optional[DataContext] = None,
 ) -> List[Alert]:
     """Generate alerts for installment/loan payments that are overdue."""
+    ctx = _ensure_ctx(user_id=user_id, ctx=ctx)
     today = date.today()
     alerts: List[Alert] = []
 
     # Check installments for overdue payments
     result = await db.execute(
         select(Installment).where(
-            Installment.user_id == user_id,
+            ctx.ownership_filter(Installment),
         )
     )
     installments = result.scalars().all()
@@ -447,6 +465,7 @@ async def _generate_payment_overdue_alerts(
             else:
                 alert = Alert(
                     user_id=user_id,
+                    organization_id=ctx.organization_id,
                     alert_type="payment_overdue",
                     severity="critical",
                     title=title,
@@ -464,7 +483,7 @@ async def _generate_payment_overdue_alerts(
     # Check loans for overdue payments
     result = await db.execute(
         select(Loan).where(
-            Loan.user_id == user_id,
+            ctx.ownership_filter(Loan),
             Loan.status == "active",
         )
     )
@@ -495,6 +514,7 @@ async def _generate_payment_overdue_alerts(
             else:
                 alert = Alert(
                     user_id=user_id,
+                    organization_id=ctx.organization_id,
                     alert_type="payment_overdue",
                     severity="critical",
                     title=title,
@@ -516,8 +536,10 @@ async def _generate_upcoming_payment_alerts(
     db: AsyncSession,
     user_id: UUID,
     existing_map: Dict[str, Alert],
+    ctx: Optional[DataContext] = None,
 ) -> List[Alert]:
     """Generate alerts for payments due within the next 3 days."""
+    ctx = _ensure_ctx(user_id=user_id, ctx=ctx)
     today = date.today()
     three_days_ahead = today + timedelta(days=3)
     alerts: List[Alert] = []
@@ -525,7 +547,7 @@ async def _generate_upcoming_payment_alerts(
     # Check installments
     result = await db.execute(
         select(Installment).where(
-            Installment.user_id == user_id,
+            ctx.ownership_filter(Installment),
         )
     )
     installments = result.scalars().all()
@@ -555,6 +577,7 @@ async def _generate_upcoming_payment_alerts(
             else:
                 alert = Alert(
                     user_id=user_id,
+                    organization_id=ctx.organization_id,
                     alert_type="upcoming_payment",
                     severity="info",
                     title=title,
@@ -572,7 +595,7 @@ async def _generate_upcoming_payment_alerts(
     # Check loans
     result = await db.execute(
         select(Loan).where(
-            Loan.user_id == user_id,
+            ctx.ownership_filter(Loan),
             Loan.status == "active",
         )
     )
@@ -603,6 +626,7 @@ async def _generate_upcoming_payment_alerts(
             else:
                 alert = Alert(
                     user_id=user_id,
+                    organization_id=ctx.organization_id,
                     alert_type="upcoming_payment",
                     severity="info",
                     title=title,
@@ -624,11 +648,13 @@ async def _generate_loan_ending_soon_alerts(
     db: AsyncSession,
     user_id: UUID,
     existing_map: Dict[str, Alert],
+    ctx: Optional[DataContext] = None,
 ) -> List[Alert]:
     """Generate alerts for loans with < 3 payments remaining."""
+    ctx = _ensure_ctx(user_id=user_id, ctx=ctx)
     result = await db.execute(
         select(Loan).where(
-            Loan.user_id == user_id,
+            ctx.ownership_filter(Loan),
             Loan.status == "active",
         )
     )
@@ -652,6 +678,7 @@ async def _generate_loan_ending_soon_alerts(
             else:
                 alert = Alert(
                     user_id=user_id,
+                    organization_id=ctx.organization_id,
                     alert_type="loan_ending_soon",
                     severity="info",
                     title=title,
@@ -672,11 +699,13 @@ async def _generate_installment_ending_soon_alerts(
     db: AsyncSession,
     user_id: UUID,
     existing_map: Dict[str, Alert],
+    ctx: Optional[DataContext] = None,
 ) -> List[Alert]:
     """Generate alerts for installments with < 2 payments remaining."""
+    ctx = _ensure_ctx(user_id=user_id, ctx=ctx)
     result = await db.execute(
         select(Installment).where(
-            Installment.user_id == user_id,
+            ctx.ownership_filter(Installment),
         )
     )
     installments = result.scalars().all()
@@ -699,6 +728,7 @@ async def _generate_installment_ending_soon_alerts(
             else:
                 alert = Alert(
                     user_id=user_id,
+                    organization_id=ctx.organization_id,
                     alert_type="installment_ending_soon",
                     severity="info",
                     title=title,
@@ -751,7 +781,8 @@ def _entity_alert_key(alert: Alert) -> str:
 # ---------------------------------------------------------------------------
 
 async def generate_alerts(
-    db: AsyncSession, user_id: UUID, months: int = 6
+    db: AsyncSession, user_id: UUID, months: int = 6,
+    ctx: Optional[DataContext] = None,
 ) -> List[Alert]:
     """Analyze forecast and entity data to generate/update all alert types.
 
@@ -759,8 +790,10 @@ async def generate_alerts(
     alerts, preserving is_read/snoozed state instead of deleting and recreating.
     Gracefully degrades if forecast computation fails.
     """
+    ctx = _ensure_ctx(user_id=user_id, ctx=ctx)
 
     # ORANGE-7: Load user settings for configurable alert thresholds
+    # Settings are always personal (per-user), not org-scoped
     settings_result = await db.execute(
         select(Settings).where(Settings.user_id == user_id)
     )
@@ -772,7 +805,7 @@ async def generate_alerts(
     # 1. Forecast-based alerts (negative_cashflow, high_expenses, approaching_negative)
     # ------------------------------------------------------------------
     try:
-        forecast = await compute_monthly_forecast(db, user_id, months)
+        forecast = await compute_monthly_forecast(db, user_id, months, ctx=ctx)
     except Exception as e:
         logger.error("Failed to compute forecast for user %s: %s", user_id, e)
         forecast = None
@@ -780,7 +813,7 @@ async def generate_alerts(
     # Fetch existing non-dismissed forecast alerts keyed by (alert_type, related_month)
     existing_result = await db.execute(
         select(Alert).where(
-            Alert.user_id == user_id,
+            ctx.ownership_filter(Alert),
             Alert.alert_type.in_(FORECAST_ALERT_TYPES),
             Alert.is_dismissed == False,
         )
@@ -821,6 +854,7 @@ async def generate_alerts(
                 else:
                     alert = Alert(
                         user_id=user_id,
+                        organization_id=ctx.organization_id,
                         alert_type="negative_cashflow",
                         severity=severity,
                         title=title,
@@ -851,6 +885,7 @@ async def generate_alerts(
                 else:
                     alert = Alert(
                         user_id=user_id,
+                        organization_id=ctx.organization_id,
                         alert_type="approaching_negative",
                         severity="info",
                         title=title,
@@ -881,6 +916,7 @@ async def generate_alerts(
                 else:
                     alert = Alert(
                         user_id=user_id,
+                        organization_id=ctx.organization_id,
                         alert_type="high_expenses",
                         severity="info",
                         title=title,
@@ -906,7 +942,7 @@ async def generate_alerts(
     # Fetch existing non-dismissed entity alerts
     existing_entity_result = await db.execute(
         select(Alert).where(
-            Alert.user_id == user_id,
+            ctx.ownership_filter(Alert),
             Alert.alert_type.in_(ENTITY_ALERT_TYPES),
             Alert.is_dismissed == False,
         )
@@ -921,22 +957,22 @@ async def generate_alerts(
 
     # Generate all entity-based alerts
     new_entity_alerts.extend(
-        await _generate_high_single_expense_alerts(db, user_id, entity_map)
+        await _generate_high_single_expense_alerts(db, user_id, entity_map, ctx=ctx)
     )
     new_entity_alerts.extend(
-        await _generate_high_income_alert(db, user_id, entity_map)
+        await _generate_high_income_alert(db, user_id, entity_map, ctx=ctx)
     )
     new_entity_alerts.extend(
-        await _generate_payment_overdue_alerts(db, user_id, entity_map)
+        await _generate_payment_overdue_alerts(db, user_id, entity_map, ctx=ctx)
     )
     new_entity_alerts.extend(
-        await _generate_upcoming_payment_alerts(db, user_id, entity_map)
+        await _generate_upcoming_payment_alerts(db, user_id, entity_map, ctx=ctx)
     )
     new_entity_alerts.extend(
-        await _generate_loan_ending_soon_alerts(db, user_id, entity_map)
+        await _generate_loan_ending_soon_alerts(db, user_id, entity_map, ctx=ctx)
     )
     new_entity_alerts.extend(
-        await _generate_installment_ending_soon_alerts(db, user_id, entity_map)
+        await _generate_installment_ending_soon_alerts(db, user_id, entity_map, ctx=ctx)
     )
 
     # Build set of keys that are still relevant

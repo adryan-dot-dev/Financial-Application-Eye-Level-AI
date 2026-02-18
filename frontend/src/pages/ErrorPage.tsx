@@ -85,8 +85,8 @@ export default function ErrorPage({
         {/* Logo */}
         <div className="mb-8">
           <img
-            src="/logo.jpeg"
-            alt="Eye Level AI"
+            src="/logo.webp"
+            alt="Cashflow.ai"
             className="h-14 w-14 mx-auto rounded-xl object-cover"
             style={{ boxShadow: 'var(--shadow-md)' }}
           />
@@ -96,7 +96,7 @@ export default function ErrorPage({
         <h1
           className="text-8xl font-extrabold tracking-tight mb-2 leading-none select-none"
           style={{
-            background: '#3B82F6',
+            backgroundColor: 'var(--color-brand-500)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
@@ -125,11 +125,8 @@ export default function ErrorPage({
         <div className="flex items-center justify-center gap-3 mb-8">
           <button
             onClick={handleGoHome}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white cursor-pointer"
-            style={{
-              background: '#3B82F6',
-              border: 'none',
-            }}
+            className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm cursor-pointer"
+            style={{ border: 'none' }}
           >
             <Home className="h-4 w-4" />
             {t('error.goHome')}

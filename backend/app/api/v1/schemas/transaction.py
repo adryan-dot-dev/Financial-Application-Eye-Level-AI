@@ -39,6 +39,7 @@ class TransactionCreate(BaseModel):
     entry_pattern: str = Field(default="one_time", pattern="^(one_time|recurring|installment)$")
     notes: Optional[str] = Field(None, max_length=2000)
     tags: Optional[List[str]] = Field(None, max_length=20)
+    credit_card_id: Optional[UUID] = None
 
     @field_validator('amount')
     @classmethod
@@ -81,6 +82,7 @@ class TransactionUpdate(BaseModel):
     entry_pattern: Optional[str] = Field(None, pattern="^(one_time|recurring|installment)$")
     notes: Optional[str] = Field(None, max_length=2000)
     tags: Optional[List[str]] = Field(None, max_length=20)
+    credit_card_id: Optional[UUID] = None
 
     @field_validator('amount')
     @classmethod
@@ -119,6 +121,9 @@ class TransactionResponse(BaseModel):
     id: UUID
     amount: Decimal
     currency: str
+    original_amount: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
     type: str
     category_id: Optional[UUID]
     description: Optional[str]
@@ -131,6 +136,7 @@ class TransactionResponse(BaseModel):
     loan_id: Optional[UUID]
     notes: Optional[str]
     tags: Optional[List[str]]
+    credit_card_id: Optional[UUID] = None
 
     model_config = {"from_attributes": True}
 

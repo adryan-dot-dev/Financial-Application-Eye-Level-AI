@@ -25,6 +25,17 @@ class Installment(Base):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     monthly_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="ILS")
+    original_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(15, 2), nullable=True
+    )
+    original_currency: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(15, 6), nullable=True
+    )
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True
+    )
     number_of_payments: Mapped[int] = mapped_column(Integer, nullable=False)
     type: Mapped[str] = mapped_column(String(10), nullable=False)  # 'income' or 'expense'
     category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -33,6 +44,9 @@ class Installment(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     day_of_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-31
     payments_completed: Mapped[int] = mapped_column(Integer, default=0)
+    credit_card_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("credit_cards.id", ondelete="SET NULL"), nullable=True
+    )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
@@ -43,8 +57,10 @@ class Installment(Base):
 
     __table_args__ = (
         Index("ix_installments_user_id", "user_id"),
+        Index("ix_installments_org_id", "organization_id"),
     )
 
     # Relationships
     user = relationship("User", back_populates="installments")
     category = relationship("Category")
+    credit_card = relationship("CreditCard")

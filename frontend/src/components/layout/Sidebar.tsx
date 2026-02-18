@@ -21,11 +21,15 @@ import {
   ChevronRight,
   ChevronLeft,
   X,
+  Database,
+  RefreshCw,
+  Building2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { cn } from '@/lib/utils'
+import OrgSwitcher from '@/components/OrgSwitcher'
 
 interface NavItem {
   key: string
@@ -33,6 +37,7 @@ interface NavItem {
   path: string
   group: 'main' | 'finance' | 'system'
   badge?: boolean
+  adminOnly?: boolean
 }
 
 const navItems: NavItem[] = [
@@ -42,11 +47,14 @@ const navItems: NavItem[] = [
   { key: 'fixed', icon: CalendarRange, path: '/fixed', group: 'finance' },
   { key: 'installments', icon: CreditCard, path: '/installments', group: 'finance' },
   { key: 'loans', icon: Landmark, path: '/loans', group: 'finance' },
+  { key: 'subscriptions', icon: RefreshCw, path: '/subscriptions', group: 'finance' },
   { key: 'forecast', icon: TrendingUp, path: '/forecast', group: 'finance' },
   { key: 'categories', icon: Tags, path: '/categories', group: 'system' },
+  { key: 'organizations', icon: Building2, path: '/organizations', group: 'system' },
   { key: 'alerts', icon: Bell, path: '/alerts', group: 'system', badge: true },
   { key: 'settings', icon: Settings, path: '/settings', group: 'system' },
-  { key: 'users', icon: Users, path: '/users', group: 'system' },
+  { key: 'users', icon: Users, path: '/users', group: 'system', adminOnly: true },
+  { key: 'backups', icon: Database, path: '/backups', group: 'system', adminOnly: true },
 ]
 
 interface SidebarProps {
@@ -58,7 +66,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
@@ -108,11 +116,17 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       {label && !collapsed && (
         <div className="mb-1 px-3 pt-2">
           <span
-            className="text-[10px] font-semibold uppercase tracking-[0.08em]"
-            style={{ color: 'var(--text-sidebar)', opacity: 0.35 }}
+            className="text-[11px] font-bold uppercase tracking-[0.08em]"
+            style={{ color: 'var(--text-sidebar)' }}
           >
             {label}
           </span>
+        </div>
+      )}
+      {/* Collapsed section dot indicator */}
+      {label && collapsed && (
+        <div className="my-2 flex justify-center">
+          <span className="h-1 w-1 rounded-full" style={{ backgroundColor: 'var(--border-primary)' }} />
         </div>
       )}
       {items.map((item) => {
@@ -127,12 +141,15 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               onMouseLeave={() => handleItemHover(null)}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'sidebar-nav-item group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium my-0.5',
+                'sidebar-nav-item group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium my-0.5 transition-all duration-200',
                 collapsed && 'justify-center px-2',
                 active
                   ? 'sidebar-nav-item-active text-[var(--text-sidebar-active)]'
                   : 'text-[var(--text-sidebar)] hover:text-[var(--text-sidebar-active)]',
               )}
+              style={active ? {
+                background: 'rgba(108, 99, 255, 0.08)',
+              } : undefined}
             >
               {/* Active indicator bar */}
               {active && (
@@ -142,12 +159,19 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                     '-end-0.5',
                   )}
                   style={{
-                    background: 'linear-gradient(180deg, #06B6D4, #3B82F6)',
-                    boxShadow: '0 0 8px rgba(59, 130, 246, 0.4)',
+                    background: 'var(--color-brand-500)',
+                    boxShadow: '0 0 8px rgba(108, 99, 255, 0.4)',
                   }}
                 />
               )}
-              <span className="relative shrink-0">
+              <span className={cn(
+                'relative flex shrink-0 items-center justify-center rounded-lg transition-all duration-200 group-hover:translate-x-0.5',
+                isRtl && 'group-hover:-translate-x-0.5 group-hover:translate-x-0',
+                active ? 'h-8 w-8' : 'h-8 w-8',
+              )} style={active ? {
+                background: 'rgba(108, 99, 255, 0.12)',
+                borderRadius: '8px',
+              } : undefined}>
                 <Icon
                   size={18}
                   className={cn(
@@ -159,11 +183,11 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 />
                 {/* Alert badge */}
                 {item.badge && (
-                  <span className="alert-badge absolute -top-1 -end-1 h-2 w-2 rounded-full bg-red-500" />
+                  <span className="alert-badge badge-pulse absolute -top-0.5 -end-0.5 h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-danger)' }} />
                 )}
               </span>
               {!collapsed && (
-                <span className="relative z-10">{t(`nav.${item.key}`)}</span>
+                <span className={cn('relative z-10', active && 'font-semibold')}>{t(`nav.${item.key}`)}</span>
               )}
             </Link>
             {/* Tooltip for collapsed state */}
@@ -184,16 +208,18 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     </div>
   )
 
-  const mainItems = navItems.filter((i) => i.group === 'main')
-  const financeItems = navItems.filter((i) => i.group === 'finance')
-  const systemItems = navItems.filter((i) => i.group === 'system')
+  const isAdmin = !!user?.is_admin
+  const visibleItems = navItems.filter((i) => !i.adminOnly || isAdmin)
+  const mainItems = visibleItems.filter((i) => i.group === 'main')
+  const financeItems = visibleItems.filter((i) => i.group === 'finance')
+  const systemItems = visibleItems.filter((i) => i.group === 'system')
 
   return (
     <>
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-[45] bg-black/60 backdrop-blur-sm md:hidden"
           onClick={onMobileClose}
         />
       )}
@@ -210,7 +236,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           'w-[var(--sidebar-width)]',
         )}
         style={{
-          backgroundColor: 'var(--bg-sidebar)',
+          background: 'var(--bg-sidebar)',
           borderInlineEnd: '1px solid var(--border-primary)',
         }}
         data-open={mobileOpen}
@@ -218,7 +244,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         {/* Mobile close button */}
         <button
           onClick={onMobileClose}
-          className="absolute top-4 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-white/5 md:hidden"
+          className="sidebar-nav-item absolute top-4 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-colors md:hidden"
           style={{
             color: 'var(--text-sidebar)',
             insetInlineEnd: '12px',
@@ -228,27 +254,31 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           <X size={16} />
         </button>
 
-        {/* Logo area */}
+        {/* Logo area with glow */}
         <div className="flex flex-col items-center gap-3 px-4 pb-5 pt-6">
           <div
-            className="overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-lg shadow-black/20"
+            className="relative overflow-hidden rounded-2xl ring-1"
+            style={{
+              boxShadow: 'var(--shadow-md)',
+              ['--tw-ring-color' as string]: 'var(--border-primary)',
+            }}
           >
             <img
-              src="/logo.jpeg"
+              src="/logo.webp"
               alt={t('app.company')}
               className={cn(
-                'w-auto transition-all duration-300',
-                collapsed ? 'h-[36px]' : 'h-[48px]',
+                'relative w-auto transition-all duration-300',
+                collapsed ? 'h-[36px]' : 'h-[52px]',
               )}
             />
           </div>
           {!collapsed && (
             <div className="text-center">
-              <h1 className="text-white font-bold text-sm leading-tight tracking-tight">
+              <h1 className="font-extrabold text-sm leading-tight tracking-tight" style={{ color: 'var(--text-primary)' }}>
                 {t('app.name')}
               </h1>
               <p className="mt-1 text-[10px] font-medium tracking-widest uppercase"
-                style={{ color: 'var(--text-sidebar)', opacity: 0.4 }}
+                style={{ color: 'var(--text-sidebar)' }}
               >
                 {t('app.company')}
               </p>
@@ -272,30 +302,32 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           {collapsed ? <ExpandIcon size={10} /> : <CollapseIcon size={10} />}
         </button>
 
-        {/* Logo separator - gradient fade */}
-        <div className="mx-4 mb-3 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.08) 50%, transparent)' }} />
+        {/* Logo separator */}
+        <div className="mx-4 mb-3 h-px" style={{ background: 'var(--border-primary)' }} />
+
+        {/* Organization Switcher */}
+        <OrgSwitcher collapsed={collapsed} />
 
         {/* Navigation */}
         <nav aria-label={t('nav.mainNavigation')} className="flex-1 overflow-y-auto px-3 pb-3">
-          {renderNavGroup('main', mainItems)}
+          {renderNavGroup('main', mainItems, t('nav.main'))}
 
-          <div className="mx-2 my-2 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.06) 50%, transparent)' }} />
+          <div className="mx-2 my-2.5 h-px" style={{ background: 'var(--border-primary)' }} />
 
-          {renderNavGroup('finance', financeItems)}
+          {renderNavGroup('finance', financeItems, t('nav.finance'))}
 
-          <div className="mx-2 my-2 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.06) 50%, transparent)' }} />
+          <div className="mx-2 my-2.5 h-px" style={{ background: 'var(--border-primary)' }} />
 
-          {renderNavGroup('system', systemItems)}
+          {renderNavGroup('system', systemItems, t('nav.system'))}
         </nav>
 
         {/* Bottom controls */}
-        <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="px-3 py-3" style={{ borderTop: '1px solid var(--border-primary)' }}>
           {/* Theme toggle */}
           <div className={cn(
             'mb-2.5 flex items-center rounded-xl p-0.5',
             collapsed ? 'flex-col gap-1' : 'gap-0.5',
-            !collapsed && 'bg-white/[0.04]',
-          )}>
+          )} style={!collapsed ? { background: 'color-mix(in srgb, var(--text-sidebar) 8%, transparent)' } : undefined}>
             {([
               { value: 'light' as const, Icon: Sun },
               { value: 'dark' as const, Icon: Moon },
@@ -310,9 +342,16 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   'flex h-7 items-center justify-center rounded-lg transition-all duration-200',
                   collapsed ? 'w-7' : 'flex-1',
                   theme === value
-                    ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/5'
-                    : 'text-[var(--text-sidebar)] hover:text-white hover:bg-white/[0.04]',
+                    ? 'shadow-sm ring-1'
+                    : 'hover:opacity-80',
                 )}
+                style={theme === value ? {
+                  background: 'rgba(108, 99, 255, 0.12)',
+                  color: 'var(--color-brand-500)',
+                  ['--tw-ring-color' as string]: 'rgba(108, 99, 255, 0.2)',
+                } : {
+                  color: 'var(--text-sidebar)',
+                }}
               >
                 <Icon size={14} />
               </button>
@@ -325,7 +364,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               onClick={toggleLanguage}
               title={t('settings.language')}
               aria-label={t('settings.language')}
-              className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-all duration-200 hover:bg-white/5"
+              className="sidebar-nav-item flex h-8 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-all duration-200"
               style={{ color: 'var(--text-sidebar)' }}
             >
               <Globe size={13} className="shrink-0" />
@@ -339,7 +378,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               title={t('auth.logout')}
               aria-label={t('auth.logout')}
               className={cn(
-                'flex h-8 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-all duration-200 hover:bg-red-500/10 hover:text-red-400',
+                'sidebar-logout-btn flex h-8 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-all duration-200',
                 !collapsed && 'ms-auto',
               )}
               style={{ color: 'var(--text-sidebar)' }}

@@ -19,7 +19,7 @@ function isEmoji(str: string): boolean {
 interface CategoryIconProps {
   /** The icon string (emoji or text). If empty/undefined, shows a fallback Tag icon. */
   icon?: string
-  /** The category color hex string, e.g. '#3B82F6' */
+  /** The category color hex string, e.g. '#4318FF' */
   color?: string
   /** Size variant */
   size?: 'sm' | 'md' | 'lg'

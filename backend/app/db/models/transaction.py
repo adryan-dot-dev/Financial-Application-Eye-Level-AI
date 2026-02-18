@@ -35,6 +35,17 @@ class Transaction(Base):
         Numeric(15, 2), nullable=False
     )
     currency: Mapped[str] = mapped_column(String(3), default="ILS")
+    original_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(15, 2), nullable=True
+    )
+    original_currency: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(15, 6), nullable=True
+    )
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True
+    )
     type: Mapped[str] = mapped_column(String(10), nullable=False)  # 'income' or 'expense'
     category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
@@ -55,6 +66,9 @@ class Transaction(Base):
     loan_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
+    credit_card_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("credit_cards.id", ondelete="SET NULL"), nullable=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     tags: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -71,8 +85,11 @@ class Transaction(Base):
         Index("ix_transactions_user_type", "user_id", "type"),
         Index("ix_transactions_user_category", "user_id", "category_id"),
         Index("ix_transactions_user_entry_pattern", "user_id", "entry_pattern"),
+        Index("ix_transactions_org_id", "organization_id"),
+        Index("ix_transactions_org_date", "organization_id", "date"),
     )
 
     # Relationships
     user = relationship("User", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
+    credit_card = relationship("CreditCard")

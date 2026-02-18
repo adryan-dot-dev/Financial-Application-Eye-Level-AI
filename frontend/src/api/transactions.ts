@@ -24,6 +24,7 @@ export interface CreateTransactionData {
   notes?: string
   tags?: string[]
   entry_pattern?: string
+  currency?: string
 }
 
 export type UpdateTransactionData = Partial<CreateTransactionData>

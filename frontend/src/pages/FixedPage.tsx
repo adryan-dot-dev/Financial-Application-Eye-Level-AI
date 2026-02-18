@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useModalA11y } from '@/hooks/useModalA11y'
@@ -24,6 +24,9 @@ import { CategoryBadge as SharedCategoryBadge } from '@/components/ui/CategoryIc
 import { queryKeys } from '@/lib/queryKeys'
 import { useToast } from '@/contexts/ToastContext'
 import { getApiErrorMessage } from '@/api/client'
+import { useCurrency } from '@/hooks/useCurrency'
+import CurrencySelector from '@/components/CurrencySelector'
+import DatePicker from '@/components/ui/DatePicker'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +43,7 @@ interface FormData {
   end_date: string
   description: string
   category_id: string
+  currency: string
 }
 
 const today = () => new Date().toISOString().split('T')[0]
@@ -53,6 +57,7 @@ const EMPTY_FORM: FormData = {
   end_date: '',
   description: '',
   category_id: '',
+  currency: 'ILS',
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +80,7 @@ function CardSkeleton() {
           key={i}
           className="card p-5"
         >
-          <div className="space-y-3">
+          <div className="space-y-3 skeleton-group">
             <div className="flex items-center justify-between">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-5 w-16 rounded-full" />
@@ -124,6 +129,7 @@ export default function FixedPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { currency: defaultCurrency } = useCurrency()
   const isRtl = i18n.language === 'he'
 
   useEffect(() => {
@@ -220,7 +226,7 @@ export default function FixedPage() {
   // ---- Modal helpers ----
   const openCreateModal = () => {
     setEditingEntry(null)
-    setFormData(EMPTY_FORM)
+    setFormData({ ...EMPTY_FORM, currency: defaultCurrency })
     setFormErrors({})
     setModalOpen(true)
   }
@@ -236,6 +242,7 @@ export default function FixedPage() {
       end_date: entry.end_date ?? '',
       description: entry.description ?? '',
       category_id: entry.category_id ?? '',
+      currency: entry.currency ?? defaultCurrency,
     })
     setFormErrors({})
     setModalOpen(true)
@@ -251,8 +258,8 @@ export default function FixedPage() {
   const closeDeleteDialog = useCallback(() => setDeleteTarget(null), [])
 
   // Modal accessibility (Escape key, focus trap, aria)
-  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
-  const { panelRef: deletePanelRef } = useModalA11y(!!deleteTarget, closeDeleteDialog)
+  const { panelRef: modalPanelRef, closing: modalClosing, requestClose: requestModalClose } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: deletePanelRef, closing: deleteClosing, requestClose: requestDeleteClose } = useModalA11y(!!deleteTarget, closeDeleteDialog)
 
   // ---- Form validation & submit ----
   const validateForm = (): boolean => {
@@ -280,6 +287,7 @@ export default function FixedPage() {
       end_date: formData.end_date || undefined,
       description: formData.description || undefined,
       category_id: formData.category_id || undefined,
+      currency: formData.currency,
     }
 
     if (editingEntry) {
@@ -308,16 +316,15 @@ export default function FixedPage() {
           <div
             className="flex h-12 w-12 items-center justify-center rounded-2xl"
             style={{
-              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.08))',
-              boxShadow: '0 4px 14px rgba(139, 92, 246, 0.1)',
+              backgroundColor: 'rgba(67, 24, 255, 0.08)',
+              boxShadow: 'var(--shadow-xs)',
             }}
           >
-            <Repeat className="h-6 w-6" style={{ color: '#8B5CF6' }} />
+            <Repeat className="h-6 w-6" style={{ color: 'var(--color-accent-magenta)' }} />
           </div>
           <div>
             <h1
-              className="text-[1.75rem] font-extrabold tracking-tight"
-              style={{ color: 'var(--text-primary)' }}
+              className="gradient-heading text-[1.75rem] font-extrabold tracking-tight"
             >
               {t('fixed.title')}
             </h1>
@@ -326,7 +333,7 @@ export default function FixedPage() {
                 {t('transactions.total')}:{' '}
                 <span
                   className="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ltr-nums"
-                  style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6' }}
+                  style={{ backgroundColor: 'rgba(217, 70, 239, 0.1)', color: 'var(--color-accent-magenta)' }}
                 >
                   {entries.length}
                 </span>
@@ -365,7 +372,7 @@ export default function FixedPage() {
                   key={typeVal}
                   onClick={() => setFilterType(typeVal)}
                   className={cn(
-                    'flex-1 px-4 py-2.5 text-xs font-semibold tracking-wide transition-all',
+                    'btn-press flex-1 px-4 py-2.5 text-xs font-semibold tracking-wide transition-all',
                     'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
                     active && 'shadow-sm',
                   )}
@@ -403,8 +410,8 @@ export default function FixedPage() {
           <div
             className="empty-float mb-6 flex h-20 w-20 items-center justify-center rounded-3xl"
             style={{
-              background: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.1)',
+              background: 'rgba(67, 24, 255, 0.08)',
+              border: '1px solid rgba(67, 24, 255, 0.1)',
             }}
           >
             <Repeat className="h-9 w-9" style={{ color: 'var(--border-focus)' }} />
@@ -438,12 +445,12 @@ export default function FixedPage() {
             return (
               <div
                 key={entry.id}
-                className="card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                className="card card-lift row-enter overflow-hidden transition-all duration-300"
                 style={{
-                  animationDelay: `${index * 40}ms`,
+                  '--row-index': Math.min(index, 15),
                   borderInlineStartWidth: '4px',
-                  borderInlineStartColor: isIncome ? '#10B981' : '#EF4444',
-                }}
+                  borderInlineStartColor: isIncome ? 'var(--color-success)' : 'var(--color-danger)',
+                } as CSSProperties}
               >
                 <div className="p-5">
                   {/* Card header: name + toggle switch */}
@@ -473,7 +480,7 @@ export default function FixedPage() {
                       disabled={pauseMutation.isPending || resumeMutation.isPending}
                       className="relative flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors duration-300 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                       style={{
-                        backgroundColor: entry.is_active ? '#10B981' : 'var(--bg-hover)',
+                        backgroundColor: entry.is_active ? 'var(--color-success)' : 'var(--bg-hover)',
                       }}
                       role="switch"
                       aria-checked={entry.is_active}
@@ -490,7 +497,7 @@ export default function FixedPage() {
                         {(pauseMutation.isPending || resumeMutation.isPending) ? (
                           <Loader2 className="h-3 w-3 animate-spin" style={{ color: 'var(--text-tertiary)' }} />
                         ) : entry.is_active ? (
-                          <Play className="h-3 w-3" style={{ color: '#10B981' }} />
+                          <Play className="h-3 w-3" style={{ color: 'var(--color-success)' }} />
                         ) : (
                           <Pause className="h-3 w-3" style={{ color: 'var(--text-tertiary)' }} />
                         )}
@@ -503,8 +510,8 @@ export default function FixedPage() {
                     <span
                       className="flex h-8 w-8 items-center justify-center rounded-full"
                       style={{
-                        backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                        color: isIncome ? '#10B981' : '#EF4444',
+                        backgroundColor: isIncome ? 'rgba(5, 205, 153, 0.12)' : 'rgba(238, 93, 80, 0.12)',
+                        color: isIncome ? 'var(--color-success)' : 'var(--color-danger)',
                       }}
                     >
                       {isIncome ? (
@@ -532,7 +539,7 @@ export default function FixedPage() {
                     >
                       <div
                         className="w-full px-2.5 py-0.5 text-center text-[9px] font-bold uppercase tracking-wider text-white"
-                        style={{ backgroundColor: '#3B82F6' }}
+                        style={{ backgroundColor: 'var(--color-brand-500)' }}
                       >
                         {t('fixed.dayOfMonth')}
                       </div>
@@ -586,15 +593,17 @@ export default function FixedPage() {
                   >
                     {/* Status label */}
                     <span
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold"
+                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
                       style={{
-                        color: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
+                        color: entry.is_active ? 'var(--color-brand-500)' : 'var(--text-tertiary)',
+                        border: '1px solid currentColor',
+                        opacity: 0.8,
                       }}
                     >
                       <span
-                        className="h-2 w-2 rounded-full"
+                        className="h-1.5 w-1.5 rounded-full"
                         style={{
-                          backgroundColor: entry.is_active ? 'var(--color-success)' : 'var(--color-warning)',
+                          backgroundColor: entry.is_active ? 'var(--color-brand-500)' : 'var(--text-tertiary)',
                         }}
                       />
                       {entry.is_active ? t('fixed.active') : t('fixed.paused')}
@@ -604,7 +613,7 @@ export default function FixedPage() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEditModal(entry)}
-                        className="action-btn action-btn-edit rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="btn-press action-btn action-btn-edit rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.edit')}
                         aria-label={t('common.edit')}
@@ -613,7 +622,7 @@ export default function FixedPage() {
                       </button>
                       <button
                         onClick={() => setDeleteTarget(entry)}
-                        className="action-btn action-btn-delete rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                        className="btn-press action-btn action-btn-delete rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={t('common.delete')}
                         aria-label={t('common.delete')}
@@ -634,12 +643,12 @@ export default function FixedPage() {
           ================================================================== */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${modalClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="fixed-modal-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal()
+            if (e.target === e.currentTarget) requestModalClose()
           }}
         >
           {/* Backdrop */}
@@ -648,7 +657,7 @@ export default function FixedPage() {
           {/* Panel */}
           <div
             ref={modalPanelRef}
-            className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
+            className="modal-panel modal-form-layout relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -659,13 +668,13 @@ export default function FixedPage() {
             <div
               className="h-1"
               style={{
-                background: formData.type === 'income'
-                  ? 'linear-gradient(90deg, #34D399, #10B981)'
-                  : 'linear-gradient(90deg, #F87171, #EF4444)',
+                backgroundColor: formData.type === 'income'
+                  ? 'var(--color-success)'
+                  : 'var(--color-danger)',
               }}
             />
 
-            <div className="p-6">
+            <div className="modal-body p-6">
               {/* Header */}
               <div className="mb-6 flex items-center justify-between">
                 <h2
@@ -676,7 +685,7 @@ export default function FixedPage() {
                   {editingEntry ? t('common.edit') : t('fixed.add')}
                 </h2>
                 <button
-                  onClick={closeModal}
+                  onClick={requestModalClose}
                   className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
                   style={{ color: 'var(--text-tertiary)' }}
                   aria-label={t('common.cancel')}
@@ -685,7 +694,7 @@ export default function FixedPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleFormSubmit} className="space-y-5">
+              <form id="fixed-form" onSubmit={handleFormSubmit} className="space-y-5">
                 {/* Type toggle */}
                 <div>
                   <label
@@ -750,11 +759,10 @@ export default function FixedPage() {
                     className={cn(
                       'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
                       'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                      formErrors.name && 'border-red-400',
-                    )}
+                                          )}
                     style={{
                       backgroundColor: 'var(--bg-input)',
-                      borderColor: formErrors.name ? undefined : 'var(--border-primary)',
+                      borderColor: formErrors.name ? 'var(--border-danger)' : 'var(--border-primary)',
                       color: 'var(--text-primary)',
                     }}
                     placeholder={t('fixed.name')}
@@ -788,11 +796,10 @@ export default function FixedPage() {
                       className={cn(
                         'amount-input w-full rounded-xl border px-4 py-3 outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.amount && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.amount ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.amount ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: formData.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                       }}
                       placeholder="0.00"
@@ -823,11 +830,10 @@ export default function FixedPage() {
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.day_of_month && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.day_of_month ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.day_of_month ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.day_of_month ? 'fixed-day-error' : undefined}
@@ -850,20 +856,18 @@ export default function FixedPage() {
                     >
                       {t('fixed.startDate')} *
                     </label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={formData.start_date}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, start_date: e.target.value }))
+                      onChange={(val) =>
+                        setFormData((prev) => ({ ...prev, start_date: val }))
                       }
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.start_date && 'border-red-400',
                       )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
-                        borderColor: formErrors.start_date ? undefined : 'var(--border-primary)',
+                        borderColor: formErrors.start_date ? 'var(--border-danger)' : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
                       aria-describedby={formErrors.start_date ? 'fixed-start-date-error' : undefined}
@@ -882,11 +886,10 @@ export default function FixedPage() {
                     >
                       {t('fixed.endDate')}
                     </label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={formData.end_date}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, end_date: e.target.value }))
+                      onChange={(val) =>
+                        setFormData((prev) => ({ ...prev, end_date: val }))
                       }
                       className={cn(
                         'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
@@ -933,6 +936,23 @@ export default function FixedPage() {
                   </select>
                 </div>
 
+                {/* Currency */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('currency.label')}
+                  </label>
+                  <CurrencySelector
+                    value={formData.currency}
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, currency: val }))
+                    }
+                    className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
+                  />
+                </div>
+
                 {/* Description */}
                 <div>
                   <label
@@ -960,30 +980,31 @@ export default function FixedPage() {
                   />
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
-                    style={{
-                      borderColor: 'var(--border-primary)',
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'var(--bg-input)',
-                    }}
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isMutating}
-                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {t('common.save')}
-                  </button>
-                </div>
               </form>
+            </div>
+
+            <div className="modal-footer flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={requestModalClose}
+                className="btn-press rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                style={{
+                  borderColor: 'var(--border-primary)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-input)',
+                }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => (document.getElementById('fixed-form') as HTMLFormElement | null)?.requestSubmit()}
+                disabled={isMutating}
+                className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('common.save')}
+              </button>
             </div>
           </div>
         </div>
@@ -994,12 +1015,12 @@ export default function FixedPage() {
           ================================================================== */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${deleteClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="fixed-delete-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteTarget(null)
+            if (e.target === e.currentTarget) requestDeleteClose()
           }}
         >
           {/* Backdrop */}
@@ -1008,7 +1029,7 @@ export default function FixedPage() {
           {/* Panel */}
           <div
             ref={deletePanelRef}
-            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
+            className="modal-panel relative z-10 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1018,7 +1039,7 @@ export default function FixedPage() {
             {/* Red accent bar */}
             <div
               className="h-1"
-              style={{ background: 'linear-gradient(90deg, #F87171, #EF4444, #DC2626)' }}
+              style={{ backgroundColor: 'var(--color-danger)' }}
             />
 
             <div className="p-6">
@@ -1062,7 +1083,7 @@ export default function FixedPage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setDeleteTarget(null)}
+                  onClick={requestDeleteClose}
                   className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
                   style={{
                     borderColor: 'var(--border-primary)',
@@ -1077,8 +1098,8 @@ export default function FixedPage() {
                   disabled={deleteMutation.isPending}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
                   style={{
-                    background: 'linear-gradient(135deg, #F87171, #EF4444)',
-                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                    backgroundColor: 'var(--color-danger)',
+                    boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   {deleteMutation.isPending && (

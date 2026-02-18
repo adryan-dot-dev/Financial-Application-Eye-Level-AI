@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
+import { getApiErrorMessage } from '@/api/client'
 import { cn } from '@/lib/utils'
 
 interface FieldErrors {
@@ -40,11 +41,10 @@ function getPasswordStrength(password: string): {
   if (/[0-9]/.test(password)) score++
   if (/[^A-Za-z0-9]/.test(password)) score++
 
-  if (score <= 1) return { score, labelKey: 'validation.strengthWeak', color: 'text-red-500', bgColor: 'bg-red-500' }
-  if (score <= 2) return { score, labelKey: 'validation.strengthFair', color: 'text-orange-500', bgColor: 'bg-orange-500' }
-  if (score <= 3) return { score, labelKey: 'validation.strengthGood', color: 'text-yellow-500', bgColor: 'bg-yellow-500' }
-  if (score <= 4) return { score, labelKey: 'validation.strengthStrong', color: 'text-emerald-500', bgColor: 'bg-emerald-500' }
-  return { score, labelKey: 'validation.strengthExcellent', color: 'text-cyan-500', bgColor: 'bg-cyan-500' }
+  if (score <= 2) return { score, labelKey: 'validation.strengthWeak', color: 'var(--color-danger)', bgColor: 'var(--color-danger)' }
+  if (score <= 3) return { score, labelKey: 'validation.strengthFair', color: 'var(--text-tertiary)', bgColor: 'var(--text-tertiary)' }
+  if (score <= 4) return { score, labelKey: 'validation.strengthGood', color: 'var(--color-success)', bgColor: 'var(--color-success)' }
+  return { score, labelKey: 'validation.strengthExcellent', color: 'var(--color-success)', bgColor: 'var(--color-success)' }
 }
 
 export default function RegisterPage() {
@@ -112,8 +112,14 @@ export default function RegisterPage() {
       errors.email = t('validation.invalidEmail')
     }
 
-    if (password.length < 4) {
+    if (password.length < 8) {
       errors.password = t('validation.passwordMinLength')
+    } else if (!/[A-Z]/.test(password)) {
+      errors.password = t('validation.passwordNeedsUppercase')
+    } else if (!/[a-z]/.test(password)) {
+      errors.password = t('validation.passwordNeedsLowercase')
+    } else if (!/\d/.test(password)) {
+      errors.password = t('validation.passwordNeedsDigit')
     }
 
     if (password !== confirmPassword) {
@@ -136,9 +142,7 @@ export default function RegisterPage() {
       await register({ username: username.trim(), email: email.trim(), password })
       navigate('/onboarding')
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } }
-      const message = axiosError?.response?.data?.detail || t('common.error')
-      setError(message)
+      setError(getApiErrorMessage(err))
     } finally {
       setIsSubmitting(false)
     }
@@ -190,65 +194,17 @@ export default function RegisterPage() {
         {/* Gradient mesh background */}
         <div className="auth-brand-bg absolute inset-0" />
 
-        {/* Animated gradient mesh overlay */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.3) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(236, 72, 153, 0.2) 0%, transparent 50%)',
-          }}
-        />
-
-        {/* Floating decorative shapes */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div
-            className="absolute -top-20 -end-20 h-72 w-72 rounded-full"
-            style={{
-              background: 'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)',
-              animation: 'float 8s ease-in-out infinite',
-            }}
-          />
-          <div
-            className="absolute -bottom-16 -start-16 h-56 w-56 rounded-full"
-            style={{
-              background: 'radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%)',
-              animation: 'float 10s ease-in-out infinite reverse',
-            }}
-          />
-          <div
-            className="absolute top-1/3 end-12 h-16 w-16 rotate-45"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: '4px',
-              animation: 'float 6s ease-in-out infinite',
-            }}
-          />
-          <div
-            className="absolute top-24 start-20 h-8 w-8 rounded-full"
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              animation: 'float 7s ease-in-out infinite reverse',
-            }}
-          />
-          <div
-            className="absolute top-1/4 start-0 h-px w-32"
-            style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent)' }}
-          />
-          <div
-            className="absolute bottom-1/3 end-0 h-px w-40"
-            style={{ background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.1), transparent)' }}
-          />
-        </div>
 
         <div className="relative z-10 flex flex-col items-center px-12 text-center">
           {/* Logo with glow */}
           <div
             className="mb-8 overflow-hidden rounded-3xl ring-1 ring-white/20"
             style={{
-              boxShadow: '0 0 40px rgba(59, 130, 246, 0.3), 0 0 80px rgba(139, 92, 246, 0.15), 0 20px 60px rgba(0,0,0,0.3)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
             }}
           >
             <img
-              src="/logo.jpeg"
+              src="/logo.webp"
               alt={t('app.company')}
               className="h-32 w-32 object-cover"
             />
@@ -262,13 +218,10 @@ export default function RegisterPage() {
             {t('app.company')}
           </p>
 
-          {/* Divider with gradient glow */}
+          {/* Divider */}
           <div
             className="my-8 h-px w-32"
-            style={{
-              background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent)',
-              boxShadow: '0 0 12px rgba(255,255,255,0.15)',
-            }}
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
           />
 
           {/* Subtitle */}
@@ -292,11 +245,11 @@ export default function RegisterPage() {
               className="mb-4 overflow-hidden rounded-2xl"
               style={{
                 border: '1px solid var(--border-primary)',
-                boxShadow: '0 0 30px rgba(59, 130, 246, 0.15), 0 8px 32px rgba(0,0,0,0.1)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
               }}
             >
               <img
-                src="/logo.jpeg"
+                src="/logo.webp"
                 alt={t('app.company')}
                 className="h-24 w-24 object-cover"
               />
@@ -327,9 +280,9 @@ export default function RegisterPage() {
             <div
               className="auth-error-animate mb-6 flex items-center gap-2.5 rounded-xl border px-4 py-3.5 text-sm"
               style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.06)',
-                borderColor: 'rgba(239, 68, 68, 0.15)',
-                color: '#EF4444',
+                backgroundColor: 'rgba(238, 93, 80, 0.06)',
+                borderColor: 'rgba(238, 93, 80, 0.15)',
+                color: 'var(--color-danger)',
               }}
               role="alert"
             >
@@ -374,19 +327,18 @@ export default function RegisterPage() {
                   className={cn(
                     'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
                     'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
-                    fieldErrors.username ? 'border-red-400' : '',
                     'ps-12 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
-                    borderColor: fieldErrors.username ? undefined : 'var(--border-primary)',
+                    borderColor: fieldErrors.username ? 'var(--border-danger)' : 'var(--border-primary)',
                     color: 'var(--text-primary)',
                   }}
                   placeholder={t('auth.username')}
                 />
               </div>
               {fieldErrors.username && (
-                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs" style={{ color: 'var(--color-danger)' }}>
                   <XCircle className="h-3 w-3" />
                   {fieldErrors.username}
                 </p>
@@ -427,19 +379,18 @@ export default function RegisterPage() {
                   className={cn(
                     'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
                     'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
-                    fieldErrors.email ? 'border-red-400' : '',
                     'ps-12 pe-4'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
-                    borderColor: fieldErrors.email ? undefined : 'var(--border-primary)',
+                    borderColor: fieldErrors.email ? 'var(--border-danger)' : 'var(--border-primary)',
                     color: 'var(--text-primary)',
                   }}
                   placeholder={t('auth.email')}
                 />
               </div>
               {fieldErrors.email && (
-                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs" style={{ color: 'var(--color-danger)' }}>
                   <XCircle className="h-3 w-3" />
                   {fieldErrors.email}
                 </p>
@@ -480,12 +431,11 @@ export default function RegisterPage() {
                   className={cn(
                     'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
                     'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
-                    fieldErrors.password ? 'border-red-400' : '',
                     'ps-12 pe-12'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
-                    borderColor: fieldErrors.password ? undefined : 'var(--border-primary)',
+                    borderColor: fieldErrors.password ? 'var(--border-danger)' : 'var(--border-primary)',
                     color: 'var(--text-primary)',
                   }}
                   placeholder={t('auth.password')}
@@ -508,7 +458,7 @@ export default function RegisterPage() {
                 </button>
               </div>
               {fieldErrors.password && (
-                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs" style={{ color: 'var(--color-danger)' }}>
                   <XCircle className="h-3 w-3" />
                   {fieldErrors.password}
                 </p>
@@ -524,7 +474,7 @@ export default function RegisterPage() {
                     >
                       {t('validation.passwordStrength')}
                     </span>
-                    <span className={cn('text-[11px] font-semibold', passwordStrength.color)}>
+                    <span className="text-[11px] font-semibold" style={{ color: passwordStrength.color }}>
                       {t(passwordStrength.labelKey)}
                     </span>
                   </div>
@@ -532,13 +482,8 @@ export default function RegisterPage() {
                     {[1, 2, 3, 4, 5].map((level) => (
                       <div
                         key={level}
-                        className={cn(
-                          'h-1.5 flex-1 rounded-full transition-all duration-300',
-                          passwordStrength.score >= level
-                            ? passwordStrength.bgColor
-                            : ''
-                        )}
-                        style={passwordStrength.score >= level ? undefined : { backgroundColor: 'var(--bg-tertiary)' }}
+                        className="h-1.5 flex-1 rounded-full transition-all duration-300"
+                        style={passwordStrength.score >= level ? { backgroundColor: passwordStrength.bgColor } : { backgroundColor: 'var(--bg-tertiary)' }}
                       />
                     ))}
                   </div>
@@ -580,19 +525,14 @@ export default function RegisterPage() {
                   className={cn(
                     'h-12 w-full rounded-xl border text-[15px] outline-none transition-all duration-200',
                     'focus-visible:border-[var(--border-focus)] focus-visible:ring-3 focus-visible:ring-[var(--border-focus)]/15',
-                    fieldErrors.confirmPassword
-                      ? 'border-red-400'
-                      : passwordsMatch
-                        ? 'border-emerald-400'
-                        : '',
                     'ps-12 pe-12'
                   )}
                   style={{
                     backgroundColor: 'var(--bg-input)',
                     borderColor: fieldErrors.confirmPassword
-                      ? undefined
+                      ? 'var(--border-danger)'
                       : passwordsMatch
-                        ? undefined
+                        ? 'var(--border-success)'
                         : 'var(--border-primary)',
                     color: 'var(--text-primary)',
                   }}
@@ -618,19 +558,19 @@ export default function RegisterPage() {
 
               {/* Password match indicator */}
               {passwordsMatch && (
-                <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-500">
+                <p className="mt-1.5 flex items-center gap-1 text-xs" style={{ color: 'var(--color-success)' }}>
                   <CheckCircle2 className="h-3 w-3" />
                   {t('validation.passwordsMatch')}
                 </p>
               )}
               {passwordsMismatch && !fieldErrors.confirmPassword && (
-                <p className="mt-1.5 flex items-center gap-1 text-xs text-amber-500">
+                <p className="mt-1.5 flex items-center gap-1 text-xs" style={{ color: 'var(--color-warning)' }}>
                   <XCircle className="h-3 w-3" />
                   {t('validation.passwordsMismatch')}
                 </p>
               )}
               {fieldErrors.confirmPassword && (
-                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                <p className="auth-error-animate mt-1.5 flex items-center gap-1 text-xs" style={{ color: 'var(--color-danger)' }}>
                   <XCircle className="h-3 w-3" />
                   {fieldErrors.confirmPassword}
                 </p>
@@ -643,7 +583,7 @@ export default function RegisterPage() {
               disabled={isSubmitting}
               className="btn-primary flex h-12 w-full items-center justify-center gap-2.5 text-[15px] font-bold transition-all duration-200 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
               style={{
-                boxShadow: '0 8px 24px rgba(59, 130, 246, 0.3)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
               }}
             >
               {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}

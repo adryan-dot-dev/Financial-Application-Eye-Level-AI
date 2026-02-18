@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import settings
 from app.db.base import Base
 from app.db.models import (  # noqa: F401
-    Alert, BankBalance, Category, ExpectedIncome,
-    FixedIncomeExpense, Installment, Loan,
-    Settings, Transaction, User,
+    Alert, AuditLog, BankAccount, BankBalance, Backup, Category,
+    CreditCard, ExpectedIncome, ExpenseApproval,
+    FixedIncomeExpense, ForecastScenario, Installment, Loan, Organization,
+    OrganizationMember, OrgBudget, OrgReport, Settings, Subscription,
+    Transaction, User,
 )
 from app.core.rate_limit import limiter
 from app.db.session import get_db
@@ -104,11 +106,13 @@ async def _ensure_admin_and_seed():
             await session.commit()
         else:
             admin_id = admin_row[0]
-            # Reset admin password and state
+            # Reset admin password and state (including password_changed_at
+            # to prevent "Token invalidated by password change" errors)
             await session.execute(
                 update(User).where(User.id == admin_id).values(
                     password_hash=hash_password("Admin2026!"),
                     is_active=True,
+                    password_changed_at=None,
                 )
             )
             # Ensure settings exist
@@ -151,6 +155,29 @@ async def _cleanup_test_data():
         admin_rows = admin_result.fetchall()
         admin_ids = [r[0] for r in admin_rows]
 
+        # Audit logs (no FK cascade concerns)
+        await session.execute(AuditLog.__table__.delete())
+
+        # New tables that reference existing tables
+        await session.execute(ExpenseApproval.__table__.delete())
+        await session.execute(OrgReport.__table__.delete())
+        await session.execute(OrgBudget.__table__.delete())
+
+        # Organization members and orgs (FK deps on users)
+        await session.execute(OrganizationMember.__table__.delete())
+        # Clear current_organization_id FK before deleting organizations
+        await session.execute(
+            update(User).values(current_organization_id=None)
+        )
+        await session.execute(Organization.__table__.delete())
+
+        # Subscriptions and backups
+        await session.execute(Subscription.__table__.delete())
+        await session.execute(Backup.__table__.delete())
+
+        # Forecast scenarios
+        await session.execute(ForecastScenario.__table__.delete())
+
         # Phase 2 tables (no FK dependencies to worry about)
         await session.execute(Alert.__table__.delete())
         await session.execute(ExpectedIncome.__table__.delete())
@@ -161,6 +188,10 @@ async def _cleanup_test_data():
 
         # Phase 1 tables
         await session.execute(Transaction.__table__.delete())
+
+        # Tables referenced by the above (must come after)
+        await session.execute(CreditCard.__table__.delete())
+        await session.execute(BankAccount.__table__.delete())
 
         # Delete non-seed categories (created by tests)
         if admin_ids:

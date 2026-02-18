@@ -1,8 +1,11 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCountUp } from '@/hooks/useCountUp'
+import { useCursorGlow } from '@/hooks/useCursorGlow'
 import { useModalA11y } from '@/hooks/useModalA11y'
+import { useScrollReveal } from '@/hooks/useScrollReveal'
 import {
   AreaChart,
   Area,
@@ -20,11 +23,15 @@ import {
   X,
   Loader2,
   TrendingUp,
+  TrendingDown,
   History,
+  CalendarDays,
+  StickyNote,
 } from 'lucide-react'
 import type { BankBalance } from '@/types'
 import { balanceApi } from '@/api/balance'
 import type { CreateBalanceData } from '@/api/balance'
+import DatePicker from '@/components/ui/DatePicker'
 import { cn, formatDate } from '@/lib/utils'
 import { useCurrency } from '@/hooks/useCurrency'
 import { queryKeys } from '@/lib/queryKeys'
@@ -59,24 +66,42 @@ const EMPTY_FORM: BalanceFormData = {
   notes: '',
 }
 
-function buildChartData(history: BankBalance[]): ChartDataPoint[] {
+function buildChartData(history: BankBalance[], locale: string = 'en-US'): ChartDataPoint[] {
   const sorted = [...history].sort(
     (a, b) => new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime(),
   )
   return sorted.map((entry) => ({
     date: entry.effective_date,
-    dateLabel: formatDateShort(entry.effective_date),
+    dateLabel: formatDateShort(entry.effective_date, locale),
     balance: parseFloat(entry.balance),
   }))
 }
 
-function formatDateShort(dateStr: string): string {
+function formatDateShort(dateStr: string, locale: string = 'en-US'): string {
   const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+}
+
+/** Compute trend between last two history entries */
+function computeTrend(history: BankBalance[]): { direction: 'up' | 'down' | 'flat'; amount: number; percent: number } | null {
+  if (history.length < 2) return null
+  const sorted = [...history].sort(
+    (a, b) => new Date(b.effective_date).getTime() - new Date(a.effective_date).getTime(),
+  )
+  const current = parseFloat(sorted[0].balance)
+  const previous = parseFloat(sorted[1].balance)
+  const diff = current - previous
+  const percent = previous !== 0 ? (diff / Math.abs(previous)) * 100 : 0
+
+  return {
+    direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat',
+    amount: Math.abs(diff),
+    percent: Math.abs(percent),
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Custom Chart Tooltip
+// Custom Chart Tooltip — Glassmorphism
 // ---------------------------------------------------------------------------
 
 function BalanceTooltip({
@@ -98,34 +123,35 @@ function BalanceTooltip({
 
   return (
     <div
-      className="rounded-xl border px-4 py-3"
+      className="rounded-2xl border px-5 py-4"
       style={{
         backgroundColor: 'var(--bg-card)',
         borderColor: 'var(--border-primary)',
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
+        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.08)',
+        backdropFilter: 'blur(16px)',
       }}
     >
       <p
-        className="mb-1.5 text-[13px] font-semibold"
+        className="mb-2 text-[13px] font-bold tracking-tight"
         style={{ color: 'var(--text-primary)' }}
       >
         {label}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         <span
-          className="inline-block h-2 w-2 rounded-full"
+          className="inline-block h-2.5 w-2.5 rounded-full"
           style={{
-            backgroundColor: balance >= 0 ? 'var(--color-brand-500)' : '#F87171',
+            backgroundColor: balance >= 0 ? 'var(--color-income)' : 'var(--color-expense)',
           }}
         />
         <span
-          className="text-xs"
+          className="text-xs font-medium"
           style={{ color: 'var(--text-secondary)' }}
         >
           {balanceLabel}
         </span>
         <span
-          className="fin-number ms-auto ps-4 text-xs ltr-nums"
+          className="fin-number ms-auto ps-6 text-sm font-bold ltr-nums"
           style={{
             color: balance >= 0 ? 'var(--color-income)' : 'var(--color-expense)',
           }}
@@ -138,7 +164,7 @@ function BalanceTooltip({
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton
+// Skeleton — Shimmer variant
 // ---------------------------------------------------------------------------
 
 function Skeleton({ className }: { className?: string }) {
@@ -150,35 +176,82 @@ function Skeleton({ className }: { className?: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Empty State (Apple-level)
+// Loading State — Premium skeleton layout
+// ---------------------------------------------------------------------------
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-8">
+      {/* Hero skeleton */}
+      <div className="card animate-fade-in-up stagger-1 p-8">
+        <div className="flex items-center gap-6">
+          <Skeleton className="h-[72px] w-[72px] rounded-2xl" />
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-12 w-52" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+          <Skeleton className="hidden h-14 w-14 rounded-full sm:block" />
+        </div>
+      </div>
+      {/* Chart skeleton */}
+      <div className="card animate-fade-in-up stagger-2 p-8">
+        <Skeleton className="mb-5 h-4 w-32" />
+        <Skeleton className="h-[300px] w-full rounded-xl" />
+      </div>
+      {/* Table skeleton */}
+      <div className="card animate-fade-in-up stagger-3 overflow-hidden">
+        <div className="px-7 py-5">
+          <Skeleton className="h-4 w-36" />
+        </div>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex gap-6 px-7 py-4">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Empty State — Premium, delightful
 // ---------------------------------------------------------------------------
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation()
 
   return (
-    <div className="animate-fade-in-scale flex flex-col items-center justify-center py-20">
+    <div className="animate-fade-in-scale flex flex-col items-center justify-center py-24">
       <div
-        className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl"
-        style={{ backgroundColor: 'rgba(59, 130, 246, 0.06)' }}
+        className="empty-float relative mb-6 flex h-24 w-24 items-center justify-center rounded-3xl"
+        style={{
+          background: 'var(--gradient-brand-subtle)',
+          border: '1px solid var(--border-primary)',
+        }}
       >
-        <Wallet className="h-10 w-10" style={{ color: 'var(--border-focus)' }} />
+        <Wallet
+          className="h-11 w-11"
+          style={{ color: 'var(--color-brand-500)' }}
+        />
       </div>
       <h3
-        className="text-xl font-bold"
+        className="text-xl font-extrabold tracking-tight"
         style={{ color: 'var(--text-primary)' }}
       >
         {t('common.noData')}
       </h3>
       <p
-        className="mt-2 max-w-xs text-center text-sm leading-relaxed"
+        className="mt-2.5 max-w-[320px] text-center text-sm leading-relaxed"
         style={{ color: 'var(--text-secondary)' }}
       >
         {t('balance.update')}
       </p>
       <button
         onClick={onAdd}
-        className="btn-primary mt-8 inline-flex items-center gap-2 px-6 py-3 text-sm"
+        className="btn-primary mt-10 inline-flex items-center gap-2.5 px-7 py-3.5 text-sm font-semibold"
       >
         <Plus className="h-4 w-4" />
         {t('balance.update')}
@@ -188,7 +261,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// Balance Chart (Apple-level)
+// Balance Chart — Premium AreaChart with split gradient
 // ---------------------------------------------------------------------------
 
 function BalanceChart({ data }: { data: ChartDataPoint[] }) {
@@ -201,45 +274,63 @@ function BalanceChart({ data }: { data: ChartDataPoint[] }) {
   const maxBalance = Math.max(...data.map((d) => d.balance))
 
   // Calculate the split offset for negative/positive gradient coloring
-  // offset = proportion of the chart area that is positive (above 0)
   let splitOffset = 1
   if (hasNegative && maxBalance > 0) {
-    splitOffset = maxBalance / (maxBalance - minBalance)
+    const range = maxBalance - minBalance
+    splitOffset = range !== 0 ? maxBalance / range : 1
   } else if (hasNegative) {
     splitOffset = 0
   }
 
   return (
-    <div className="card animate-fade-in-up section-delay-2 overflow-hidden p-7">
-      <h3
-        className="mb-5 text-base font-bold"
-        style={{ color: 'var(--text-primary)' }}
+    <div className="card card-hover animate-fade-in-up section-delay-2 overflow-hidden p-0">
+      {/* Chart header */}
+      <div
+        className="flex items-center gap-3 px-8 pt-7 pb-2"
       >
-        {t('balance.history')}
-      </h3>
-      <div className="h-[300px] px-1" dir="ltr">
+        <div
+          className="icon-circle-sm flex h-9 w-9 items-center justify-center rounded-xl"
+          style={{ backgroundColor: 'var(--bg-info)', color: 'var(--color-info)' }}
+        >
+          <TrendingUp className="h-4 w-4" />
+        </div>
+        <h3
+          className="text-[15px] font-bold tracking-tight"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {t('balance.history')}
+        </h3>
+        {/* Data points count */}
+        <span className="meta-pill ms-auto">
+          {data.length} {t('balance.points')}
+        </span>
+      </div>
+
+      {/* Chart body */}
+      <div className="h-[320px] px-4 pb-6" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
+          <AreaChart data={data} margin={{ top: 16, right: 20, left: 8, bottom: 8 }}>
             <defs>
               {hasNegative ? (
                 <>
                   <linearGradient id="balanceGradSplit" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.3} />
-                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="#3B82F6" stopOpacity={0.05} />
-                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="#F87171" stopOpacity={0.05} />
-                    <stop offset="100%" stopColor="#F87171" stopOpacity={0.25} />
+                    <stop offset="0%" stopColor="var(--color-brand-500)" stopOpacity={0.25} />
+                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="var(--color-brand-500)" stopOpacity={0.03} />
+                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="var(--color-expense)" stopOpacity={0.03} />
+                    <stop offset="100%" stopColor="var(--color-expense)" stopOpacity={0.2} />
                   </linearGradient>
                   <linearGradient id="balanceStrokeSplit" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3B82F6" stopOpacity={1} />
-                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="#3B82F6" stopOpacity={1} />
-                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="#F87171" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#F87171" stopOpacity={1} />
+                    <stop offset="0%" stopColor="var(--color-brand-500)" stopOpacity={1} />
+                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="var(--color-brand-500)" stopOpacity={1} />
+                    <stop offset={`${(splitOffset * 100).toFixed(1)}%`} stopColor="var(--color-expense)" stopOpacity={1} />
+                    <stop offset="100%" stopColor="var(--color-expense)" stopOpacity={1} />
                   </linearGradient>
                 </>
               ) : (
                 <linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                  <stop offset="0%" stopColor="var(--color-brand-500)" stopOpacity={0.3} />
+                  <stop offset="50%" stopColor="var(--color-brand-500)" stopOpacity={0.08} />
+                  <stop offset="100%" stopColor="var(--color-brand-500)" stopOpacity={0} />
                 </linearGradient>
               )}
             </defs>
@@ -251,22 +342,28 @@ function BalanceChart({ data }: { data: ChartDataPoint[] }) {
             />
             <XAxis
               dataKey="dateLabel"
-              tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }}
+              tick={{ fill: 'var(--text-tertiary)', fontSize: 11, fontWeight: 500 }}
               tickLine={false}
               axisLine={false}
+              dy={8}
             />
             <YAxis
-              tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
+              tick={{ fill: 'var(--text-tertiary)', fontSize: 11, fontWeight: 500 }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(val: number) =>
                 Math.abs(val) >= 1000 ? `${(val / 1000).toFixed(0)}k` : String(val)
               }
-              width={50}
+              width={52}
+              dx={-4}
             />
             <Tooltip
               content={<BalanceTooltip balanceLabel={t('balance.current')} />}
-              cursor={{ stroke: 'var(--text-tertiary)', strokeWidth: 1, strokeDasharray: '4 4' }}
+              cursor={{
+                stroke: 'var(--text-tertiary)',
+                strokeWidth: 1,
+                strokeDasharray: '4 4',
+              }}
             />
             {hasNegative && (
               <ReferenceLine
@@ -279,11 +376,24 @@ function BalanceChart({ data }: { data: ChartDataPoint[] }) {
             <Area
               type="monotone"
               dataKey="balance"
-              stroke={hasNegative ? 'url(#balanceStrokeSplit)' : '#3B82F6'}
+              stroke={hasNegative ? 'url(#balanceStrokeSplit)' : 'var(--color-brand-500)'}
               strokeWidth={2.5}
               fill={hasNegative ? 'url(#balanceGradSplit)' : 'url(#balanceGrad)'}
-              dot={{ r: 3.5, fill: 'var(--color-brand-500)', strokeWidth: 2, stroke: 'var(--bg-card)' }}
-              activeDot={{ r: 6, strokeWidth: 2.5, fill: 'var(--color-brand-500)', stroke: 'var(--bg-card)' }}
+              isAnimationActive={true}
+              animationDuration={800}
+              animationEasing="ease-out"
+              dot={{
+                r: 4,
+                fill: 'var(--color-brand-500)',
+                strokeWidth: 2.5,
+                stroke: 'var(--bg-card)',
+              }}
+              activeDot={{
+                r: 7,
+                strokeWidth: 3,
+                fill: 'var(--color-brand-500)',
+                stroke: 'var(--bg-card)',
+              }}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -301,7 +411,8 @@ export default function BalancePage() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const { formatAmount } = useCurrency()
-  const isRtl = i18n.language === 'he'
+  const scrollRef = useScrollReveal()
+  const { ref: glowRef, onMouseMove: handleGlow } = useCursorGlow()
 
   useEffect(() => {
     document.title = t('pageTitle.balance')
@@ -335,7 +446,11 @@ export default function BalancePage() {
   )
 
   // Chart data
-  const chartData = buildChartData(history)
+  const locale = i18n.language === 'he' ? 'he-IL' : 'en-US'
+  const chartData = buildChartData(history, locale)
+
+  // Trend
+  const trend = computeTrend(history)
 
   // Mutations
   const invalidate = () => {
@@ -376,7 +491,7 @@ export default function BalancePage() {
   }, [])
 
   // Modal accessibility (Escape key, focus trap, aria)
-  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: modalPanelRef, closing: modalClosing, requestClose: requestModalClose } = useModalA11y(modalOpen, closeModal)
 
   // Form validation & submit
   const validateForm = (): boolean => {
@@ -412,25 +527,37 @@ export default function BalancePage() {
   const balanceNum = currentBalance ? parseFloat(currentBalance.balance) : 0
   const balanceColor = balanceNum >= 0 ? 'var(--color-income)' : 'var(--color-expense)'
 
+  // Animated balance display
+  const animatedBalance = useCountUp(currentBalance ? parseFloat(currentBalance.balance) : 0, 800)
+
   // =========================================================================
   // RENDER
   // =========================================================================
 
   return (
-    <div className="space-y-7 p-6 md:p-8">
+    <div ref={scrollRef} className="space-y-8 p-6 md:p-8 lg:p-10">
       {/* Page header */}
       <div className="animate-fade-in flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1
-          className="text-[1.75rem] font-extrabold tracking-tight"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          {t('balance.title')}
-        </h1>
+        <div>
+          <h1
+            className="gradient-heading text-[1.85rem] font-extrabold tracking-tight"
+          >
+            {t('balance.title')}
+          </h1>
+          {hasBalance && currentBalance && (
+            <p
+              className="mt-1 text-sm"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {t('balance.effectiveDate')}: {formatDate(currentBalance.effective_date, locale)}
+            </p>
+          )}
+        </div>
 
         {hasBalance && (
           <button
             onClick={openModal}
-            className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm"
+            className="btn-primary inline-flex items-center gap-2.5 px-6 py-3 text-sm font-semibold"
           >
             <Plus className="h-4 w-4" />
             {t('balance.update')}
@@ -439,91 +566,140 @@ export default function BalancePage() {
       </div>
 
       {/* Loading state */}
-      {isLoading && (
-        <div className="card animate-fade-in-up stagger-1 p-8">
-          <div className="flex flex-col items-center gap-5">
-            <Skeleton className="h-16 w-16 rounded-2xl" />
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-10 w-56" />
-          </div>
-        </div>
-      )}
+      {isLoading && <LoadingSkeleton />}
 
       {/* Empty state */}
       {!isLoading && !hasBalance && <EmptyState onAdd={openModal} />}
 
-      {/* Current balance card -- HERO element */}
+      {/* ================================================================
+          HERO BALANCE CARD
+          ================================================================ */}
       {!isLoading && hasBalance && currentBalance && (
         <div
-          className="card hero-balance-card animate-fade-in-up stagger-1 p-8"
+          ref={glowRef}
+          onMouseMove={handleGlow}
+          className="hero-balance-card card card-glow content-reveal animate-fade-in-up stagger-1 relative overflow-hidden"
           style={{
-            boxShadow: 'var(--shadow-md)',
+            boxShadow: 'var(--shadow-lg)',
+            padding: '2rem',
           }}
         >
-          <div className="flex items-center gap-5">
+          {/* Brand gradient accent line at top */}
+          <div
+            className="absolute inset-x-0 top-0 h-[3px]"
+            style={{ backgroundColor: 'var(--color-brand-500)' }}
+          />
+
+          <div className="flex items-start gap-6">
+            {/* Icon container */}
             <div
-              className="flex h-16 w-16 items-center justify-center rounded-2xl"
-              style={{ backgroundColor: '#3B82F614', color: '#3B82F6' }}
+              className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-2xl"
+              style={{
+                backgroundColor: 'var(--bg-info)',
+                color: 'var(--color-brand-500)',
+              }}
             >
-              <Wallet className="h-8 w-8" />
+              <Wallet className="h-9 w-9" />
             </div>
-            <div className="flex-1">
+
+            {/* Content */}
+            <div className="min-w-0 flex-1">
               <p
-                className="text-[11px] font-semibold uppercase tracking-widest"
+                className="text-[11px] font-semibold uppercase tracking-[0.12em]"
                 style={{ color: 'var(--text-tertiary)' }}
               >
                 {t('balance.current')}
               </p>
+
               <p
-                className="fin-number text-[2.5rem] ltr-nums mt-1 leading-tight tracking-tight"
+                className="fin-number-xl ltr-nums mt-1.5 text-[2.75rem] font-extrabold leading-none tracking-tight"
                 style={{ color: balanceColor }}
               >
-                {formatAmount(currentBalance.balance)}
+                <span className="tabular-nums">{formatAmount(animatedBalance)}</span>
               </p>
-              <div className="mt-2 flex items-center gap-2">
-                <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  {t('balance.effectiveDate')}:{' '}
-                  <span className="ltr-nums font-medium">
-                    {formatDate(currentBalance.effective_date, isRtl ? 'he-IL' : 'en-US')}
+
+              {/* Meta row: date + trend + notes */}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span className="meta-pill">
+                  <CalendarDays className="h-3 w-3" />
+                  <span className="ltr-nums">
+                    {formatDate(currentBalance.effective_date, locale)}
                   </span>
-                </p>
+                </span>
+
                 {currentBalance.notes && (
+                  <span className="meta-pill">
+                    <StickyNote className="h-3 w-3" />
+                    <span className="max-w-[200px] truncate">
+                      {currentBalance.notes}
+                    </span>
+                  </span>
+                )}
+
+                {/* Trend indicator */}
+                {trend && trend.direction !== 'flat' && (
                   <span
-                    className="text-xs"
-                    style={{ color: 'var(--text-tertiary)' }}
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: trend.direction === 'up'
+                        ? 'var(--bg-success)'
+                        : 'var(--bg-danger)',
+                      color: trend.direction === 'up'
+                        ? 'var(--color-success)'
+                        : 'var(--color-danger)',
+                      border: `1px solid ${trend.direction === 'up' ? 'var(--border-success)' : 'var(--border-danger)'}`,
+                    }}
                   >
-                    - {currentBalance.notes}
+                    {trend.direction === 'up' ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    <span className="ltr-nums">
+                      {trend.percent.toFixed(1)}%
+                    </span>
                   </span>
                 )}
               </div>
             </div>
+
+            {/* Trend direction icon — desktop only */}
             <div
-              className="hidden h-12 w-12 items-center justify-center rounded-full sm:flex"
+              className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-full sm:flex"
               style={{
-                backgroundColor: balanceNum >= 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                backgroundColor: balanceNum >= 0
+                  ? 'var(--bg-success)'
+                  : 'var(--bg-danger)',
                 color: balanceColor,
               }}
             >
-              <TrendingUp className={cn('h-6 w-6', balanceNum < 0 && 'rotate-180')} />
+              {balanceNum >= 0 ? (
+                <TrendingUp className="h-6 w-6" />
+              ) : (
+                <TrendingDown className="h-6 w-6" />
+              )}
             </div>
           </div>
 
           {/* Overdraft indicator */}
           {balanceNum < 0 && (
             <div
-              className="mt-4 flex items-center gap-2 rounded-lg px-4 py-2.5"
+              className="mt-5 flex items-center gap-2.5 rounded-xl px-4 py-3"
               style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.06)',
-                border: '1px solid rgba(239, 68, 68, 0.15)',
+                backgroundColor: 'var(--bg-danger-subtle)',
+                border: '1px solid var(--border-danger)',
               }}
             >
               <div
                 className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: 'var(--color-expense)' }}
+                style={{
+                  backgroundColor: 'var(--color-expense)',
+                  boxShadow: '0 0 6px rgba(0,0,0,0.15)',
+                }}
               />
               <p
                 className="text-xs font-semibold"
-                style={{ color: 'var(--color-expense)' }}
+                style={{ color: 'var(--color-danger)' }}
               >
                 {t('balance.current')}: {formatAmount(currentBalance.balance)}
               </p>
@@ -532,33 +708,44 @@ export default function BalancePage() {
         </div>
       )}
 
-      {/* Balance chart */}
-      {!isLoading && hasBalance && <BalanceChart data={chartData} />}
+      {/* ================================================================
+          Balance Chart
+          ================================================================ */}
+      <div className="scroll-reveal">
+        {!isLoading && hasBalance && <BalanceChart data={chartData} />}
+      </div>
 
-      {/* History table */}
+      {/* ================================================================
+          History Table — Premium styling
+          ================================================================ */}
       {!isLoading && hasBalance && sortedHistory.length > 0 && (
-        <div className="card animate-fade-in-up section-delay-3 overflow-hidden">
+        <div className="scroll-reveal card card-hover animate-fade-in-up section-delay-3 overflow-hidden">
+          {/* Table header */}
           <div
-            className="flex items-center gap-3 border-b px-6 py-5"
+            className="flex items-center gap-3 border-b px-7 py-5"
             style={{ borderColor: 'var(--border-primary)' }}
           >
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
-              style={{ backgroundColor: 'var(--bg-hover)' }}
+              style={{
+                backgroundColor: 'var(--bg-hover)',
+                color: 'var(--text-secondary)',
+              }}
             >
-              <History className="h-4 w-4" style={{ color: 'var(--text-tertiary)' }} />
+              <History className="h-4 w-4" />
             </div>
             <h3
-              className="text-sm font-bold"
+              className="text-[15px] font-bold tracking-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {t('balance.history')}
             </h3>
             <span
-              className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+              className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
               style={{
                 backgroundColor: 'var(--bg-tertiary)',
                 color: 'var(--text-secondary)',
+                border: '1px solid var(--border-primary)',
               }}
             >
               {sortedHistory.length}
@@ -577,21 +764,21 @@ export default function BalancePage() {
                 >
                   <th
                     scope="col"
-                    className="px-6 py-3.5 text-start text-[11px] font-semibold uppercase tracking-widest"
+                    className="px-7 py-3.5 text-start text-[11px] font-bold uppercase tracking-[0.1em]"
                     style={{ color: 'var(--text-tertiary)' }}
                   >
                     {t('balance.effectiveDate')}
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3.5 text-start text-[11px] font-semibold uppercase tracking-widest"
+                    className="px-7 py-3.5 text-start text-[11px] font-bold uppercase tracking-[0.1em]"
                     style={{ color: 'var(--text-tertiary)' }}
                   >
                     {t('balance.current')}
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3.5 text-start text-[11px] font-semibold uppercase tracking-widest"
+                    className="px-7 py-3.5 text-start text-[11px] font-bold uppercase tracking-[0.1em]"
                     style={{ color: 'var(--text-tertiary)' }}
                   >
                     {t('transactions.notes')}
@@ -599,30 +786,69 @@ export default function BalancePage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedHistory.map((entry) => {
+                {sortedHistory.map((entry, index) => {
                   const entryBal = parseFloat(entry.balance)
                   const entryColor = entryBal >= 0 ? 'var(--color-income)' : 'var(--color-expense)'
+                  // Determine change from previous entry
+                  const prevEntry = sortedHistory[index + 1]
+                  const prevBal = prevEntry ? parseFloat(prevEntry.balance) : null
+                  const change = prevBal !== null ? entryBal - prevBal : null
 
                   return (
                     <tr
                       key={entry.id}
-                      className="border-b transition-colors hover:bg-[var(--bg-hover)]"
-                      style={{ borderColor: 'var(--border-primary)' }}
+                      className={cn(
+                        'row-enter row-animate border-b transition-colors hover:bg-[var(--bg-hover)]',
+                      )}
+                      style={{
+                        '--row-index': Math.min(index, 15),
+                        borderColor: 'var(--border-primary)',
+                        animationDelay: `${index * 30}ms`,
+                      } as CSSProperties}
                     >
                       <td
-                        className="whitespace-nowrap px-6 py-3.5 font-medium ltr-nums"
+                        className="whitespace-nowrap px-7 py-4 font-medium ltr-nums"
                         style={{ color: 'var(--text-primary)' }}
                       >
-                        {formatDate(entry.effective_date, isRtl ? 'he-IL' : 'en-US')}
+                        <div className="flex items-center gap-2.5">
+                          <CalendarDays
+                            className="h-3.5 w-3.5 shrink-0"
+                            style={{ color: 'var(--text-tertiary)' }}
+                          />
+                          {formatDate(entry.effective_date, locale)}
+                        </div>
                       </td>
                       <td
-                        className="fin-number whitespace-nowrap px-6 py-3.5 ltr-nums"
-                        style={{ color: entryColor }}
+                        className="whitespace-nowrap px-7 py-4"
                       >
-                        {formatAmount(entry.balance)}
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="fin-number font-bold ltr-nums"
+                            style={{ color: entryColor }}
+                          >
+                            {formatAmount(entry.balance)}
+                          </span>
+                          {/* Inline change indicator */}
+                          {change !== null && change !== 0 && (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
+                              style={{
+                                color: change > 0
+                                  ? 'var(--color-success)'
+                                  : 'var(--color-danger)',
+                              }}
+                            >
+                              {change > 0 ? (
+                                <TrendingUp className="h-3 w-3" />
+                              ) : (
+                                <TrendingDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td
-                        className="max-w-[300px] overflow-hidden truncate px-6 py-3.5"
+                        className="max-w-[300px] overflow-hidden truncate px-7 py-4"
                         style={{ color: 'var(--text-tertiary)' }}
                         title={entry.notes || undefined}
                       >
@@ -638,16 +864,16 @@ export default function BalancePage() {
       )}
 
       {/* ================================================================
-          Modal: Update Balance
+          Modal: Update Balance — Glassmorphism
           ================================================================ */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${modalClosing ? 'modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="balance-modal-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal()
+            if (e.target === e.currentTarget) requestModalClose()
           }}
         >
           {/* Backdrop */}
@@ -656,154 +882,177 @@ export default function BalancePage() {
           {/* Panel */}
           <div
             ref={modalPanelRef}
-            className="modal-panel relative z-10 w-full max-w-lg rounded-2xl border p-7"
+            className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            {/* Header */}
-            <div className="mb-6 flex items-center justify-between">
-              <h2
-                id="balance-modal-title"
-                className="text-lg font-bold"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {t('balance.update')}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)]"
-                style={{ color: 'var(--text-tertiary)' }}
-                aria-label={t('common.cancel')}
-              >
-                <X className="h-5 w-5" />
-              </button>
+            {/* Brand accent line */}
+            <div
+              className="h-[3px] w-full"
+              style={{ backgroundColor: 'var(--color-brand-500)' }}
+            />
+
+            <div className="p-7">
+              {/* Header */}
+              <div className="mb-7 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                    style={{
+                      backgroundColor: 'var(--bg-info)',
+                      color: 'var(--color-brand-500)',
+                    }}
+                  >
+                    <Wallet className="h-5 w-5" />
+                  </div>
+                  <h2
+                    id="balance-modal-title"
+                    className="text-lg font-extrabold tracking-tight"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {t('balance.update')}
+                  </h2>
+                </div>
+                <button
+                  onClick={requestModalClose}
+                  className="rounded-xl p-2.5 transition-colors hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  aria-label={t('common.cancel')}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleFormSubmit} className="space-y-5">
+                {/* Balance amount */}
+                <div>
+                  <label
+                    className="mb-2 block text-sm font-semibold"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {t('balance.current')} *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.balance}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, balance: e.target.value }))
+                    }
+                    className={cn(
+                      'input w-full rounded-xl border px-4 py-3.5 text-lg font-bold ltr-nums',
+                      formErrors.balance && 'input-error',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: formErrors.balance ? undefined : 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder="0.00"
+                    aria-describedby={formErrors.balance ? 'balance-balance-error' : undefined}
+                    aria-invalid={!!formErrors.balance}
+                  />
+                  {formErrors.balance && (
+                    <p
+                      id="balance-balance-error"
+                      role="alert"
+                      className="mt-1.5 text-xs font-semibold"
+                      style={{ color: 'var(--color-danger)' }}
+                    >
+                      {formErrors.balance}
+                    </p>
+                  )}
+                </div>
+
+                {/* Effective date */}
+                <div>
+                  <label
+                    className="mb-2 block text-sm font-semibold"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {t('balance.effectiveDate')} *
+                  </label>
+                  <DatePicker
+                    value={formData.effective_date}
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, effective_date: val }))
+                    }
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                      formErrors.effective_date && 'input-error',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: formErrors.effective_date ? undefined : 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    aria-describedby={formErrors.effective_date ? 'balance-date-error' : undefined}
+                    aria-invalid={!!formErrors.effective_date}
+                  />
+                  {formErrors.effective_date && (
+                    <p
+                      id="balance-date-error"
+                      role="alert"
+                      className="mt-1.5 text-xs font-semibold"
+                      style={{ color: 'var(--color-danger)' }}
+                    >
+                      {formErrors.effective_date}
+                    </p>
+                  )}
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label
+                    className="mb-2 block text-sm font-semibold"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {t('transactions.notes')}
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                    }
+                    rows={3}
+                    className={cn(
+                      'input w-full resize-none rounded-xl border px-4 py-3 text-sm',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder={t('transactions.notes')}
+                  />
+                </div>
+
+                {/* Actions */}
+                <div
+                  className="flex items-center justify-end gap-3 border-t pt-5"
+                  style={{ borderColor: 'var(--border-primary)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={requestModalClose}
+                    className="btn-press btn-secondary rounded-xl px-5 py-2.5 text-sm"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isMutating}
+                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t('common.save')}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleFormSubmit} className="space-y-5">
-              {/* Balance amount */}
-              <div>
-                <label
-                  className="mb-2 block text-sm font-semibold"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('balance.current')} *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.balance}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, balance: e.target.value }))
-                  }
-                  className={cn(
-                    'w-full rounded-xl border px-4 py-3 text-lg font-semibold outline-none ltr-nums',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                    formErrors.balance && 'border-red-400',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: formErrors.balance ? undefined : 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  placeholder="0.00"
-                  aria-describedby={formErrors.balance ? 'balance-balance-error' : undefined}
-                  aria-invalid={!!formErrors.balance}
-                />
-                {formErrors.balance && (
-                  <p id="balance-balance-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
-                    {formErrors.balance}
-                  </p>
-                )}
-              </div>
-
-              {/* Effective date */}
-              <div>
-                <label
-                  className="mb-2 block text-sm font-semibold"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('balance.effectiveDate')} *
-                </label>
-                <input
-                  type="date"
-                  value={formData.effective_date}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, effective_date: e.target.value }))
-                  }
-                  className={cn(
-                    'w-full rounded-xl border px-4 py-2.5 text-sm outline-none',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                    formErrors.effective_date && 'border-red-400',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: formErrors.effective_date ? undefined : 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  aria-describedby={formErrors.effective_date ? 'balance-date-error' : undefined}
-                  aria-invalid={!!formErrors.effective_date}
-                />
-                {formErrors.effective_date && (
-                  <p id="balance-date-error" role="alert" className="mt-1.5 text-xs font-medium" style={{ color: 'var(--color-expense)' }}>
-                    {formErrors.effective_date}
-                  </p>
-                )}
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label
-                  className="mb-2 block text-sm font-semibold"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('transactions.notes')}
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, notes: e.target.value }))
-                  }
-                  rows={3}
-                  className={cn(
-                    'w-full resize-none rounded-xl border px-4 py-2.5 text-sm outline-none',
-                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                  )}
-                  style={{
-                    backgroundColor: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  placeholder={t('transactions.notes')}
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-colors"
-                  style={{
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-secondary)',
-                    backgroundColor: 'var(--bg-input)',
-                  }}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isMutating}
-                  className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm disabled:opacity-60"
-                >
-                  {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {t('common.save')}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

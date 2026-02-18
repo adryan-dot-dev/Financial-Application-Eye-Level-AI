@@ -37,7 +37,7 @@ const STATUS_MESSAGE_KEYS: Record<number, string> = {
 
 export function getApiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ detail?: string }>
+    const axiosError = error as AxiosError<{ detail?: string | Array<{ msg: string }> }>
 
     // No response = network error
     if (!axiosError.response) {
@@ -45,16 +45,26 @@ export function getApiErrorMessage(error: unknown): string {
     }
 
     const status = axiosError.response.status
-    const messageKey = STATUS_MESSAGE_KEYS[status]
+    const detail = axiosError.response.data?.detail
 
-    if (messageKey) {
-      return i18n.t(messageKey)
+    // 422 = Pydantic validation errors — extract the actual message
+    if (status === 422 && Array.isArray(detail) && detail.length > 0) {
+      const msg = detail[0].msg
+      if (msg && typeof msg === 'string') {
+        // Pydantic prefixes with "Value error, " — strip it
+        return msg.replace(/^Value error,\s*/i, '')
+      }
     }
 
-    // Fall back to server detail or generic message
-    const detail = axiosError.response.data?.detail
+    // Server returned a string detail (e.g. 409 "Username already exists")
     if (detail && typeof detail === 'string') {
       return detail
+    }
+
+    // Generic status-based message
+    const messageKey = STATUS_MESSAGE_KEYS[status]
+    if (messageKey) {
+      return i18n.t(messageKey)
     }
 
     return i18n.t('toast.error')

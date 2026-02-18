@@ -28,6 +28,7 @@ class BalanceCreate(BaseModel):
     balance: Decimal = Field(..., max_digits=15, decimal_places=2)
     effective_date: date
     notes: Optional[str] = Field(None, max_length=1000)
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('balance')
     @classmethod
@@ -52,6 +53,7 @@ class BalanceResponse(BaseModel):
     effective_date: date
     is_current: bool
     notes: Optional[str]
+    bank_account_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

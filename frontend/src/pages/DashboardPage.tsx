@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { CSSProperties } from 'react'
+import NumberFlow from '@number-flow/react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -20,8 +21,6 @@ import {
   Wallet,
   TrendingUp,
   TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight,
   AlertTriangle,
   Bell,
   Info,
@@ -38,9 +37,12 @@ import {
   CalendarDays,
   Clock,
   Repeat,
+  X,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
-import type { DashboardSummary, DashboardPeriodData, CategoryBreakdownResponse, UpcomingPaymentsResponse } from '@/api/dashboard'
+import type { DashboardSummary, DashboardPeriodData, CategoryBreakdownResponse, UpcomingPaymentsResponse, SubscriptionsSummaryResponse } from '@/api/dashboard'
 import { forecastApi } from '@/api/forecast'
 import { alertsApi } from '@/api/alerts'
 import { MonthlyComparisonChart } from '@/components/dashboard/MonthlyComparisonChart'
@@ -50,8 +52,13 @@ import { LoansSummaryWidget } from '@/components/dashboard/LoansSummaryWidget'
 import { TopExpensesWidget } from '@/components/dashboard/TopExpensesWidget'
 import { cn } from '@/lib/utils'
 import { useCurrency } from '@/hooks/useCurrency'
+import { useCountUp } from '@/hooks/useCountUp'
+import { useCursorGlow } from '@/hooks/useCursorGlow'
+import { useScrollReveal } from '@/hooks/useScrollReveal'
 import { queryKeys } from '@/lib/queryKeys'
 import { useToast } from '@/contexts/ToastContext'
+import PeriodSelector from '@/components/ui/PeriodSelector'
+import { usePeriodSelector } from '@/hooks/usePeriodSelector'
 import type { ForecastMonth, Alert } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -62,12 +69,14 @@ interface KpiCardProps {
   icon: React.ReactNode
   label: string
   value: string
+  rawValue: number
   trend: string
   accentColor: string
   sparklineColor: string
   isLoading: boolean
   staggerClass: string
   sparklineData: number[]
+  extraClassName?: string
 }
 
 interface ChartDataPoint {
@@ -87,20 +96,20 @@ function parseTrend(trend: string): { value: number; isPositive: boolean } {
   return { value: Math.abs(num), isPositive: num >= 0 }
 }
 
-function buildChartData(months: ForecastMonth[]): ChartDataPoint[] {
+function buildChartData(months: ForecastMonth[], locale: string = 'en-US'): ChartDataPoint[] {
   return months.map((m) => ({
-    month: formatMonthLabel(m.month),
+    month: formatMonthLabel(m.month, locale),
     income: parseFloat(m.total_income) || 0,
     expenses: Math.abs(parseFloat(m.total_expenses) || 0),
     closingBalance: parseFloat(m.closing_balance) || 0,
   }))
 }
 
-function formatMonthLabel(monthStr: string): string {
+function formatMonthLabel(monthStr: string, locale: string = 'en-US'): string {
   const normalized = monthStr.length > 7 ? monthStr.slice(0, 7) : monthStr
   const date = new Date(normalized + '-01')
   if (isNaN(date.getTime())) return monthStr
-  return date.toLocaleDateString('en-US', { month: 'short' })
+  return date.toLocaleDateString(locale, { month: 'short' })
 }
 
 function severityConfig(severity: Alert['severity']) {
@@ -202,6 +211,7 @@ function MiniSparkline({
             dot={false}
             isAnimationActive={true}
             animationDuration={800}
+            animationEasing="ease-out"
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -214,12 +224,15 @@ function MiniSparkline({
 // ---------------------------------------------------------------------------
 
 function HeroBalanceCard({
-  balance,
-  netCashflow,
+  balance: _balance,
+  netCashflow: _netCashflow,
   balanceTrend,
   isLoading,
-  expectedBalance,
+  expectedBalance: _expectedBalance,
   isNetPositive,
+  rawBalance,
+  rawNetCashflow,
+  rawExpectedBalance,
 }: {
   balance: string
   netCashflow: string
@@ -227,21 +240,30 @@ function HeroBalanceCard({
   isLoading: boolean
   expectedBalance: string
   isNetPositive: boolean
+  rawBalance: number
+  rawNetCashflow: number
+  rawExpectedBalance: number
 }) {
   const { t } = useTranslation()
+  const { currency } = useCurrency()
   const { value: trendVal, isPositive } = parseTrend(balanceTrend)
 
   if (isLoading) {
     return (
       <div
-        className="hero-balance-card relative overflow-hidden rounded-2xl p-8 animate-fade-in-up stagger-1 h-full"
+        className="hero-balance-card relative overflow-hidden rounded-2xl p-5 sm:p-8 animate-fade-in-up stagger-1 h-full"
         style={{
-          background: 'linear-gradient(135deg, #1E3A8A, #2563EB, #3B82F6)',
+          background: 'linear-gradient(135deg, var(--color-brand-700) 0%, var(--color-brand-500) 50%, var(--color-brand-400) 100%)',
           minHeight: 180,
         }}
       >
-        <div className="absolute inset-0 bg-white/[0.03]" />
-        <div className="relative z-10">
+        {/* Decorative floating shapes */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-20 -end-20 h-56 w-56 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', filter: 'blur(40px)' }} />
+          <div className="absolute -bottom-16 -start-16 h-40 w-40 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', filter: 'blur(30px)' }} />
+        </div>
+        <div className="absolute inset-0 bg-white/[0.03] backdrop-blur-[1px]" />
+        <div className="relative z-10 skeleton-group">
           <SkeletonBox className="h-4 w-28 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
           <SkeletonBox className="mt-4 h-10 w-52 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
           <SkeletonBox className="mt-3 h-4 w-36 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }} />
@@ -253,13 +275,18 @@ function HeroBalanceCard({
 
   return (
     <div
-      className="hero-balance-card relative overflow-hidden rounded-2xl p-8 animate-fade-in-up stagger-1 h-full"
+      className="hero-balance-card relative overflow-hidden rounded-2xl p-5 sm:p-8 animate-fade-in-up stagger-1 h-full"
       style={{
-        background: 'linear-gradient(135deg, #1E3A8A, #2563EB, #3B82F6)',
+        background: 'linear-gradient(135deg, var(--color-brand-700) 0%, var(--color-brand-500) 50%, var(--color-brand-400) 100%)',
       }}
     >
+      {/* Decorative floating shapes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-20 -end-20 h-56 w-56 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', filter: 'blur(40px)' }} />
+        <div className="absolute -bottom-16 -start-16 h-40 w-40 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', filter: 'blur(30px)' }} />
+      </div>
       {/* Glass overlay */}
-      <div className="absolute inset-0 bg-white/[0.03]" />
+      <div className="absolute inset-0 bg-white/[0.03] backdrop-blur-[1px]" />
 
       <div className="relative z-10 flex flex-col gap-5">
         {/* Top row: balance + trend badge */}
@@ -271,12 +298,29 @@ function HeroBalanceCard({
                 {t('dashboard.currentBalance')}
               </p>
             </div>
-            <p className="text-white fin-number-lg mt-3 ltr-nums">
-              {balance}
+            <p className="text-white fin-number-lg mt-2 sm:mt-3 ltr-nums truncate text-xl sm:text-2xl md:text-[2rem]">
+              <span dir="ltr">
+                <NumberFlow
+                  value={rawBalance}
+                  format={{ style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }}
+                  transformTiming={{ duration: 750, easing: 'ease-out' }}
+                  spinTiming={{ duration: 750, easing: 'ease-out' }}
+                />
+              </span>
             </p>
-            <p className="text-white/60 text-sm mt-2 flex items-center gap-2">
-              <Activity className="h-3.5 w-3.5" />
-              {t('dashboard.netCashflow')}: {netCashflow}
+            <p className="text-white/60 text-sm mt-2 flex items-center gap-2 overflow-hidden">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {t('dashboard.netCashflow')}:{' '}
+                <span dir="ltr">
+                  <NumberFlow
+                    value={rawNetCashflow}
+                    format={{ style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }}
+                    transformTiming={{ duration: 750, easing: 'ease-out' }}
+                    spinTiming={{ duration: 750, easing: 'ease-out' }}
+                  />
+                </span>
+              </span>
             </p>
           </div>
 
@@ -291,9 +335,9 @@ function HeroBalanceCard({
               }}
             >
               {isPositive ? (
-                <ArrowUpRight className="h-4 w-4" />
+                <ChevronUp className="h-3.5 w-3.5" />
               ) : (
-                <ArrowDownRight className="h-4 w-4" />
+                <ChevronDown className="h-3.5 w-3.5" />
               )}
               {trendVal.toFixed(1)}%
             </div>
@@ -304,46 +348,55 @@ function HeroBalanceCard({
         <div
           className="rounded-xl px-5 py-4 flex items-center gap-4"
           style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.12)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(16px) saturate(150%)',
+            WebkitBackdropFilter: 'blur(16px) saturate(150%)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
           }}
         >
           <div
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
             style={{
               backgroundColor: isNetPositive
-                ? 'rgba(16, 185, 129, 0.25)'
-                : 'rgba(239, 68, 68, 0.25)',
+                ? 'rgba(5, 205, 153, 0.25)'
+                : 'rgba(238, 93, 80, 0.25)',
             }}
           >
             {isNetPositive ? (
-              <TrendingUp className="h-5 w-5 text-emerald-300" />
+              <TrendingUp className="h-5 w-5" style={{ color: 'var(--color-success-light)' }} />
             ) : (
-              <TrendingDown className="h-5 w-5 text-red-300" />
+              <TrendingDown className="h-5 w-5" style={{ color: 'var(--color-danger-light)' }} />
             )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-white/60 text-[11px] font-semibold uppercase tracking-wider">
               {t('dashboard.expectedBalance')}
             </p>
-            <p className="text-white text-2xl font-bold ltr-nums tracking-tight mt-0.5 fin-number">
-              {expectedBalance}
+            <p className="text-white text-2xl font-bold ltr-nums tracking-tight mt-0.5 fin-number truncate">
+              <span dir="ltr">
+                <NumberFlow
+                  value={rawExpectedBalance}
+                  format={{ style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }}
+                  transformTiming={{ duration: 750, easing: 'ease-out' }}
+                  spinTiming={{ duration: 750, easing: 'ease-out' }}
+                />
+              </span>
             </p>
           </div>
           <div
             className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold shrink-0"
             style={{
               backgroundColor: isNetPositive
-                ? 'rgba(16, 185, 129, 0.25)'
-                : 'rgba(239, 68, 68, 0.25)',
-              color: isNetPositive ? '#6EE7B7' : '#FCA5A5',
+                ? 'rgba(5, 205, 153, 0.25)'
+                : 'rgba(238, 93, 80, 0.25)',
+              color: isNetPositive ? 'var(--color-success-light)' : 'var(--color-danger-light)',
             }}
           >
             {isNetPositive ? (
-              <ArrowUpRight className="h-3 w-3" />
+              <ChevronUp className="h-3 w-3" />
             ) : (
-              <ArrowDownRight className="h-3 w-3" />
+              <ChevronDown className="h-3 w-3" />
             )}
             {isNetPositive
               ? t('dashboard.expectedUp')
@@ -362,21 +415,24 @@ function HeroBalanceCard({
 function KpiCard({
   icon,
   label,
-  value,
+  value: _value,
+  rawValue,
   trend,
   accentColor,
   sparklineColor,
   isLoading,
   staggerClass,
   sparklineData,
+  extraClassName,
 }: KpiCardProps) {
+  const { currency } = useCurrency()
   const { value: trendVal, isPositive } = parseTrend(trend)
 
   if (isLoading) {
     return (
       <div className={cn('card overflow-hidden', staggerClass, 'animate-fade-in-up')}>
         <div className="h-1 skeleton" />
-        <div className="p-5">
+        <div className="p-5 skeleton-group">
           <div className="flex items-center gap-4">
             <SkeletonBox className="h-14 w-14 rounded-full" />
             <div className="flex-1 space-y-2">
@@ -395,77 +451,74 @@ function KpiCard({
     <div
       className={cn(
         'card overflow-hidden transition-all duration-300',
-        'hover:-translate-y-1 hover:shadow-lg',
+        'card-lift',
+        'card-entrance',
         staggerClass,
         'animate-fade-in-up',
+        extraClassName,
       )}
     >
       {/* Colored accent bar at top */}
       <div className="h-1" style={{ background: accentColor }} />
 
-      <div className="p-5">
-        {/* Row: icon circle + value + trend */}
-        <div className="flex items-center gap-4">
-          {/* Large colored icon circle */}
-          <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
-            style={{
-              background: `linear-gradient(135deg, ${accentColor}20, ${accentColor}08)`,
-              color: accentColor,
-              boxShadow: `0 4px 14px ${accentColor}15`,
-            }}
-          >
-            {icon}
-          </div>
-
-          {/* Label + Value stacked */}
-          <div className="min-w-0 flex-1">
+      <div className="p-4">
+        {/* Label row */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{
+                backgroundColor: `${accentColor}14`,
+                color: accentColor,
+              }}
+            >
+              {icon}
+            </div>
             <p
-              className="text-[11px] font-semibold uppercase tracking-widest"
+              className="text-xs font-semibold"
               style={{ color: 'var(--text-tertiary)' }}
             >
               {label}
             </p>
-            <p
-              className="fin-number text-2xl ltr-nums mt-1 leading-tight"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {value}
-            </p>
           </div>
 
-          {/* Big prominent trend indicator */}
+          {/* Trend indicator */}
           {trendVal > 0 ? (
             <div
-              className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-2.5"
+              className="flex items-center gap-1 rounded-lg px-2 py-1"
               style={{
                 backgroundColor: isPositive
-                  ? 'rgba(16, 185, 129, 0.1)'
-                  : 'rgba(239, 68, 68, 0.1)',
-                color: isPositive ? '#10B981' : '#EF4444',
+                  ? 'rgba(5, 205, 153, 0.1)'
+                  : 'rgba(238, 93, 80, 0.1)',
+                color: isPositive ? 'var(--color-success)' : 'var(--color-danger)',
               }}
             >
               {isPositive ? (
-                <ArrowUpRight className="h-6 w-6" />
+                <ChevronUp className="h-3.5 w-3.5" />
               ) : (
-                <ArrowDownRight className="h-6 w-6" />
+                <ChevronDown className="h-3.5 w-3.5" />
               )}
-              <span className="text-sm font-bold ltr-nums">
+              <span className="text-xs font-bold ltr-nums">
                 {trendVal.toFixed(1)}%
               </span>
             </div>
-          ) : (
-            <div
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl"
-              style={{
-                backgroundColor: 'var(--bg-hover)',
-                color: 'var(--text-tertiary)',
-              }}
-            >
-              <Activity className="h-5 w-5 opacity-40" />
-            </div>
-          )}
+          ) : null}
         </div>
+
+        {/* Value - full width, no competing elements */}
+        <p
+          className="stat-highlight active fin-number text-2xl font-bold ltr-nums leading-tight"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          <span className="tabular-nums" dir="ltr">
+            <NumberFlow
+              value={rawValue}
+              format={{ style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }}
+              transformTiming={{ duration: 750, easing: 'ease-out' }}
+              spinTiming={{ duration: 750, easing: 'ease-out' }}
+            />
+          </span>
+        </p>
 
         {/* Sparkline in tinted container */}
         <div
@@ -499,14 +552,7 @@ function CustomChartTooltip({
   if (!active || !payload || payload.length === 0) return null
 
   return (
-    <div
-      className="rounded-xl border px-4 py-3"
-      style={{
-        backgroundColor: 'var(--bg-card)',
-        borderColor: 'var(--border-primary)',
-        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.12)',
-      }}
-    >
+    <div className="glass-tooltip">
       <p
         className="text-xs font-semibold mb-2"
         style={{ color: 'var(--text-primary)' }}
@@ -569,10 +615,10 @@ function ForecastChart({
           <div
             className="flex h-10 w-10 items-center justify-center rounded-xl"
             style={{
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.04))',
+              backgroundColor: 'rgba(67, 24, 255, 0.08)',
             }}
           >
-            <BarChart3 className="h-5 w-5" style={{ color: '#3B82F6' }} />
+            <BarChart3 className="h-5 w-5" style={{ color: 'var(--color-brand-500)' }} />
           </div>
           <div>
             <h3
@@ -605,7 +651,7 @@ function ForecastChart({
       </div>
 
       {/* Chart content area */}
-      <div className="h-[340px] px-6 pt-6 pb-3" dir="ltr">
+      <div className="h-[240px] sm:h-[340px] px-3 sm:px-6 pt-4 sm:pt-6 pb-3" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
             <defs>
@@ -676,9 +722,10 @@ function ForecastChart({
               fill="url(#incomeGradient)"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 6, stroke: 'white', strokeWidth: 2 }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-income)', style: { filter: 'drop-shadow(0 0 6px rgba(5, 205, 153, 0.4))' } }}
               isAnimationActive={true}
-              animationDuration={300}
+              animationDuration={800}
+              animationEasing="ease-out"
             />
             <Area
               type="monotone"
@@ -687,9 +734,10 @@ function ForecastChart({
               fill="url(#expenseGradient)"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 6, stroke: 'white', strokeWidth: 2 }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-danger)', style: { filter: 'drop-shadow(0 0 6px rgba(238, 93, 80, 0.4))' } }}
               isAnimationActive={true}
-              animationDuration={300}
+              animationDuration={800}
+              animationEasing="ease-out"
             />
             <Area
               type="monotone"
@@ -698,10 +746,11 @@ function ForecastChart({
               fill="url(#balanceGradient)"
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 6, stroke: 'white', strokeWidth: 2, fill: 'var(--color-brand-500)' }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: 'drop-shadow(0 0 6px rgba(108, 99, 255, 0.4))' } }}
               strokeDasharray="6 3"
               isAnimationActive={true}
-              animationDuration={300}
+              animationDuration={800}
+              animationEasing="ease-out"
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -722,6 +771,7 @@ function AlertsPanel({
   isRtl: boolean
 }) {
   const { t } = useTranslation()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const displayAlerts = alerts.slice(0, 5)
   const unreadCount = displayAlerts.filter((a) => !a.is_read).length
 
@@ -740,10 +790,9 @@ function AlertsPanel({
             >
               <Bell className="h-4.5 w-4.5" style={{ color: 'var(--text-tertiary)' }} />
             </div>
-            {/* Red badge with count */}
             {unreadCount > 0 && (
               <span
-                className="absolute -top-1.5 -end-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                className="badge-pulse absolute -top-1.5 -end-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
                 style={{ backgroundColor: 'var(--color-danger)' }}
               >
                 {unreadCount}
@@ -777,7 +826,7 @@ function AlertsPanel({
         </Link>
       </div>
 
-      {/* Alert items */}
+      {/* Alert items — compact with expand */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {displayAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10">
@@ -792,60 +841,81 @@ function AlertsPanel({
             </p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {displayAlerts.map((alert) => {
               const sev = severityConfig(alert.severity)
               const isUnread = !alert.is_read
-              return (
-                <Link
-                  key={alert.id}
-                  to="/alerts"
-                  className="alert-item relative flex items-start gap-3 rounded-xl px-3.5 py-3.5 transition-colors"
-                  style={{
-                    backgroundColor: isUnread ? sev.bg : 'transparent',
-                    borderInlineStart: `3px solid ${sev.text}`,
-                  }}
-                >
-                  {/* Severity icon */}
-                  <div className="mt-0.5 flex shrink-0 items-center" style={{ color: sev.dot }}>
-                    {sev.icon}
-                  </div>
+              const isExpanded = expandedId === alert.id
 
-                  <div className="min-w-0 flex-1">
-                    <p
+              return (
+                <div key={alert.id}>
+                  {/* Compact row: title + severity badge + expand arrow */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isExpanded ? null : alert.id)}
+                    className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-[var(--bg-hover)]"
+                    style={{
+                      backgroundColor: isUnread ? sev.bg : 'transparent',
+                    }}
+                  >
+                    {/* Severity dot */}
+                    <div
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: sev.dot }}
+                    />
+
+                    {/* Title */}
+                    <span
                       className={cn(
-                        'text-[13px] leading-snug',
-                        isUnread ? 'font-semibold' : 'font-medium'
+                        'min-w-0 flex-1 truncate text-[13px]',
+                        isUnread ? 'font-semibold' : 'font-medium',
                       )}
                       style={{ color: 'var(--text-primary)' }}
                     >
                       {alert.title}
-                    </p>
-                    <p
-                      className="mt-0.5 text-[11px] leading-snug"
-                      style={{
-                        color: 'var(--text-secondary)',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {alert.message}
-                    </p>
-                  </div>
+                    </span>
 
-                  {/* Severity pill */}
-                  <span
-                    className="mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                    style={{
-                      backgroundColor: sev.bg,
-                      color: sev.text,
-                    }}
-                  >
-                    {t(`alerts.${alert.severity}`)}
-                  </span>
-                </Link>
+                    {/* Severity pill */}
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                      style={{ backgroundColor: sev.bg, color: sev.text }}
+                    >
+                      {t(`alerts.${alert.severity}`)}
+                    </span>
+
+                    {/* Expand arrow */}
+                    <ChevronDown
+                      className={cn(
+                        'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
+                        isExpanded && 'rotate-180',
+                      )}
+                      style={{ color: 'var(--text-tertiary)' }}
+                    />
+                  </button>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div
+                      className="mx-3 mb-1 rounded-lg px-3 py-2.5 animate-fade-in-up"
+                      style={{ backgroundColor: 'var(--bg-hover)' }}
+                    >
+                      <p
+                        className="text-[12px] leading-relaxed"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        {alert.message}
+                      </p>
+                      <Link
+                        to="/alerts"
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold"
+                        style={{ color: 'var(--color-brand-500)' }}
+                      >
+                        {t('dashboard.viewAll')}
+                        <ChevronRight className={cn('h-3 w-3', isRtl && 'rotate-180')} />
+                      </Link>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -868,32 +938,32 @@ function QuickActions({ isRtl }: { isRtl: boolean }) {
       description: t('transactions.title'),
       icon: <PlusCircle className="h-5 w-5" />,
       href: '/transactions',
-      gradient: '#2563EB',
-      bgLight: 'rgba(37, 99, 235, 0.08)',
+      gradient: 'var(--color-brand-600)',
+      bgLight: 'rgba(67, 24, 255, 0.08)',
     },
     {
       label: t('balance.update'),
       description: t('balance.title'),
       icon: <Banknote className="h-5 w-5" />,
       href: '/balance',
-      gradient: '#10B981',
-      bgLight: 'rgba(16, 185, 129, 0.08)',
+      gradient: 'var(--color-success)',
+      bgLight: 'rgba(5, 205, 153, 0.08)',
     },
     {
       label: t('forecast.title'),
       description: t('dashboard.forecast'),
       icon: <BarChart3 className="h-5 w-5" />,
       href: '/forecast',
-      gradient: '#1D4ED8',
-      bgLight: 'rgba(29, 78, 216, 0.08)',
+      gradient: 'var(--color-brand-700)',
+      bgLight: 'rgba(67, 24, 255, 0.06)',
     },
     {
       label: t('loans.title'),
       description: t('loans.title'),
       icon: <CreditCard className="h-5 w-5" />,
       href: '/loans',
-      gradient: '#7C3AED',
-      bgLight: 'rgba(124, 58, 237, 0.08)',
+      gradient: 'var(--color-accent-purple)',
+      bgLight: 'rgba(134, 140, 255, 0.08)',
     },
   ]
 
@@ -907,10 +977,10 @@ function QuickActions({ isRtl }: { isRtl: boolean }) {
         <div
           className="flex h-10 w-10 items-center justify-center rounded-xl"
           style={{
-            background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0.04))',
+            backgroundColor: 'rgba(67, 24, 255, 0.08)',
           }}
         >
-          <PlusCircle className="h-5 w-5" style={{ color: '#2563EB' }} />
+          <PlusCircle className="h-5 w-5" style={{ color: 'var(--color-brand-600)' }} />
         </div>
         <h3
           className="text-sm font-bold"
@@ -919,14 +989,15 @@ function QuickActions({ isRtl }: { isRtl: boolean }) {
           {t('dashboard.quickActions')}
         </h3>
       </div>
-      <div className="grid grid-cols-2 gap-4 p-6 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 p-4 sm:p-6 md:grid-cols-4">
         {actions.map((action, index) => (
           <Link
             key={action.href}
             to={action.href}
             className={cn(
-              'quick-action-card group flex flex-col items-center gap-3.5 rounded-xl px-4 py-5 text-center transition-all duration-200',
+              'quick-action-card card-lift group flex flex-col items-center gap-3.5 rounded-xl px-4 py-5 text-center transition-all duration-200',
               `animate-fade-in-up stagger-${index + 5}`,
+              index === 0 && 'glow-ring',
             )}
             style={{
               backgroundColor: action.bgLight,
@@ -982,14 +1053,14 @@ function CategoryDonutChart() {
   const chartData = items.map((item) => ({
     name: isHe ? item.category_name_he : item.category_name,
     value: parseFloat(item.total_amount) || 0,
-    color: item.category_color || '#94a3b8',
+    color: item.category_color || 'var(--text-tertiary)',
     percentage: item.percentage,
     count: item.transaction_count,
   }))
 
   if (isLoading) {
     return (
-      <div className="card card-hover animate-fade-in-up section-delay-3 p-7">
+      <div className="card card-hover animate-fade-in-up section-delay-3 p-7 skeleton-group">
         <div className="mb-6 flex items-center gap-3">
           <SkeletonBox className="h-9 w-9 rounded-xl" />
           <SkeletonBox className="h-5 w-40" />
@@ -997,7 +1068,7 @@ function CategoryDonutChart() {
         <div className="flex items-center justify-center py-8">
           <SkeletonBox className="h-[200px] w-[200px] rounded-full" />
         </div>
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-3 skeleton-group">
           <SkeletonBox className="h-4 w-full rounded" />
           <SkeletonBox className="h-4 w-3/4 rounded" />
           <SkeletonBox className="h-4 w-5/6 rounded" />
@@ -1016,10 +1087,10 @@ function CategoryDonutChart() {
         <div
           className="flex h-10 w-10 items-center justify-center rounded-xl"
           style={{
-            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.04))',
+            backgroundColor: 'rgba(134, 140, 255, 0.08)',
           }}
         >
-          <Target className="h-5 w-5" style={{ color: '#8B5CF6' }} />
+          <Target className="h-5 w-5" style={{ color: 'var(--color-accent-purple)' }} />
         </div>
         <h3
           className="text-sm font-bold"
@@ -1059,6 +1130,7 @@ function CategoryDonutChart() {
                     stroke="none"
                     isAnimationActive={true}
                     animationDuration={600}
+                    animationBegin={200}
                   >
                     {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1069,14 +1141,7 @@ function CategoryDonutChart() {
                       if (!active || !payload || payload.length === 0) return null
                       const d = payload[0].payload as (typeof chartData)[0]
                       return (
-                        <div
-                          className="rounded-xl border px-4 py-3"
-                          style={{
-                            backgroundColor: 'var(--bg-card)',
-                            borderColor: 'var(--border-primary)',
-                            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.12)',
-                          }}
-                        >
+                        <div className="glass-tooltip">
                           <div className="flex items-center gap-2 mb-1">
                             <div
                               className="h-2.5 w-2.5 rounded-full"
@@ -1108,7 +1173,7 @@ function CategoryDonutChart() {
                 </PieChart>
               </ResponsiveContainer>
               {/* Center label */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4 overflow-hidden">
                 <p
                   className="text-[10px] font-medium uppercase tracking-wider"
                   style={{ color: 'var(--text-tertiary)' }}
@@ -1116,7 +1181,7 @@ function CategoryDonutChart() {
                   {t('transactions.total')}
                 </p>
                 <p
-                  className="text-lg font-bold ltr-nums mt-0.5"
+                  className="text-lg font-bold ltr-nums mt-0.5 truncate max-w-full"
                   style={{ color: 'var(--text-primary)' }}
                 >
                   {formatAmount(totalExpenses)}
@@ -1136,7 +1201,7 @@ function CategoryDonutChart() {
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: item.category_color || '#94a3b8' }}
+                    style={{ backgroundColor: item.category_color || 'var(--text-tertiary)' }}
                   />
                   <span
                     className="text-[13px] font-medium truncate"
@@ -1185,7 +1250,7 @@ function UpcomingPaymentsWidget() {
   const totalExpenses = data?.total_upcoming_expenses ?? '0'
   const totalIncome = data?.total_upcoming_income ?? '0'
 
-  function getSourceIcon(sourceType: 'fixed' | 'installment' | 'loan') {
+  function getSourceIcon(sourceType: 'fixed' | 'installment' | 'loan' | 'subscription') {
     switch (sourceType) {
       case 'fixed':
         return <Repeat className="h-4 w-4" />
@@ -1193,10 +1258,12 @@ function UpcomingPaymentsWidget() {
         return <CreditCard className="h-4 w-4" />
       case 'loan':
         return <Banknote className="h-4 w-4" />
+      case 'subscription':
+        return <CalendarDays className="h-4 w-4" />
     }
   }
 
-  function getSourceLabel(sourceType: 'fixed' | 'installment' | 'loan') {
+  function getSourceLabel(sourceType: 'fixed' | 'installment' | 'loan' | 'subscription') {
     switch (sourceType) {
       case 'fixed':
         return t('dashboard.fixed')
@@ -1204,6 +1271,8 @@ function UpcomingPaymentsWidget() {
         return t('dashboard.installment')
       case 'loan':
         return t('dashboard.loan')
+      case 'subscription':
+        return t('nav.subscriptions')
     }
   }
 
@@ -1231,12 +1300,12 @@ function UpcomingPaymentsWidget() {
 
   if (isLoading) {
     return (
-      <div className="card card-hover animate-fade-in-up section-delay-3 p-7">
+      <div className="card card-hover animate-fade-in-up section-delay-3 p-7 skeleton-group">
         <div className="mb-6 flex items-center gap-3">
           <SkeletonBox className="h-9 w-9 rounded-xl" />
           <SkeletonBox className="h-5 w-36" />
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 skeleton-group">
           <SkeletonBox className="h-14 w-full rounded-xl" />
           <SkeletonBox className="h-14 w-full rounded-xl" />
           <SkeletonBox className="h-14 w-full rounded-xl" />
@@ -1256,9 +1325,9 @@ function UpcomingPaymentsWidget() {
       >
         <div
           className="flex h-9 w-9 items-center justify-center rounded-xl"
-          style={{ backgroundColor: 'rgba(59, 130, 246, 0.08)' }}
+          style={{ backgroundColor: 'rgba(67, 24, 255, 0.08)' }}
         >
-          <CalendarDays className="h-4.5 w-4.5" style={{ color: '#3B82F6' }} />
+          <CalendarDays className="h-4.5 w-4.5" style={{ color: 'var(--color-brand-500)' }} />
         </div>
         <div>
           <h3
@@ -1292,24 +1361,24 @@ function UpcomingPaymentsWidget() {
           {/* Payment list */}
           <div className="flex-1 overflow-y-auto px-4 py-3 max-h-[340px]">
             <div className="space-y-1.5">
-              {items.map((item) => {
+              {items.map((item, index) => {
                 const dueBadge = getDueBadge(item.days_until_due)
                 const isExpense = item.type === 'expense'
 
                 return (
                   <div
                     key={item.id}
-                    className="flex items-center gap-3 rounded-xl px-3.5 py-3 transition-colors"
-                    style={{ backgroundColor: 'var(--bg-hover)' }}
+                    className="row-enter flex items-center gap-3 rounded-xl px-3.5 py-3 transition-colors"
+                    style={{ '--row-index': Math.min(index, 15), backgroundColor: 'var(--bg-hover)' } as CSSProperties}
                   >
                     {/* Source type icon */}
                     <div
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
                       style={{
                         backgroundColor: isExpense
-                          ? 'rgba(239, 68, 68, 0.08)'
-                          : 'rgba(16, 185, 129, 0.08)',
-                        color: isExpense ? '#EF4444' : '#10B981',
+                          ? 'rgba(238, 93, 80, 0.08)'
+                          : 'rgba(5, 205, 153, 0.08)',
+                        color: isExpense ? 'var(--color-danger)' : 'var(--color-success)',
                       }}
                     >
                       {getSourceIcon(item.source_type)}
@@ -1342,8 +1411,8 @@ function UpcomingPaymentsWidget() {
                           <span
                             className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
                             style={{
-                              backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                              color: '#3B82F6',
+                              backgroundColor: 'rgba(134, 140, 255, 0.1)',
+                              color: 'var(--color-brand-500)',
                             }}
                           >
                             {item.installment_info}
@@ -1353,9 +1422,9 @@ function UpcomingPaymentsWidget() {
                     </div>
 
                     {/* Amount + due badge */}
-                    <div className="shrink-0 flex flex-col items-end gap-1">
+                    <div className="shrink-0 flex flex-col items-end gap-1 max-w-[45%]">
                       <span
-                        className="text-[13px] font-bold ltr-nums"
+                        className="text-[13px] font-bold ltr-nums truncate max-w-full"
                         style={{
                           color: isExpense ? 'var(--color-danger)' : 'var(--color-income)',
                         }}
@@ -1391,15 +1460,15 @@ function UpcomingPaymentsWidget() {
               >
                 {t('dashboard.totalUpcoming')}
               </span>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 shrink-0">
                 <span
-                  className="text-xs font-bold ltr-nums"
+                  className="text-xs font-bold ltr-nums whitespace-nowrap"
                   style={{ color: 'var(--color-danger)' }}
                 >
                   -{formatAmount(totalExpenses)}
                 </span>
                 <span
-                  className="text-xs font-bold ltr-nums"
+                  className="text-xs font-bold ltr-nums whitespace-nowrap"
                   style={{ color: 'var(--color-income)' }}
                 >
                   +{formatAmount(totalIncome)}
@@ -1414,6 +1483,137 @@ function UpcomingPaymentsWidget() {
 }
 
 // ---------------------------------------------------------------------------
+// Subscriptions Summary Widget
+// ---------------------------------------------------------------------------
+
+function SubscriptionsWidget() {
+  const { t } = useTranslation()
+  const { formatAmount } = useCurrency()
+
+  const { data, isLoading } = useQuery<SubscriptionsSummaryResponse>({
+    queryKey: queryKeys.dashboard.subscriptionsSummary(),
+    queryFn: () => dashboardApi.subscriptionsSummary(),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="card card-hover animate-fade-in-up section-delay-3 p-7 skeleton-group">
+        <div className="mb-6 flex items-center gap-3">
+          <SkeletonBox className="h-9 w-9 rounded-xl" />
+          <SkeletonBox className="h-5 w-36" />
+        </div>
+        <div className="space-y-3 skeleton-group">
+          <SkeletonBox className="h-14 w-full rounded-xl" />
+          <SkeletonBox className="h-14 w-full rounded-xl" />
+        </div>
+      </div>
+    )
+  }
+
+  const items = data?.items ?? []
+  const activeCount = data?.active_subscriptions_count ?? 0
+  const monthlyCost = data?.total_monthly_subscription_cost ?? '0'
+  const upcomingCount = data?.upcoming_renewals_count ?? 0
+
+  return (
+    <div className="card card-hover animate-fade-in-up section-delay-4 overflow-hidden flex flex-col">
+      {/* Header */}
+      <div
+        className="flex items-center justify-between border-b px-7 py-5"
+        style={{ borderColor: 'var(--border-primary)' }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-xl"
+            style={{ backgroundColor: 'var(--bg-info)' }}
+          >
+            <CalendarDays className="h-4.5 w-4.5" style={{ color: 'var(--color-brand-500)' }} />
+          </div>
+          <div>
+            <h3
+              className="text-base font-bold"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {t('nav.subscriptions')}
+            </h3>
+            <p className="text-[10px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+              {activeCount} {t('dashboard.active')}
+            </p>
+          </div>
+        </div>
+        <Link
+          to="/subscriptions"
+          className="flex items-center gap-1 text-xs font-semibold"
+          style={{ color: 'var(--color-brand-500)' }}
+        >
+          {t('common.viewAll')}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      {/* Stats row */}
+      <div
+        className="grid grid-cols-2 gap-px border-b"
+        style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--border-primary)' }}
+      >
+        <div className="px-5 py-4" style={{ backgroundColor: 'var(--bg-card)' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+            {t('dashboard.monthlyExpenses')}
+          </p>
+          <p className="fin-number text-lg ltr-nums mt-1" style={{ color: 'var(--color-danger)' }}>
+            {formatAmount(monthlyCost)}
+          </p>
+        </div>
+        <div className="px-5 py-4" style={{ backgroundColor: 'var(--bg-card)' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+            {t('dashboard.upcomingRenewals')}
+          </p>
+          <p className="fin-number text-lg ltr-nums mt-1" style={{ color: 'var(--text-primary)' }}>
+            {upcomingCount}
+          </p>
+        </div>
+      </div>
+
+      {/* Subscription list */}
+      {items.length > 0 && (
+        <div className="flex-1 overflow-y-auto px-4 py-3 max-h-[240px]">
+          <div className="space-y-1.5">
+            {items.slice(0, 5).map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl px-3.5 py-3"
+                style={{ backgroundColor: 'var(--bg-hover)' }}
+              >
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{
+                    backgroundColor: item.is_active ? 'var(--bg-info)' : 'var(--bg-hover)',
+                    color: item.is_active ? 'var(--color-brand-500)' : 'var(--text-tertiary)',
+                  }}
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                    {item.name}
+                  </p>
+                  <p className="text-[10px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                    {item.billing_cycle}
+                  </p>
+                </div>
+                <span className="text-[13px] font-bold ltr-nums shrink-0" style={{ color: 'var(--color-danger)' }}>
+                  {formatAmount(item.monthly_equivalent, item.currency)}/{t('common.month')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Empty State
 // ---------------------------------------------------------------------------
 
@@ -1422,7 +1622,7 @@ function EmptyState() {
 
   return (
     <div className="card animate-fade-in-scale flex flex-col items-center justify-center py-20">
-      <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl" style={{ backgroundColor: 'rgba(37, 99, 235, 0.05)' }}>
+      <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl" style={{ backgroundColor: 'rgba(67, 24, 255, 0.05)' }}>
         <Wallet className="h-10 w-10" style={{ color: 'var(--border-focus)' }} />
       </div>
       <h3
@@ -1471,7 +1671,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
       </h3>
       <button
         onClick={onRetry}
-        className="card-hover mt-6 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all"
+        className="btn-press card-hover mt-6 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all"
         style={{
           backgroundColor: 'var(--bg-hover)',
           color: 'var(--text-primary)',
@@ -1479,7 +1679,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         }}
       >
         <RefreshCw className="h-4 w-4" />
-        {t('common.loading')}
+        {t('error.tryAgain')}
       </button>
     </div>
   )
@@ -1496,6 +1696,10 @@ export default function DashboardPage() {
   const toast = useToast()
   const { formatAmount } = useCurrency()
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [alertPopupDismissed, setAlertPopupDismissed] = useState(false)
+  const scrollRef = useScrollReveal()
+  const { ref: glowRef, onMouseMove: handleGlow } = useCursorGlow()
+  const { period, setPeriod } = usePeriodSelector()
 
   useEffect(() => {
     document.title = t('pageTitle.dashboard')
@@ -1503,8 +1707,8 @@ export default function DashboardPage() {
 
   // --- Data queries ---
   const summaryQuery = useQuery<DashboardSummary>({
-    queryKey: queryKeys.dashboard.summary(),
-    queryFn: () => dashboardApi.summary(),
+    queryKey: queryKeys.dashboard.summary(period.startDate, period.endDate),
+    queryFn: () => dashboardApi.summary(period.startDate, period.endDate),
   })
 
   const forecastQuery = useQuery({
@@ -1538,12 +1742,21 @@ export default function DashboardPage() {
     forecastQuery.isError &&
     !isSummaryLoading
 
-  const chartData = forecastData ? buildChartData(forecastData.months) : []
+  const locale = i18n.language === 'he' ? 'he-IL' : 'en-US'
+  const chartData = forecastData ? buildChartData(forecastData.months, locale) : []
 
   // Build sparkline data from weekly breakdowns
   const incomeSparkline = extractSparklineData(weeklyData, 'income')
   const expensesSparkline = extractSparklineData(weeklyData, 'expenses')
   const netSparkline = extractSparklineData(weeklyData, 'net')
+
+  // Animated KPI values
+  const rawIncome = summary ? (parseFloat(summary.monthly_income) || 0) : 0
+  const rawExpenses = summary ? (parseFloat(summary.monthly_expenses) || 0) : 0
+  const rawNet = summary ? (parseFloat(summary.net_cashflow) || 0) : 0
+  const animatedIncome = useCountUp(rawIncome, 800)
+  const animatedExpenses = useCountUp(rawExpenses, 800)
+  const animatedNet = useCountUp(rawNet, 800)
 
   // Calculate expected balance = current_balance + net_cashflow
   const currentBalanceNum = summary ? (parseFloat(summary.current_balance) || 0) : 0
@@ -1578,32 +1791,38 @@ export default function DashboardPage() {
     {
       icon: <TrendingUp className="h-5 w-5" />,
       label: t('dashboard.monthlyIncome'),
-      value: summary ? formatAmount(summary.monthly_income) : '--',
+      value: summary ? formatAmount(animatedIncome) : '--',
+      rawValue: rawIncome,
       trend: summary?.income_trend ?? '0',
-      accentColor: '#10B981',
-      sparklineColor: '#10B981',
+      accentColor: 'var(--color-income)',
+      sparklineColor: 'var(--color-income)',
       staggerClass: 'stagger-2',
       sparklineData: incomeSparkline,
+      extraClassName: 'card-noise',
     },
     {
       icon: <TrendingDown className="h-5 w-5" />,
       label: t('dashboard.monthlyExpenses'),
-      value: summary ? formatAmount(summary.monthly_expenses) : '--',
+      value: summary ? formatAmount(animatedExpenses) : '--',
+      rawValue: rawExpenses,
       trend: summary?.expense_trend ?? '0',
-      accentColor: '#EF4444',
-      sparklineColor: '#EF4444',
+      accentColor: 'var(--color-expense)',
+      sparklineColor: 'var(--color-expense)',
       staggerClass: 'stagger-3',
       sparklineData: expensesSparkline,
+      extraClassName: 'card-noise',
     },
     {
       icon: <BarChart3 className="h-5 w-5" />,
       label: t('dashboard.netCashflow'),
-      value: summary ? formatAmount(summary.net_cashflow) : '--',
+      value: summary ? formatAmount(animatedNet) : '--',
+      rawValue: rawNet,
       trend: '0',
-      accentColor: '#3B82F6',
-      sparklineColor: '#3B82F6',
+      accentColor: 'var(--color-brand-500)',
+      sparklineColor: 'var(--color-brand-500)',
       staggerClass: 'stagger-4',
       sparklineData: netSparkline,
+      extraClassName: 'card-noise',
     },
   ]
 
@@ -1611,23 +1830,76 @@ export default function DashboardPage() {
   // Render
   // -----------------------------------------------------------------------
 
+  const unreadAlertCount = alerts?.items?.filter((a: Alert) => !a.is_read).length ?? 0
+
+  // Auto-dismiss alert popup after 8 seconds
+  useEffect(() => {
+    if (unreadAlertCount > 0 && !alertPopupDismissed) {
+      const timer = setTimeout(() => setAlertPopupDismissed(true), 8000)
+      return () => clearTimeout(timer)
+    }
+  }, [unreadAlertCount, alertPopupDismissed])
+
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="space-y-8 p-6 md:p-8">
+    <div ref={scrollRef} dir={isRtl ? 'rtl' : 'ltr'} className="space-y-6 sm:space-y-8 p-4 sm:p-6 md:p-8">
+      {/* --- Alert popup notification --- */}
+      {unreadAlertCount > 0 && !alertPopupDismissed && (
+        <div
+          className="fixed top-4 z-50 toast-spring-enter"
+          style={{ insetInlineEnd: '1rem' }}
+        >
+          <div
+            className="card flex items-center gap-3 rounded-xl px-4 py-3 max-w-xs"
+            style={{
+              boxShadow: 'var(--shadow-lg)',
+              border: '1px solid var(--border-primary)',
+              backdropFilter: 'blur(16px) saturate(150%)',
+              WebkitBackdropFilter: 'blur(16px) saturate(150%)',
+            }}
+          >
+            <div
+              className="badge-pulse flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{ backgroundColor: 'var(--bg-warning)', color: 'var(--color-warning)' }}
+            >
+              <Bell className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {t('dashboard.unreadCount', { count: unreadAlertCount })}
+              </p>
+              <Link
+                to="/alerts"
+                className="text-xs font-medium"
+                style={{ color: 'var(--color-brand-500)' }}
+              >
+                {t('dashboard.alerts')} →
+              </Link>
+            </div>
+            <button
+              onClick={() => setAlertPopupDismissed(true)}
+              className="btn-press shrink-0 rounded-md p-1"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* --- Page Header --- */}
-      <div className="animate-fade-in flex items-end justify-between">
-        <div>
+      <div className="animate-fade-in flex items-start sm:items-end justify-between gap-3">
+        <div className="min-w-0">
           <h1
-            className="text-[1.75rem] font-extrabold tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
+            className="gradient-heading text-xl sm:text-[1.75rem] font-extrabold tracking-tight"
           >
             {t('dashboard.title')}
           </h1>
           <div
-            className="mt-2 flex items-center gap-2 text-sm"
+            className="mt-1 sm:mt-2 flex items-center gap-2 text-xs sm:text-sm"
             style={{ color: 'var(--text-tertiary)' }}
           >
-            <Calendar className="h-3.5 w-3.5" />
-            <span>{formatTodayDate(i18n.language)}</span>
+            <Calendar className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{formatTodayDate(i18n.language)}</span>
           </div>
         </div>
 
@@ -1636,7 +1908,7 @@ export default function DashboardPage() {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="card card-hover flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium transition-all disabled:opacity-60"
+            className="btn-press card card-hover flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-medium transition-all disabled:opacity-60 shrink-0"
             style={{ color: 'var(--text-secondary)' }}
             title={t('common.refresh')}
             aria-label={t('common.refresh')}
@@ -1645,6 +1917,13 @@ export default function DashboardPage() {
           </button>
         )}
       </div>
+
+      {/* --- Period Selector --- */}
+      {!isAllError && (
+        <div className="animate-fade-in">
+          <PeriodSelector value={period} onChange={setPeriod} />
+        </div>
+      )}
 
       {/* --- Error / empty state --- */}
       {isAllError && !isSummaryLoading && (
@@ -1657,9 +1936,9 @@ export default function DashboardPage() {
 
       {/* --- Hero + KPI Cards in unified grid --- */}
       {!isAllError && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <div ref={glowRef} onMouseMove={handleGlow} className="scroll-reveal content-reveal card-glow grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-5">
           {/* Hero balance card - spans 2 columns */}
-          <div className="lg:col-span-2">
+          <div className="md:col-span-2 lg:col-span-2">
             <HeroBalanceCard
               balance={summary ? formatAmount(summary.current_balance) : '--'}
               netCashflow={summary ? formatAmount(summary.net_cashflow) : '--'}
@@ -1667,6 +1946,9 @@ export default function DashboardPage() {
               isLoading={isSummaryLoading}
               expectedBalance={summary ? formatAmount(expectedBalanceNum) : '--'}
               isNetPositive={isNetPositive}
+              rawBalance={currentBalanceNum}
+              rawNetCashflow={netCashflowNum}
+              rawExpectedBalance={expectedBalanceNum}
             />
           </div>
           {/* 3 KPI cards - 1 column each */}
@@ -1678,9 +1960,9 @@ export default function DashboardPage() {
 
       {/* --- Forecast Chart (full width) --- */}
       {!isAllError && (
-        <div>
+        <div className="scroll-reveal content-reveal">
           {forecastQuery.isLoading ? (
-            <div className="card animate-fade-in-up section-delay-2 p-7">
+            <div className="card animate-fade-in-up section-delay-2 p-7 skeleton-group">
               <SkeletonBox className="mb-6 h-5 w-44" />
               <SkeletonBox className="h-[340px] w-full rounded-xl" />
             </div>
@@ -1706,12 +1988,14 @@ export default function DashboardPage() {
 
       {/* --- Financial Health Score (full width, compact) --- */}
       {!isAllError && (
-        <FinancialHealthWidget />
+        <div className="scroll-reveal">
+          <FinancialHealthWidget />
+        </div>
       )}
 
       {/* --- Category Breakdown + Top Expenses --- */}
       {!isAllError && (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="scroll-reveal grid grid-cols-1 gap-4 sm:gap-6 lg:gap-8 lg:grid-cols-2">
           <CategoryDonutChart />
           <TopExpensesWidget />
         </div>
@@ -1719,7 +2003,7 @@ export default function DashboardPage() {
 
       {/* --- Installments + Loans Summary --- */}
       {!isAllError && (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="scroll-reveal grid grid-cols-1 gap-4 sm:gap-6 lg:gap-8 lg:grid-cols-2">
           <InstallmentsSummaryWidget />
           <LoansSummaryWidget />
         </div>
@@ -1727,18 +2011,20 @@ export default function DashboardPage() {
 
       {/* --- Monthly Comparison Chart (full width) --- */}
       {!isAllError && (
-        <MonthlyComparisonChart />
+        <div className="scroll-reveal">
+          <MonthlyComparisonChart />
+        </div>
       )}
 
       {/* --- Upcoming Payments + Alerts --- */}
       {!isAllError && (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="scroll-reveal grid grid-cols-1 gap-4 sm:gap-6 lg:gap-8 lg:grid-cols-2">
           <UpcomingPaymentsWidget />
           <div>
             {alertsQuery.isLoading ? (
-              <div className="card animate-fade-in-up section-delay-2 p-6">
+              <div className="card animate-fade-in-up section-delay-2 p-6 skeleton-group">
                 <SkeletonBox className="mb-5 h-5 w-28" />
-                <div className="space-y-3">
+                <div className="space-y-3 skeleton-group">
                   <SkeletonBox className="h-16 w-full rounded-xl" />
                   <SkeletonBox className="h-16 w-full rounded-xl" />
                   <SkeletonBox className="h-16 w-full rounded-xl" />
@@ -1754,9 +2040,18 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* --- Subscriptions Summary --- */}
+      {!isAllError && (
+        <div className="scroll-reveal">
+          <SubscriptionsWidget />
+        </div>
+      )}
+
       {/* --- Quick Actions --- */}
       {!isAllError && !isSummaryLoading && (
-        <QuickActions isRtl={isRtl} />
+        <div className="scroll-reveal">
+          <QuickActions isRtl={isRtl} />
+        </div>
       )}
     </div>
   )

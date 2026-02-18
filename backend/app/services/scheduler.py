@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.db.models.user import User
 from app.db.session import async_session
 from app.services.automation_service import process_recurring_charges
+from app.services.backup_service import create_backup, cleanup_old_backups
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,34 @@ async def _process_all_users_recurring(reference_date: Optional[date] = None) ->
     return summary
 
 
+async def _daily_backup() -> None:
+    """Run a daily database backup."""
+    logger.info("Starting scheduled daily backup")
+    try:
+        async with async_session() as db:
+            backup = await create_backup(db)
+            logger.info(
+                "Daily backup completed: %s (%.1f KB, %ds)",
+                backup.filename,
+                (backup.file_size or 0) / 1024,
+                backup.duration_seconds or 0,
+            )
+    except Exception:
+        logger.exception("Daily backup failed")
+
+
+async def _daily_backup_cleanup() -> None:
+    """Clean up old backup files past retention period."""
+    logger.info("Starting backup cleanup")
+    try:
+        async with async_session() as db:
+            deleted = await cleanup_old_backups(db)
+            if deleted > 0:
+                logger.info("Cleaned up %d old backups", deleted)
+    except Exception:
+        logger.exception("Backup cleanup failed")
+
+
 def get_scheduler() -> Optional[AsyncIOScheduler]:
     """Return the current scheduler instance."""
     return _scheduler
@@ -184,8 +213,31 @@ def start_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,  # Allow up to 1 hour late execution
     )
 
+    # Daily backup at 02:00 Israel time
+    _scheduler.add_job(
+        _daily_backup,
+        trigger=CronTrigger(hour=2, minute=0, timezone="Asia/Jerusalem"),
+        id="daily_backup",
+        name="Daily Database Backup",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # Daily backup cleanup at 03:00 Israel time
+    _scheduler.add_job(
+        _daily_backup_cleanup,
+        trigger=CronTrigger(hour=3, minute=0, timezone="Asia/Jerusalem"),
+        id="daily_backup_cleanup",
+        name="Daily Backup Cleanup",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     _scheduler.start()
-    logger.info("Scheduler started - daily recurring charges at 00:05 Asia/Jerusalem")
+    logger.info(
+        "Scheduler started - daily recurring charges at 00:05, "
+        "backup at 02:00, cleanup at 03:00 (Asia/Jerusalem)"
+    )
 
     return _scheduler
 

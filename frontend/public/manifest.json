@@ -1,0 +1,14 @@
+{
+  "name": "Cash Flow Manager - Eye Level AI",
+  "short_name": "CashFlow",
+  "description": "Smart cash flow management for businesses",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#06b6d4",
+  "orientation": "any",
+  "icons": [
+    { "src": "/logo.jpeg", "sizes": "192x192", "type": "image/jpeg" },
+    { "src": "/logo.jpeg", "sizes": "512x512", "type": "image/jpeg" }
+  ]
+}

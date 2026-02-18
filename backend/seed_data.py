@@ -241,16 +241,16 @@ async def seed():
         # ------------------------------------------------------------------- #
         now = datetime.now(timezone.utc)
         alerts = [
-            ("high_expense", "warning", "📈 הוצאות שיווק גבוהות",
+            ("high_expense", "warning", "הוצאות שיווק גבוהות",
              "הוצאות השיווק חרגו מהתקציב ב-15% החודש.",
              "category", CAT["marketing"], False),
-            ("loan_payment", "info", "💳 תשלום הלוואה קרב",
+            ("loan_payment", "info", "תשלום הלוואה קרב",
              "תשלום הלוואת הרחבת העסק בסך 3,200 ₪ ב-15 בפברואר.",
              None, None, False),
-            ("low_balance", "critical", "🚨 יתרת מזומנים נמוכה",
+            ("low_balance", "critical", "יתרת מזומנים נמוכה",
              "יתרת הבנק ירדה מתחת לסף הביטחון של 50,000 ₪.",
              None, None, False),
-            ("installment_progress", "info", "💻 התקדמות תשלומי MacBook Pro",
+            ("installment_progress", "info", "התקדמות תשלומי MacBook Pro",
              "6 מתוך 12 תשלומים שולמו עבור MacBook Pro 16.",
              "installment", None, True),
         ]

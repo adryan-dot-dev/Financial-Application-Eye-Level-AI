@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useModalA11y } from '@/hooks/useModalA11y'
@@ -34,6 +34,12 @@ import { CategoryBadge } from '@/components/ui/CategoryIcon'
 import { queryKeys } from '@/lib/queryKeys'
 import { useToast } from '@/contexts/ToastContext'
 import { getApiErrorMessage } from '@/api/client'
+import { useCurrency } from '@/hooks/useCurrency'
+import CurrencySelector from '@/components/CurrencySelector'
+import DatePicker from '@/components/ui/DatePicker'
+import PeriodSelector from '@/components/ui/PeriodSelector'
+import type { PeriodSelection } from '@/components/ui/PeriodSelector'
+import { getDateRangeForPreset } from '@/components/ui/PeriodSelector'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +65,7 @@ interface FormData {
   description: string
   category_id: string
   notes: string
+  currency: string
 }
 
 const EMPTY_FILTERS: Filters = {
@@ -80,6 +87,7 @@ const EMPTY_FORM: FormData = {
   description: '',
   category_id: '',
   notes: '',
+  currency: 'ILS',
 }
 
 const PAGE_SIZE = 15
@@ -100,7 +108,7 @@ function TableSkeleton() {
   return (
     <div className="space-y-4 p-6">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4" style={{ animationDelay: `${i * 50}ms` }}>
+        <div key={i} className="flex items-center gap-4 skeleton-group" style={{ animationDelay: `${i * 50}ms` }}>
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-5 flex-1" />
           <Skeleton className="h-5 w-24" />
@@ -137,6 +145,7 @@ export default function TransactionsPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { currency: defaultCurrency } = useCurrency()
   const isRtl = i18n.language === 'he'
 
   useEffect(() => {
@@ -147,7 +156,16 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(1)
   const [sortBy, setSortBy] = useState<SortField>('date')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+  // Period selector (must be before filters so we can use the initial dates)
+  const [periodSelection, setPeriodSelection] = useState<PeriodSelection>(() => {
+    const { startDate, endDate } = getDateRangeForPreset('1M')
+    return { preset: '1M' as const, startDate, endDate }
+  })
+
+  const [filters, setFilters] = useState<Filters>(() => {
+    const { startDate, endDate } = getDateRangeForPreset('1M')
+    return { ...EMPTY_FILTERS, start_date: startDate, end_date: endDate }
+  })
   const [showFilters, setShowFilters] = useState(false)
 
   // Modal / dialog
@@ -158,6 +176,16 @@ export default function TransactionsPage() {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null)
+
+  const handlePeriodChange = useCallback((newPeriod: PeriodSelection) => {
+    setPeriodSelection(newPeriod)
+    setFilters(prev => ({
+      ...prev,
+      start_date: newPeriod.startDate,
+      end_date: newPeriod.endDate,
+    }))
+    setPage(1)
+  }, [])
 
   // Search debounce
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -283,7 +311,7 @@ export default function TransactionsPage() {
   // ---- Modal helpers ----
   const openCreateModal = () => {
     setEditingTransaction(null)
-    setFormData(EMPTY_FORM)
+    setFormData({ ...EMPTY_FORM, currency: defaultCurrency })
     setFormErrors({})
     setModalOpen(true)
   }
@@ -297,6 +325,7 @@ export default function TransactionsPage() {
       description: tx.description ?? '',
       category_id: tx.category_id ?? '',
       notes: tx.notes ?? '',
+      currency: tx.currency ?? defaultCurrency,
     })
     setFormErrors({})
     setModalOpen(true)
@@ -312,8 +341,8 @@ export default function TransactionsPage() {
   const closeDeleteDialog = useCallback(() => setDeleteTarget(null), [])
 
   // Modal accessibility (Escape key, focus trap, aria)
-  const { panelRef: modalPanelRef } = useModalA11y(modalOpen, closeModal)
-  const { panelRef: deletePanelRef } = useModalA11y(!!deleteTarget, closeDeleteDialog)
+  const { panelRef: modalPanelRef, closing: modalClosing, requestClose: requestModalClose } = useModalA11y(modalOpen, closeModal)
+  const { panelRef: deletePanelRef, closing: deleteClosing, requestClose: requestDeleteClose } = useModalA11y(!!deleteTarget, closeDeleteDialog)
 
   // ---- Form validation & submit ----
   const validateForm = (): boolean => {
@@ -340,6 +369,7 @@ export default function TransactionsPage() {
       description: formData.description || undefined,
       category_id: formData.category_id || undefined,
       notes: formData.notes || undefined,
+      currency: formData.currency,
     }
 
     if (editingTransaction) {
@@ -366,7 +396,9 @@ export default function TransactionsPage() {
   const hasActiveFilters = activeFilterCount > 0
 
   const clearFilters = () => {
-    setFilters(EMPTY_FILTERS)
+    const { startDate, endDate } = getDateRangeForPreset('1M')
+    setPeriodSelection({ preset: '1M' as const, startDate, endDate })
+    setFilters({ ...EMPTY_FILTERS, start_date: startDate, end_date: endDate })
     setSearchInput('')
     setPage(1)
   }
@@ -448,16 +480,15 @@ export default function TransactionsPage() {
           <div
             className="flex h-12 w-12 items-center justify-center rounded-2xl"
             style={{
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.08))',
-              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.1)',
+              backgroundColor: 'rgba(67, 24, 255, 0.1)',
+              boxShadow: 'var(--shadow-xs)',
             }}
           >
-            <Wallet className="h-6 w-6" style={{ color: '#3B82F6' }} />
+            <Wallet className="h-6 w-6" style={{ color: 'var(--color-brand-500)' }} />
           </div>
           <div>
             <h1
-              className="text-[1.75rem] font-extrabold tracking-tight"
-              style={{ color: 'var(--text-primary)' }}
+              className="gradient-heading text-[1.75rem] font-extrabold tracking-tight"
             >
               {t('transactions.title')}
             </h1>
@@ -466,7 +497,7 @@ export default function TransactionsPage() {
                 {t('transactions.total')}:{' '}
                 <span
                   className="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ltr-nums"
-                  style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}
+                  style={{ backgroundColor: 'rgba(67, 24, 255, 0.1)', color: 'var(--color-brand-500)' }}
                 >
                   {totalCount}
                 </span>
@@ -482,6 +513,11 @@ export default function TransactionsPage() {
           <Plus className="h-5 w-5" />
           {t('transactions.add')}
         </button>
+      </div>
+
+      {/* ---- Period selector ---- */}
+      <div className="animate-fade-in-up stagger-2">
+        <PeriodSelector value={periodSelection} onChange={handlePeriodChange} />
       </div>
 
       {/* ---- Search + filter toggle row ---- */}
@@ -534,7 +570,7 @@ export default function TransactionsPage() {
                       setPage(1)
                     }}
                     className={cn(
-                      'px-4 py-2 text-xs font-semibold tracking-wide transition-all',
+                      'btn-press px-4 py-2 text-xs font-semibold tracking-wide transition-all',
                       'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
                       active && 'shadow-sm',
                     )}
@@ -555,14 +591,14 @@ export default function TransactionsPage() {
             onClick={() => setShowFilters((v) => !v)}
             aria-expanded={showFilters}
             className={cn(
-              'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold tracking-wide transition-all',
+              'btn-press inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold tracking-wide transition-all',
               'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
               hasActiveFilters && 'shadow-sm',
             )}
             style={{
               borderColor: hasActiveFilters ? 'var(--border-focus)' : 'var(--border-primary)',
               color: hasActiveFilters ? 'var(--border-focus)' : 'var(--text-secondary)',
-              backgroundColor: hasActiveFilters ? 'rgba(59, 130, 246, 0.06)' : 'var(--bg-input)',
+              backgroundColor: hasActiveFilters ? 'rgba(67, 24, 255, 0.06)' : 'var(--bg-input)',
             }}
           >
             <Filter className="h-3.5 w-3.5" />
@@ -604,7 +640,7 @@ export default function TransactionsPage() {
                   )}
                   style={{
                     borderColor: !filters.category_id ? 'var(--border-focus)' : 'var(--border-primary)',
-                    backgroundColor: !filters.category_id ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-input)',
+                    backgroundColor: !filters.category_id ? 'rgba(67, 24, 255, 0.1)' : 'var(--bg-input)',
                     color: !filters.category_id ? 'var(--border-focus)' : 'var(--text-secondary)',
                   }}
                 >
@@ -645,11 +681,10 @@ export default function TransactionsPage() {
               >
                 {t('transactions.from')}
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={filters.start_date}
-                onChange={(e) => {
-                  setFilters((prev) => ({ ...prev, start_date: e.target.value }))
+                onChange={(val) => {
+                  setFilters((prev) => ({ ...prev, start_date: val }))
                   setPage(1)
                 }}
                 className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
@@ -669,11 +704,10 @@ export default function TransactionsPage() {
               >
                 {t('transactions.to')}
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={filters.end_date}
-                onChange={(e) => {
-                  setFilters((prev) => ({ ...prev, end_date: e.target.value }))
+                onChange={(val) => {
+                  setFilters((prev) => ({ ...prev, end_date: val }))
                   setPage(1)
                 }}
                 className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
@@ -743,7 +777,7 @@ export default function TransactionsPage() {
                 <button
                   onClick={clearFilters}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
-                  style={{ color: 'var(--border-focus)', backgroundColor: 'rgba(59, 130, 246, 0.06)' }}
+                  style={{ color: 'var(--border-focus)', backgroundColor: 'rgba(67, 24, 255, 0.06)' }}
                 >
                   <X className="h-3 w-3" />
                   {t('transactions.clearFilters')}
@@ -768,7 +802,7 @@ export default function TransactionsPage() {
             <span
               className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
               style={{
-                backgroundColor: filters.type === 'income' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                backgroundColor: filters.type === 'income' ? 'rgba(5, 205, 153, 0.1)' : 'rgba(238, 93, 80, 0.1)',
                 color: filters.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
               }}
             >
@@ -789,8 +823,8 @@ export default function TransactionsPage() {
               <span
                 className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
                 style={{
-                  backgroundColor: `${cat?.color || '#3B82F6'}15`,
-                  color: cat?.color || '#3B82F6',
+                  backgroundColor: `${cat?.color || 'var(--color-brand-500)'}15`,
+                  color: cat?.color || 'var(--color-brand-500)',
                 }}
               >
                 {cat?.icon && <span className="text-sm">{cat.icon}</span>}
@@ -809,7 +843,7 @@ export default function TransactionsPage() {
           {filters.start_date && (
             <span
               className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
-              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}
+              style={{ backgroundColor: 'rgba(67, 24, 255, 0.1)', color: 'var(--color-brand-500)' }}
             >
               <Calendar className="h-3 w-3" />
               {t('transactions.from')}: {filters.start_date}
@@ -826,7 +860,7 @@ export default function TransactionsPage() {
           {filters.end_date && (
             <span
               className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold"
-              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}
+              style={{ backgroundColor: 'rgba(67, 24, 255, 0.1)', color: 'var(--color-brand-500)' }}
             >
               <Calendar className="h-3 w-3" />
               {t('transactions.to')}: {filters.end_date}
@@ -843,7 +877,7 @@ export default function TransactionsPage() {
           {(filters.min_amount || filters.max_amount) && (
             <span
               className="inline-flex items-center gap-1.5 rounded-full py-1 ps-3 pe-1.5 text-xs font-semibold ltr-nums"
-              style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6' }}
+              style={{ backgroundColor: 'rgba(217, 70, 239, 0.1)', color: 'var(--color-accent-purple)' }}
             >
               {filters.min_amount && filters.max_amount
                 ? `${filters.min_amount} – ${filters.max_amount}`
@@ -903,17 +937,17 @@ export default function TransactionsPage() {
                 <rect x="68" y="64" width="40" height="4" rx="2" fill="var(--border-primary)" opacity="0.25" />
                 <rect x="68" y="76" width="28" height="4" rx="2" fill="var(--border-primary)" opacity="0.15" />
                 {/* Receipt dollar icon circle */}
-                <circle cx="90" cy="100" r="10" fill="rgba(59, 130, 246, 0.1)" />
-                <text x="90" y="105" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#3B82F6">$</text>
+                <circle cx="90" cy="100" r="10" fill="rgba(67, 24, 255, 0.1)" />
+                <text x="90" y="105" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#4318FF">$</text>
                 {/* Decorative floating circles */}
-                <circle cx="38" cy="48" r="14" fill="rgba(16, 185, 129, 0.12)" />
-                <path d="M32 48L36 52L44 44" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="148" cy="38" r="12" fill="rgba(239, 68, 68, 0.10)" />
-                <path d="M144 34L152 42M152 34L144 42" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round" />
-                <circle cx="142" cy="90" r="8" fill="rgba(139, 92, 246, 0.10)" />
+                <circle cx="38" cy="48" r="14" fill="rgba(5, 205, 153, 0.12)" />
+                <path d="M32 48L36 52L44 44" stroke="#05CD99" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="148" cy="38" r="12" fill="rgba(238, 93, 80, 0.10)" />
+                <path d="M144 34L152 42M152 34L144 42" stroke="#EE5D50" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="142" cy="90" r="8" fill="rgba(217, 70, 239, 0.10)" />
                 {/* Small sparkle */}
                 <path d="M30 88L32 84L34 88L32 92Z" fill="rgba(251, 191, 36, 0.4)" />
-                <path d="M152 68L154 64L156 68L154 72Z" fill="rgba(59, 130, 246, 0.3)" />
+                <path d="M152 68L154 64L156 68L154 72Z" fill="rgba(67, 24, 255, 0.3)" />
               </svg>
             </div>
             <h3
@@ -937,198 +971,281 @@ export default function TransactionsPage() {
             </button>
           </div>
         ) : (
-          /* ---- Data table ---- */
-          <div className="overflow-x-auto">
-            <table className="tx-table w-full text-sm">
-              <thead>
-                <tr
-                  className="border-b-2"
-                  style={{
-                    borderColor: 'var(--border-primary)',
-                    backgroundColor: 'var(--bg-secondary)',
-                  }}
-                >
-                  <SortHeader field="date" label={t('transactions.date')} />
-                  <th
-                    scope="col"
-                    className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    {t('transactions.description')}
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    {t('transactions.category')}
-                  </th>
-                  <SortHeader
-                    field="amount"
-                    label={t('transactions.amount')}
-                    className="text-end"
-                  />
-                  <th
-                    scope="col"
-                    className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    {t('transactions.type')}
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-5 py-4 text-center text-[11px] font-semibold uppercase tracking-widest"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    {t('transactions.actions')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx, index) => {
-                  const cat = tx.category_id ? categoryMap.get(tx.category_id) : undefined
-                  const catLabel = cat
-                    ? (isRtl ? cat.name_he : cat.name)
-                    : t('transactions.uncategorized')
-                  const isIncome = tx.type === 'income'
+          /* ---- Mobile card layout ---- */
+          <>
+            <div className="md:hidden tx-table-mobile-card">
+              {transactions.map((tx, index) => {
+                const cat = tx.category_id ? categoryMap.get(tx.category_id) : undefined
+                const catLabel = cat
+                  ? (isRtl ? cat.name_he : cat.name)
+                  : t('transactions.uncategorized')
+                const isIncome = tx.type === 'income'
 
-                  return (
-                    <tr
-                      key={tx.id}
-                      className={cn(
-                        'row-animate border-b transition-all duration-200',
-                        isIncome ? 'row-income' : 'row-expense',
-                      )}
-                      style={{
-                        borderColor: 'var(--border-primary)',
-                        animationDelay: `${index * 30}ms`,
-                        borderInlineStartWidth: '3px',
-                        borderInlineStartColor: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
-                      }}
-                    >
-                      {/* Date */}
-                      <td
-                        className="whitespace-nowrap px-5 py-5 text-[13px]"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        <span className="inline-flex items-center gap-2.5">
-                          <span
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold ltr-nums"
-                            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}
-                          >
-                            {new Date(tx.date).getDate()}
-                          </span>
-                          <span className="flex flex-col">
-                            <span className="text-[11px] font-medium ltr-nums" style={{ color: 'var(--text-tertiary)' }}>
-                              {new Date(tx.date).toLocaleDateString(isRtl ? 'he-IL' : 'en-US', { month: 'short' })}
-                            </span>
-                            <span className="text-[11px] ltr-nums" style={{ color: 'var(--text-tertiary)', opacity: 0.7 }}>
-                              {new Date(tx.date).getFullYear()}
-                            </span>
-                          </span>
-                        </span>
-                      </td>
-
-                      {/* Description */}
-                      <td
-                        className="max-w-[260px] overflow-hidden truncate px-5 py-5 text-[13px] font-semibold"
-                        style={{ color: 'var(--text-primary)' }}
-                        title={tx.description || undefined}
-                      >
-                        {tx.description || '\u2014'}
-                      </td>
-
-                      {/* Category */}
-                      <td className="px-5 py-5">
-                        <CategoryBadgeWrapper category={cat} label={catLabel} />
-                      </td>
-
-                      {/* Amount – larger with arrow icon */}
-                      <td className="whitespace-nowrap px-5 py-5 text-end">
-                        <span
-                          className="inline-flex items-center gap-1.5"
-                          style={{ color: isIncome ? 'var(--color-income)' : 'var(--color-expense)' }}
+                return (
+                  <div
+                    key={tx.id}
+                    className={cn(
+                      'tx-table-mobile-card-item row-enter',
+                      isIncome ? 'tx-table-mobile-card-item-income' : 'tx-table-mobile-card-item-expense',
+                    )}
+                    style={{ '--row-index': Math.min(index, 15) } as CSSProperties}
+                  >
+                    {/* Top row: description + amount */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="text-sm font-semibold truncate"
+                          style={{ color: 'var(--text-primary)' }}
                         >
+                          {tx.description || '\u2014'}
+                        </p>
+                        <div className="mt-1 flex items-center gap-2 flex-wrap">
+                          <CategoryBadgeWrapper category={cat} label={catLabel} />
                           <span
-                            className="flex h-6 w-6 items-center justify-center rounded-full"
+                            className="text-[11px] ltr-nums"
+                            style={{ color: 'var(--text-tertiary)' }}
+                          >
+                            {new Date(tx.date).toLocaleDateString(isRtl ? 'he-IL' : 'en-US', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className="text-base fin-number font-bold ltr-nums shrink-0"
+                        style={{ color: isIncome ? 'var(--color-income)' : 'var(--color-expense)' }}
+                      >
+                        {isIncome ? '+' : '\u2212'}{formatCurrency(tx.amount, tx.currency)}
+                      </span>
+                    </div>
+
+                    {/* Bottom row: actions */}
+                    <div className="flex items-center justify-end gap-1 border-t pt-3" style={{ borderColor: 'var(--border-primary)' }}>
+                      <button
+                        onClick={() => openEditModal(tx)}
+                        className="btn-press action-btn action-btn-edit rounded-lg p-2.5 transition-all hover:bg-[var(--bg-hover)]"
+                        style={{ color: 'var(--text-tertiary)' }}
+                        aria-label={t('transactions.edit')}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => duplicateMutation.mutate(tx.id)}
+                        className="btn-press action-btn action-btn-duplicate rounded-lg p-2.5 transition-all hover:bg-[var(--bg-hover)]"
+                        style={{ color: 'var(--text-tertiary)' }}
+                        aria-label={t('transactions.duplicate')}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(tx)}
+                        className="btn-press action-btn action-btn-delete rounded-lg p-2.5 transition-all hover:bg-[var(--bg-hover)]"
+                        style={{ color: 'var(--text-tertiary)' }}
+                        aria-label={t('transactions.delete')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ---- Desktop data table ---- */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="tx-table w-full text-sm">
+                <thead>
+                  <tr
+                    className="border-b-2"
+                    style={{
+                      borderColor: 'var(--border-primary)',
+                      backgroundColor: 'var(--bg-secondary)',
+                    }}
+                  >
+                    <SortHeader field="date" label={t('transactions.date')} />
+                    <th
+                      scope="col"
+                      className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('transactions.description')}
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('transactions.category')}
+                    </th>
+                    <SortHeader
+                      field="amount"
+                      label={t('transactions.amount')}
+                      className="text-end"
+                    />
+                    <th
+                      scope="col"
+                      className="px-5 py-4 text-start text-[11px] font-semibold uppercase tracking-widest"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('transactions.type')}
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-4 text-center text-[11px] font-semibold uppercase tracking-widest"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {t('transactions.actions')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx, index) => {
+                    const cat = tx.category_id ? categoryMap.get(tx.category_id) : undefined
+                    const catLabel = cat
+                      ? (isRtl ? cat.name_he : cat.name)
+                      : t('transactions.uncategorized')
+                    const isIncome = tx.type === 'income'
+
+                    return (
+                      <tr
+                        key={tx.id}
+                        className={cn(
+                          'row-enter row-reveal-actions border-b transition-all duration-200',
+                          isIncome ? 'row-income' : 'row-expense',
+                        )}
+                        style={{
+                          '--row-index': Math.min(index, 15),
+                          borderColor: 'var(--border-primary)',
+                          borderInlineStartWidth: '3px',
+                          borderInlineStartColor: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
+                        } as CSSProperties}
+                      >
+                        {/* Date */}
+                        <td
+                          className="whitespace-nowrap px-5 py-5 text-[13px]"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          <span className="inline-flex items-center gap-2.5">
+                            <span
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold ltr-nums"
+                              style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)' }}
+                            >
+                              {new Date(tx.date).getDate()}
+                            </span>
+                            <span className="flex flex-col">
+                              <span className="text-[11px] font-medium ltr-nums" style={{ color: 'var(--text-tertiary)' }}>
+                                {new Date(tx.date).toLocaleDateString(isRtl ? 'he-IL' : 'en-US', { month: 'short' })}
+                              </span>
+                              <span className="text-[11px] ltr-nums" style={{ color: 'var(--text-tertiary)', opacity: 0.7 }}>
+                                {new Date(tx.date).getFullYear()}
+                              </span>
+                            </span>
+                          </span>
+                        </td>
+
+                        {/* Description */}
+                        <td
+                          className="max-w-[260px] overflow-hidden truncate px-5 py-5 text-[13px] font-semibold"
+                          style={{ color: 'var(--text-primary)' }}
+                          title={tx.description || undefined}
+                        >
+                          {tx.description || '\u2014'}
+                        </td>
+
+                        {/* Category */}
+                        <td className="px-5 py-5">
+                          <CategoryBadgeWrapper category={cat} label={catLabel} />
+                        </td>
+
+                        {/* Amount – larger with arrow icon */}
+                        <td className="whitespace-nowrap px-5 py-5 text-end">
+                          <span
+                            className="inline-flex items-center gap-1.5"
+                            style={{ color: isIncome ? 'var(--color-income)' : 'var(--color-expense)' }}
+                          >
+                            <span
+                              className="flex h-6 w-6 items-center justify-center rounded-full"
+                              style={{
+                                backgroundColor: isIncome ? 'rgba(5, 205, 153, 0.12)' : 'rgba(238, 93, 80, 0.12)',
+                              }}
+                            >
+                              {isIncome ? (
+                                <ArrowUpRight className="h-3.5 w-3.5" />
+                              ) : (
+                                <ArrowDownRight className="h-3.5 w-3.5" />
+                              )}
+                            </span>
+                            <span className="text-base fin-number font-bold ltr-nums">
+                              {isIncome ? '+' : '\u2212'}{formatCurrency(tx.amount, tx.currency)}
+                            </span>
+                          </span>
+                        </td>
+
+                        {/* Type – prominent pill badge */}
+                        <td className="px-5 py-5">
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
                             style={{
-                              backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                              backgroundColor: isIncome ? 'rgba(5, 205, 153, 0.10)' : 'rgba(238, 93, 80, 0.10)',
+                              color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
                             }}
                           >
                             {isIncome ? (
-                              <ArrowUpRight className="h-3.5 w-3.5" />
+                              <TrendingUp className="h-3 w-3" />
                             ) : (
-                              <ArrowDownRight className="h-3.5 w-3.5" />
+                              <TrendingDown className="h-3 w-3" />
                             )}
+                            {isIncome ? t('transactions.income') : t('transactions.expense')}
                           </span>
-                          <span className="text-base fin-number font-bold ltr-nums">
-                            {isIncome ? '+' : '\u2212'}{formatCurrency(tx.amount, tx.currency)}
-                          </span>
-                        </span>
-                      </td>
+                        </td>
 
-                      {/* Type – prominent pill badge */}
-                      <td className="px-5 py-5">
-                        <span
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
-                          style={{
-                            backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.10)' : 'rgba(239, 68, 68, 0.10)',
-                            color: isIncome ? 'var(--color-income)' : 'var(--color-expense)',
-                          }}
-                        >
-                          {isIncome ? (
-                            <TrendingUp className="h-3 w-3" />
-                          ) : (
-                            <TrendingDown className="h-3 w-3" />
-                          )}
-                          {isIncome ? t('transactions.income') : t('transactions.expense')}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-5 py-5">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => openEditModal(tx)}
-                            className="action-btn action-btn-edit rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
-                            style={{ color: 'var(--text-tertiary)' }}
-                            data-tooltip={t('transactions.edit')}
-                            aria-label={t('transactions.edit')}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => duplicateMutation.mutate(tx.id)}
-                            className="action-btn action-btn-duplicate rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
-                            style={{ color: 'var(--text-tertiary)' }}
-                            data-tooltip={t('transactions.duplicate')}
-                            aria-label={t('transactions.duplicate')}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(tx)}
-                            className="action-btn action-btn-delete rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
-                            style={{ color: 'var(--text-tertiary)' }}
-                            data-tooltip={t('transactions.delete')}
-                            aria-label={t('transactions.delete')}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {/* Actions */}
+                        <td className="px-5 py-5">
+                          <div className="row-actions flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => openEditModal(tx)}
+                              className="btn-press action-btn action-btn-edit rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                              style={{ color: 'var(--text-tertiary)' }}
+                              data-tooltip={t('transactions.edit')}
+                              aria-label={t('transactions.edit')}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => duplicateMutation.mutate(tx.id)}
+                              className="btn-press action-btn action-btn-duplicate rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                              style={{ color: 'var(--text-tertiary)' }}
+                              data-tooltip={t('transactions.duplicate')}
+                              aria-label={t('transactions.duplicate')}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(tx)}
+                              className="btn-press action-btn action-btn-delete rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2 tooltip-wrap"
+                              style={{ color: 'var(--text-tertiary)' }}
+                              data-tooltip={t('transactions.delete')}
+                              aria-label={t('transactions.delete')}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {/* ---- Pagination ---- */}
         {!txLoading && transactions.length > 0 && totalPages > 1 && (
           <div
-            className="flex items-center justify-between border-t px-6 py-5"
+            className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t px-4 sm:px-6 py-4 sm:py-5"
             style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--bg-secondary)' }}
           >
             <p className="text-xs font-semibold ltr-nums" style={{ color: 'var(--text-tertiary)' }}>
@@ -1140,7 +1257,7 @@ export default function TransactionsPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="rounded-lg p-2 transition-all disabled:opacity-30 hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                className="btn-press rounded-lg p-2 transition-all disabled:opacity-30 hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                 style={{ color: 'var(--text-secondary)' }}
                 aria-label={t('common.previousPage')}
               >
@@ -1169,7 +1286,7 @@ export default function TransactionsPage() {
                     key={pageNum}
                     onClick={() => setPage(pageNum)}
                     className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-all',
+                      'btn-press flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-all',
                       'focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2',
                       !isCurrentPage && 'hover:bg-[var(--bg-hover)]',
                       isCurrentPage && 'page-btn-active',
@@ -1189,7 +1306,7 @@ export default function TransactionsPage() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="rounded-lg p-2 transition-all disabled:opacity-30 hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                className="btn-press rounded-lg p-2 transition-all disabled:opacity-30 hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
                 style={{ color: 'var(--text-secondary)' }}
                 aria-label={t('common.nextPage')}
               >
@@ -1209,12 +1326,12 @@ export default function TransactionsPage() {
           ================================================================== */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4${modalClosing ? ' modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="tx-modal-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal()
+            if (e.target === e.currentTarget) requestModalClose()
           }}
         >
           {/* Backdrop */}
@@ -1223,7 +1340,7 @@ export default function TransactionsPage() {
           {/* Panel */}
           <div
             ref={modalPanelRef}
-            className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
+            className="modal-panel modal-form-layout relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border p-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1234,13 +1351,13 @@ export default function TransactionsPage() {
             <div
               className="h-1"
               style={{
-                background: formData.type === 'income'
-                  ? 'linear-gradient(90deg, #34D399, #10B981)'
-                  : 'linear-gradient(90deg, #F87171, #EF4444)',
+                backgroundColor: formData.type === 'income'
+                  ? 'var(--color-success)'
+                  : 'var(--color-danger)',
               }}
             />
 
-            <div className="p-6">
+            <div className="modal-body p-6">
               {/* Header */}
               <div className="mb-6 flex items-center justify-between">
                 <h2
@@ -1253,7 +1370,7 @@ export default function TransactionsPage() {
                     : t('transactions.add')}
                 </h2>
                 <button
-                  onClick={closeModal}
+                  onClick={requestModalClose}
                   className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
                   style={{ color: 'var(--text-tertiary)' }}
                   aria-label={t('common.cancel')}
@@ -1262,7 +1379,7 @@ export default function TransactionsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleFormSubmit} className="space-y-5">
+              <form id="tx-form" onSubmit={handleFormSubmit} className="space-y-5">
                 {/* Type toggle */}
                 <div>
                   <label
@@ -1311,7 +1428,7 @@ export default function TransactionsPage() {
                 </div>
 
                 {/* Amount + Date row */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label
                       className="mb-2 block text-xs font-semibold uppercase tracking-wider"
@@ -1330,12 +1447,11 @@ export default function TransactionsPage() {
                       className={cn(
                         'amount-input w-full rounded-xl border px-4 py-3 outline-none ltr-nums transition-all',
                         'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.amount && 'border-red-400',
-                      )}
+                                              )}
                       style={{
                         backgroundColor: 'var(--bg-input)',
                         borderColor: formErrors.amount
-                          ? undefined
+                          ? 'var(--border-danger)'
                           : 'var(--border-primary)',
                         color: formData.type === 'income' ? 'var(--color-income)' : 'var(--color-expense)',
                       }}
@@ -1356,21 +1472,16 @@ export default function TransactionsPage() {
                     >
                       {t('transactions.date')} *
                     </label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={formData.date}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, date: e.target.value }))
+                      onChange={(val) =>
+                        setFormData((prev) => ({ ...prev, date: val }))
                       }
-                      className={cn(
-                        'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
-                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
-                        formErrors.date && 'border-red-400',
-                      )}
+                      className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
                       style={{
                         backgroundColor: 'var(--bg-input)',
                         borderColor: formErrors.date
-                          ? undefined
+                          ? 'var(--border-danger)'
                           : 'var(--border-primary)',
                         color: 'var(--text-primary)',
                       }}
@@ -1444,6 +1555,23 @@ export default function TransactionsPage() {
                   </select>
                 </div>
 
+                {/* Currency */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('currency.label')}
+                  </label>
+                  <CurrencySelector
+                    value={formData.currency}
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, currency: val }))
+                    }
+                    className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20"
+                  />
+                </div>
+
                 {/* Notes */}
                 <div>
                   <label
@@ -1471,30 +1599,34 @@ export default function TransactionsPage() {
                   />
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: 'var(--border-primary)' }}>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
-                    style={{
-                      borderColor: 'var(--border-primary)',
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'var(--bg-input)',
-                    }}
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isMutating}
-                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {t('common.save')}
-                  </button>
-                </div>
               </form>
+            </div>
+            {/* Sticky footer */}
+            <div className="modal-footer flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={requestModalClose}
+                className="btn-press rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                style={{
+                  borderColor: 'var(--border-primary)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-input)',
+                }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const form = document.getElementById('tx-form') as HTMLFormElement
+                  form?.requestSubmit()
+                }}
+                disabled={isMutating}
+                className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {isMutating && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('common.save')}
+              </button>
             </div>
           </div>
         </div>
@@ -1505,12 +1637,12 @@ export default function TransactionsPage() {
           ================================================================== */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4${deleteClosing ? ' modal-closing' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="tx-delete-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteTarget(null)
+            if (e.target === e.currentTarget) requestDeleteClose()
           }}
         >
           {/* Backdrop */}
@@ -1519,7 +1651,7 @@ export default function TransactionsPage() {
           {/* Panel */}
           <div
             ref={deletePanelRef}
-            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
+            className="modal-panel relative z-10 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl border"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-primary)',
@@ -1529,7 +1661,7 @@ export default function TransactionsPage() {
             {/* Red accent bar */}
             <div
               className="h-1"
-              style={{ background: 'linear-gradient(90deg, #F87171, #EF4444, #DC2626)' }}
+              style={{ backgroundColor: 'var(--color-danger)' }}
             />
 
             <div className="p-6">
@@ -1575,7 +1707,7 @@ export default function TransactionsPage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setDeleteTarget(null)}
+                  onClick={requestDeleteClose}
                   className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
                   style={{
                     borderColor: 'var(--border-primary)',
@@ -1590,8 +1722,8 @@ export default function TransactionsPage() {
                   disabled={deleteMutation.isPending}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
                   style={{
-                    background: 'linear-gradient(135deg, #F87171, #EF4444)',
-                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                    backgroundColor: 'var(--color-danger)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   }}
                 >
                   {deleteMutation.isPending && (

@@ -15,6 +15,7 @@ class DashboardSummary(BaseModel):
     balance_trend: Decimal
     income_trend: Decimal
     expense_trend: Decimal
+    base_currency: str = "ILS"
 
 
 class DashboardPeriodData(BaseModel):
@@ -159,3 +160,26 @@ class TopExpenseItem(BaseModel):
 class TopExpensesResponse(BaseModel):
     items: List[TopExpenseItem]
     period: str
+
+
+# ---------------------------------------------------------------------------
+# Subscriptions Summary
+# ---------------------------------------------------------------------------
+
+class SubscriptionSummaryItem(BaseModel):
+    id: str
+    name: str
+    amount: Decimal
+    currency: str
+    billing_cycle: str
+    monthly_equivalent: Decimal  # amount normalized to monthly
+    next_renewal_date: date
+    provider: Optional[str]
+    is_active: bool
+
+
+class SubscriptionsSummaryResponse(BaseModel):
+    active_subscriptions_count: int
+    total_monthly_subscription_cost: Decimal
+    upcoming_renewals_count: int  # next 7 days
+    items: List[SubscriptionSummaryItem]

@@ -37,6 +37,10 @@ class Alert(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True
+    )
     expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -46,6 +50,7 @@ class Alert(Base):
         Index("ix_alerts_user_dismissed", "user_id", "is_dismissed"),
         Index("ix_alerts_user_read_dismissed", "user_id", "is_read", "is_dismissed"),
         Index("ix_alerts_user_type", "user_id", "alert_type"),
+        Index("ix_alerts_org_id", "organization_id"),
     )
 
     # Relationships

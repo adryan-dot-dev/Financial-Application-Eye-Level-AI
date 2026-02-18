@@ -25,6 +25,17 @@ class Loan(Base):
     original_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     monthly_payment: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="ILS")
+    original_currency_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(15, 2), nullable=True
+    )
+    original_currency: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(15, 6), nullable=True
+    )
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True
+    )
     interest_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
@@ -35,6 +46,9 @@ class Loan(Base):
     payments_made: Mapped[int] = mapped_column(Integer, default=0)
     remaining_balance: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="active")  # 'active', 'completed', 'paused'
+    bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True
+    )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
@@ -46,8 +60,10 @@ class Loan(Base):
     __table_args__ = (
         Index("ix_loans_user_id", "user_id"),
         Index("ix_loans_user_status", "user_id", "status"),
+        Index("ix_loans_org_id", "organization_id"),
     )
 
     # Relationships
     user = relationship("User", back_populates="loans")
     category = relationship("Category")
+    bank_account = relationship("BankAccount")

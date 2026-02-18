@@ -11,6 +11,8 @@ export interface CreateLoanData {
   day_of_month: number
   total_payments: number
   description?: string
+  currency?: string
+  first_payment_made?: boolean
 }
 
 export type UpdateLoanData = Partial<CreateLoanData>

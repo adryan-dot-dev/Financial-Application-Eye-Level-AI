@@ -35,6 +35,8 @@ class InstallmentCreate(BaseModel):
     start_date: date
     day_of_month: int = Field(..., ge=1, le=31)
     description: Optional[str] = Field(None, max_length=1000)
+    first_payment_made: bool = False
+    credit_card_id: Optional[UUID] = None
 
     @field_validator('total_amount')
     @classmethod
@@ -65,6 +67,7 @@ class InstallmentUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     category_id: Optional[UUID] = None
     description: Optional[str] = Field(None, max_length=1000)
+    credit_card_id: Optional[UUID] = None
 
 
 class InstallmentResponse(BaseModel):
@@ -73,6 +76,9 @@ class InstallmentResponse(BaseModel):
     total_amount: Decimal
     monthly_amount: Decimal
     currency: str
+    original_amount: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
     number_of_payments: int
     type: str
     category_id: Optional[UUID] = None
@@ -80,11 +86,12 @@ class InstallmentResponse(BaseModel):
     day_of_month: int
     payments_completed: int
     description: Optional[str] = None
+    credit_card_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     # Computed fields - auto-synced with time
-    status: str = "active"  # "pending", "active", "completed", "overdue"
+    status: str = "active"  # "pending", "active", "completed", "overdue", "due"
     expected_payments_by_now: int = 0
     is_on_track: bool = True
     next_payment_date: Optional[date] = None
@@ -99,7 +106,7 @@ class PaymentScheduleItem(BaseModel):
     payment_number: int
     date: date
     amount: Decimal
-    status: str  # 'completed', 'upcoming', 'future'
+    status: str  # 'completed', 'overdue', 'due', 'future'
 
 
 class InstallmentDetailResponse(BaseModel):

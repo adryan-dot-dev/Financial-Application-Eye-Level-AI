@@ -456,7 +456,7 @@ class TestTransactionEdgeCasesV2:
 
     @pytest.mark.asyncio
     async def test_xss_in_description(self, client: AsyncClient, auth_headers: dict):
-        """XSS in description should be stored as-is (frontend must escape)."""
+        """XSS in description should be stripped by strip_tags sanitization."""
         xss = "<script>alert('xss')</script>"
         response = await client.post("/api/v1/transactions", json={
             "amount": 100,
@@ -465,7 +465,8 @@ class TestTransactionEdgeCasesV2:
             "description": xss,
         }, headers=auth_headers)
         assert response.status_code == 201
-        assert response.json()["description"] == xss
+        # HTML tags are stripped, only text content remains
+        assert response.json()["description"] == "alert('xss')"
 
     @pytest.mark.asyncio
     async def test_invalid_currency_code(self, client: AsyncClient, auth_headers: dict):
@@ -491,7 +492,7 @@ class TestTransactionEdgeCasesV2:
 
     @pytest.mark.asyncio
     async def test_valid_usd_currency(self, client: AsyncClient, auth_headers: dict):
-        """Valid 3-letter uppercase currency should succeed."""
+        """Valid 3-letter uppercase currency should succeed and be converted to base."""
         response = await client.post("/api/v1/transactions", json={
             "amount": 100,
             "type": "income",
@@ -499,7 +500,11 @@ class TestTransactionEdgeCasesV2:
             "currency": "USD",
         }, headers=auth_headers)
         assert response.status_code == 201
-        assert response.json()["currency"] == "USD"
+        data = response.json()
+        # Amount is now stored in base currency (ILS), original preserved
+        assert data["currency"] == "ILS"
+        assert data["original_currency"] == "USD"
+        assert float(data["original_amount"]) == 100.0
 
     @pytest.mark.asyncio
     async def test_empty_tags_list(self, client: AsyncClient, auth_headers: dict):

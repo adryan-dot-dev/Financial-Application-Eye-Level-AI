@@ -25,6 +25,26 @@ export function formatCurrency(amount: string | number | undefined | null, curre
   }).format(num)
 }
 
+/** Return the symbol for a given ISO 4217 currency code (e.g. 'ILS' -> '₪') */
+export function getCurrencySymbol(currency: string): string {
+  switch (currency) {
+    case 'ILS': return '₪'
+    case 'USD': return '$'
+    case 'EUR': return '€'
+    default: return currency
+  }
+}
+
+/** Return the flag emoji for a given ISO 4217 currency code */
+export function getCurrencyFlag(currency: string): string {
+  switch (currency) {
+    case 'ILS': return '🇮🇱'
+    case 'USD': return '🇺🇸'
+    case 'EUR': return '🇪🇺'
+    default: return ''
+  }
+}
+
 export function formatDate(dateStr: string | undefined | null, locale = 'he-IL'): string {
   if (!dateStr) return ''
   const date = new Date(dateStr)

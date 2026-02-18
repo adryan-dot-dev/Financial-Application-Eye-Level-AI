@@ -17,6 +17,11 @@ export const queryKeys = {
     list: () => ['installments', 'list'] as const,
     payments: (id: string) => ['installments', 'payments', id] as const,
   },
+  subscriptions: {
+    all: ['subscriptions'] as const,
+    list: (params?: Record<string, unknown>) => ['subscriptions', 'list', params] as const,
+    upcoming: (days?: number) => ['subscriptions', 'upcoming', days] as const,
+  },
   loans: {
     all: ['loans'] as const,
     list: () => ['loans', 'list'] as const,
@@ -40,13 +45,19 @@ export const queryKeys = {
   },
   dashboard: {
     all: ['dashboard'] as const,
-    summary: () => ['dashboard', 'summary'] as const,
+    summary: (startDate?: string, endDate?: string) => ['dashboard', 'summary', startDate, endDate] as const,
     categoryBreakdown: () => ['dashboard', 'category-breakdown'] as const,
     upcomingPayments: (days?: number) => ['dashboard', 'upcoming-payments', days] as const,
     financialHealth: () => ['dashboard', 'financial-health'] as const,
     installmentsSummary: () => ['dashboard', 'installments-summary'] as const,
     loansSummary: () => ['dashboard', 'loans-summary'] as const,
     topExpenses: () => ['dashboard', 'top-expenses'] as const,
+    subscriptionsSummary: () => ['dashboard', 'subscriptions-summary'] as const,
+  },
+  currency: {
+    all: ['currency'] as const,
+    rates: (base?: string) => ['currency', 'rates', base] as const,
+    supported: () => ['currency', 'supported'] as const,
   },
   settings: {
     all: ['settings'] as const,
@@ -54,5 +65,16 @@ export const queryKeys = {
   users: {
     all: ['users'] as const,
     list: () => ['users', 'list'] as const,
+  },
+  backups: {
+    all: ['backups'] as const,
+    list: (params?: Record<string, unknown>) => ['backups', 'list', params] as const,
+    schedule: () => ['backups', 'schedule'] as const,
+  },
+  organizations: {
+    all: ['organizations'] as const,
+    list: () => ['organizations', 'list'] as const,
+    detail: (id: string) => ['organizations', 'detail', id] as const,
+    members: (id: string) => ['organizations', 'members', id] as const,
   },
 }

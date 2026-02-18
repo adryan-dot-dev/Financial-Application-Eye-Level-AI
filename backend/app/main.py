@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,12 +23,26 @@ setup_logging(settings.DEBUG)
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.services.scheduler import start_scheduler, stop_scheduler
+    start_scheduler()
+    logger.info("Application started - scheduler initialized")
+    yield
+    stop_scheduler()
+    logger.info("Scheduler stopped")
+    from app.db.session import engine
+    await engine.dispose()
+
+
 app = FastAPI(
     title="Cash Flow Management - Eye Level AI",
     description="Cash flow management system with forecasting and alerts",
     version="0.1.0",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # ── Rate limiting ────────────────────────────────────────────────────
@@ -41,8 +56,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["Content-Security-Policy"] = "default-src 'self'"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["X-API-Version"] = "v1"
         return response
 
 
@@ -61,23 +80,6 @@ app.add_middleware(
 
 # API Routes
 app.include_router(api_router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    from app.services.scheduler import start_scheduler
-    start_scheduler()
-    logger.info("Application started - scheduler initialized")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    from app.services.scheduler import stop_scheduler
-    stop_scheduler()
-    logger.info("Scheduler stopped")
-
-    from app.db.session import engine
-    await engine.dispose()
 
 
 @app.exception_handler(DataError)

@@ -1,15 +1,52 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+
+const EXIT_DURATION = 150
 
 /**
- * Custom hook for modal accessibility.
+ * Custom hook for modal accessibility + exit animations.
  * - Traps focus within the modal when open
- * - Closes modal on Escape key press
+ * - Closes modal on Escape key press (with exit animation)
  * - Restores focus to the trigger element when closed
  * - Auto-focuses the first focusable element when opened
+ * - Returns `closing` flag and `requestClose` for animated exit
+ *
+ * Usage:
+ *   const { panelRef, closing, requestClose } = useModalA11y(isOpen, onClose)
+ *   <div className={closing ? 'modal-closing' : ''}>
+ *     <div className="modal-backdrop" onClick={requestClose} />
+ *     <div ref={panelRef} className="modal-panel">...</div>
+ *   </div>
  */
 export function useModalA11y(isOpen: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const [closing, setClosing] = useState(false)
+  const closingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const requestClose = useCallback(() => {
+    if (closing) return
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReduced) {
+      onClose()
+      return
+    }
+    setClosing(true)
+    closingTimerRef.current = setTimeout(() => {
+      setClosing(false)
+      onClose()
+    }, EXIT_DURATION)
+  }, [onClose, closing])
+
+  // Clean up timer and reset closing state when isOpen changes
+  useEffect(() => {
+    if (!isOpen) {
+      setClosing(false)
+      if (closingTimerRef.current) {
+        clearTimeout(closingTimerRef.current)
+        closingTimerRef.current = null
+      }
+    }
+  }, [isOpen])
 
   // Save the currently focused element when modal opens
   useEffect(() => {
@@ -18,7 +55,7 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
     }
   }, [isOpen])
 
-  // Handle Escape key
+  // Handle Escape key — use requestClose for animated exit
   useEffect(() => {
     if (!isOpen) return
 
@@ -26,13 +63,13 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        onClose()
+        requestClose()
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, requestClose])
 
   // Focus management: auto-focus first focusable element and trap focus
   useEffect(() => {
@@ -85,5 +122,5 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
     }
   }, [isOpen])
 
-  return { panelRef }
+  return { panelRef, closing, requestClose }
 }

@@ -94,8 +94,8 @@ export function TopExpensesWidget() {
           <div
             className="flex h-9 w-9 items-center justify-center rounded-xl"
             style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.08)',
-              color: '#EF4444',
+              backgroundColor: 'rgba(238, 93, 80, 0.08)',
+              color: 'var(--color-danger)',
             }}
           >
             <TrendingDown className="h-4.5 w-4.5" />
@@ -142,8 +142,8 @@ export function TopExpensesWidget() {
           <div
             className="flex h-9 w-9 items-center justify-center rounded-xl"
             style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.08)',
-              color: '#EF4444',
+              backgroundColor: 'rgba(238, 93, 80, 0.08)',
+              color: 'var(--color-danger)',
             }}
           >
             <TrendingDown className="h-4.5 w-4.5" />
@@ -170,7 +170,7 @@ export function TopExpensesWidget() {
         {items.map((item, index) => {
           const amount = parseFloat(item.amount) || 0
           const barWidthPct = maxAmount > 0 ? (amount / maxAmount) * 100 : 0
-          const categoryColor = item.category_color || '#EF4444'
+          const categoryColor = item.category_color || 'var(--color-danger)'
           const categoryName = isHe
             ? (item.category_name_he ?? item.category_name)
             : (item.category_name ?? item.category_name_he)
@@ -182,8 +182,8 @@ export function TopExpensesWidget() {
               key={item.id}
               className="space-y-1.5 rounded-xl px-2.5 py-2 transition-colors"
               style={{
-                backgroundColor: isHighExpense ? 'rgba(239, 68, 68, 0.06)' : 'transparent',
-                border: isHighExpense ? '1px solid rgba(239, 68, 68, 0.15)' : '1px solid transparent',
+                backgroundColor: isHighExpense ? 'rgba(238, 93, 80, 0.06)' : 'transparent',
+                border: isHighExpense ? '1px solid rgba(238, 93, 80, 0.15)' : '1px solid transparent',
               }}
             >
               {/* Top row: rank, icon/dot, description, date, amount */}
@@ -192,12 +192,12 @@ export function TopExpensesWidget() {
                 <div
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
                   style={{
-                    backgroundColor: isHighExpense ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-hover)',
+                    backgroundColor: isHighExpense ? 'rgba(238, 93, 80, 0.12)' : 'var(--bg-hover)',
                   }}
                 >
                   <span
                     className="text-[11px] font-bold"
-                    style={{ color: isHighExpense ? '#EF4444' : 'var(--text-tertiary)' }}
+                    style={{ color: isHighExpense ? 'var(--color-danger)' : 'var(--text-tertiary)' }}
                   >
                     {index + 1}
                   </span>
@@ -277,8 +277,8 @@ export function TopExpensesWidget() {
                   <span
                     className="shrink-0 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
                     style={{
-                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                      color: '#EF4444',
+                      backgroundColor: 'rgba(238, 93, 80, 0.12)',
+                      color: 'var(--color-danger)',
                     }}
                   >
                     <AlertTriangle className="h-3 w-3" />

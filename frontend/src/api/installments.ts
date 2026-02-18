@@ -10,6 +10,8 @@ export interface CreateInstallmentData {
   start_date: string
   day_of_month: number
   description?: string
+  currency?: string
+  first_payment_made?: boolean
 }
 
 export type UpdateInstallmentData = Partial<CreateInstallmentData>

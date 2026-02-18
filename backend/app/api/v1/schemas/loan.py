@@ -36,6 +36,8 @@ class LoanCreate(BaseModel):
     day_of_month: int = Field(..., ge=1, le=31)
     total_payments: int = Field(..., ge=1, le=600)
     description: Optional[str] = Field(None, max_length=1000)
+    first_payment_made: bool = False
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('original_amount', 'monthly_payment')
     @classmethod
@@ -68,6 +70,7 @@ class LoanUpdate(BaseModel):
     category_id: Optional[UUID] = None
     status: Optional[str] = Field(None, pattern="^(active|completed|paused)$")
     description: Optional[str] = Field(None, max_length=1000)
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('monthly_payment')
     @classmethod
@@ -83,6 +86,9 @@ class LoanResponse(BaseModel):
     original_amount: Decimal
     monthly_payment: Decimal
     currency: str
+    original_currency_amount: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
     interest_rate: Decimal
     category_id: Optional[UUID]
     start_date: date
@@ -92,6 +98,7 @@ class LoanResponse(BaseModel):
     remaining_balance: Decimal
     status: str
     description: Optional[str]
+    bank_account_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -114,7 +121,7 @@ class AmortizationItem(BaseModel):
     principal: Decimal
     interest: Decimal
     remaining_balance: Decimal
-    status: str  # 'paid', 'upcoming', 'future'
+    status: str  # 'paid', 'overdue', 'due', 'future'
 
 
 class LoanDetailResponse(BaseModel):

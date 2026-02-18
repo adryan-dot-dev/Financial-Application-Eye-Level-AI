@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -78,9 +78,27 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     phone_number: Optional[str] = None
     is_admin: bool
+    is_super_admin: bool = False
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class AdminPasswordReset(BaseModel):
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if v.strip() != v or not v.strip():
+            raise ValueError("Password must not be only whitespace")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        return v
 
 
 class UserUpdate(BaseModel):
@@ -112,6 +130,14 @@ class UserUpdate(BaseModel):
             # Strip HTML tags to prevent stored XSS
             v = re.sub(r"<[^>]+>", "", v)
         return v
+
+
+class UserListResponse(BaseModel):
+    items: List[UserResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
 
 
 class UserAdminCreate(BaseModel):

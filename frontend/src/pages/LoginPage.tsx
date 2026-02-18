@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Sun, Moon, Monitor, Globe, Loader2, User, Lock, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
+import { getApiErrorMessage } from '@/api/client'
 import { cn } from '@/lib/utils'
 
 export default function LoginPage() {
@@ -60,9 +61,7 @@ export default function LoginPage() {
       await login({ username, password })
       navigate('/dashboard')
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } }
-      const message = axiosError?.response?.data?.detail || t('common.error')
-      setError(message)
+      setError(getApiErrorMessage(err))
     } finally {
       setIsSubmitting(false)
     }
@@ -114,74 +113,17 @@ export default function LoginPage() {
         {/* Gradient mesh background */}
         <div className="auth-brand-bg absolute inset-0" />
 
-        {/* Animated gradient mesh overlay */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.3) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(236, 72, 153, 0.2) 0%, transparent 50%)',
-          }}
-        />
-
-        {/* Floating decorative shapes */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {/* Large circle top-right */}
-          <div
-            className="absolute -top-20 -end-20 h-72 w-72 rounded-full"
-            style={{
-              background: 'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)',
-              animation: 'float 8s ease-in-out infinite',
-            }}
-          />
-          {/* Medium circle bottom-left */}
-          <div
-            className="absolute -bottom-16 -start-16 h-56 w-56 rounded-full"
-            style={{
-              background: 'radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%)',
-              animation: 'float 10s ease-in-out infinite reverse',
-            }}
-          />
-          {/* Small diamond center-right */}
-          <div
-            className="absolute top-1/3 end-12 h-16 w-16 rotate-45"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: '4px',
-              animation: 'float 6s ease-in-out infinite',
-            }}
-          />
-          {/* Tiny circle top-left */}
-          <div
-            className="absolute top-24 start-20 h-8 w-8 rounded-full"
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              animation: 'float 7s ease-in-out infinite reverse',
-            }}
-          />
-          {/* Horizontal line accents */}
-          <div
-            className="absolute top-1/4 start-0 h-px w-32"
-            style={{
-              background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent)',
-            }}
-          />
-          <div
-            className="absolute bottom-1/3 end-0 h-px w-40"
-            style={{
-              background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.1), transparent)',
-            }}
-          />
-        </div>
 
         <div className="relative z-10 flex flex-col items-center px-12">
           {/* Logo with glow */}
           <div
             className="mb-8 overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/20"
             style={{
-              boxShadow: '0 0 40px rgba(59, 130, 246, 0.3), 0 0 80px rgba(139, 92, 246, 0.15), 0 20px 60px rgba(0,0,0,0.3)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
             }}
           >
             <img
-              src="/logo.jpeg"
+              src="/logo.webp"
               alt={t('app.company')}
               className="h-32 w-32 object-cover"
             />
@@ -197,13 +139,10 @@ export default function LoginPage() {
             {t('app.company')}
           </p>
 
-          {/* Divider with gradient glow */}
+          {/* Divider */}
           <div
             className="my-8 h-px w-32"
-            style={{
-              background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent)',
-              boxShadow: '0 0 12px rgba(255,255,255,0.15)',
-            }}
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
           />
 
           {/* Subtitle */}
@@ -228,11 +167,11 @@ export default function LoginPage() {
               className="mb-5 overflow-hidden rounded-2xl"
               style={{
                 border: '1px solid var(--border-primary)',
-                boxShadow: '0 0 30px rgba(59, 130, 246, 0.15), 0 8px 32px rgba(0,0,0,0.1)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
               }}
             >
               <img
-                src="/logo.jpeg"
+                src="/logo.webp"
                 alt={t('app.company')}
                 className="h-24 w-24 object-cover"
               />
@@ -269,9 +208,9 @@ export default function LoginPage() {
             <div
               className="auth-error-animate mb-7 flex items-start gap-3 rounded-xl border px-4 py-3.5 text-sm"
               style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.06)',
-                borderColor: 'rgba(239, 68, 68, 0.15)',
-                color: '#EF4444',
+                backgroundColor: 'rgba(238, 93, 80, 0.06)',
+                borderColor: 'rgba(238, 93, 80, 0.15)',
+                color: 'var(--color-danger)',
               }}
               role="alert"
             >
@@ -387,7 +326,7 @@ export default function LoginPage() {
               disabled={isSubmitting}
               className="btn-primary flex h-12 w-full items-center justify-center gap-2.5 text-[15px] font-bold transition-all duration-200 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
               style={{
-                boxShadow: '0 8px 24px rgba(59, 130, 246, 0.3)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
               }}
             >
               {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}

@@ -40,7 +40,7 @@ export interface UpcomingPaymentItem {
   name: string
   amount: string
   currency: string
-  source_type: 'fixed' | 'installment' | 'loan'
+  source_type: 'fixed' | 'installment' | 'loan' | 'subscription'
   type: 'income' | 'expense'
   due_date: string
   days_until_due: number
@@ -138,9 +138,33 @@ export interface TopExpensesResponse {
   period: string
 }
 
+// --- Subscriptions Summary ---
+
+export interface SubscriptionSummaryItem {
+  id: string
+  name: string
+  amount: string
+  currency: string
+  billing_cycle: string
+  monthly_equivalent: string
+  next_renewal_date: string
+  provider: string | null
+  is_active: boolean
+}
+
+export interface SubscriptionsSummaryResponse {
+  active_subscriptions_count: number
+  total_monthly_subscription_cost: string
+  upcoming_renewals_count: number
+  items: SubscriptionSummaryItem[]
+}
+
 export const dashboardApi = {
-  summary: async (): Promise<DashboardSummary> => {
-    const response = await apiClient.get<DashboardSummary>('/dashboard/summary')
+  summary: async (startDate?: string, endDate?: string): Promise<DashboardSummary> => {
+    const params: Record<string, string> = {}
+    if (startDate) params.start_date = startDate
+    if (endDate) params.end_date = endDate
+    const response = await apiClient.get<DashboardSummary>('/dashboard/summary', { params })
     return response.data
   },
 
@@ -198,6 +222,11 @@ export const dashboardApi = {
 
   topExpenses: async (): Promise<TopExpensesResponse> => {
     const response = await apiClient.get<TopExpensesResponse>('/dashboard/top-expenses')
+    return response.data
+  },
+
+  subscriptionsSummary: async (): Promise<SubscriptionsSummaryResponse> => {
+    const response = await apiClient.get<SubscriptionsSummaryResponse>('/dashboard/subscriptions-summary')
     return response.data
   },
 }

@@ -12,11 +12,11 @@ import { queryKeys } from '@/lib/queryKeys'
 // ---------------------------------------------------------------------------
 
 const FACTOR_COLORS: Record<string, string> = {
-  savings_ratio: '#10B981',
-  debt_ratio: '#3B82F6',
-  balance_trend: '#3B82F6',
-  expense_stability: '#F59E0B',
-  emergency_fund: '#2563EB',
+  savings_ratio: 'var(--color-income)',
+  debt_ratio: 'var(--color-danger)',
+  balance_trend: 'var(--color-brand-500)',
+  expense_stability: 'var(--color-warning)',
+  emergency_fund: 'var(--color-accent-teal)',
 }
 
 const FACTOR_TRANSLATION_KEYS: Record<string, string> = {
@@ -32,11 +32,10 @@ const FACTOR_TRANSLATION_KEYS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 function getScoreColor(score: number): string {
-  if (score >= 80) return '#10B981'
-  if (score >= 60) return '#34D399'
-  if (score >= 40) return '#FBBF24'
-  if (score >= 20) return '#F97316'
-  return '#EF4444'
+  if (score >= 80) return 'var(--color-income)'
+  if (score >= 60) return 'var(--color-brand-500)'
+  if (score >= 40) return 'var(--color-warning)'
+  return 'var(--color-expense)'
 }
 
 function getGradeKey(grade: FinancialHealthResponse['grade']): string {
@@ -144,12 +143,11 @@ function FactorBar({ factor, t }: { factor: HealthFactor; t: (key: string) => st
         style={{ backgroundColor: 'var(--bg-hover)' }}
       >
         <div
-          className="h-full rounded-full"
+          className="h-full rounded-full progress-fill-animated"
           style={{
-            width: `${Math.max(0, Math.min(100, factor.score))}%`,
+            '--target-width': `${Math.max(0, Math.min(100, factor.score))}%`,
             backgroundColor: color,
-            transition: 'width 0.6s ease-in-out',
-          }}
+          } as CSSProperties}
         />
       </div>
     </div>
@@ -223,8 +221,8 @@ export function FinancialHealthWidget() {
         <div
           className="flex h-10 w-10 items-center justify-center rounded-xl"
           style={{
-            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.04))',
-            color: '#EF4444',
+            backgroundColor: 'rgba(238, 93, 80, 0.08)',
+            color: 'var(--color-danger)',
           }}
         >
           <Heart className="h-5 w-5" />

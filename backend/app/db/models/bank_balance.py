@@ -23,8 +23,15 @@ class BankBalance(Base):
     )
     balance: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="ILS")
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True
+    )
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)
     is_current: Mapped[bool] = mapped_column(Boolean, default=False)
+    bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
@@ -34,7 +41,10 @@ class BankBalance(Base):
         Index("ix_bank_balances_user_id", "user_id"),
         Index("ix_bank_balances_user_current", "user_id", "is_current"),
         Index("ix_bank_balances_user_date", "user_id", "effective_date"),
+        Index("ix_bank_balances_org_id", "organization_id"),
+        Index("ix_bank_balances_org_current", "organization_id", "is_current"),
     )
 
     # Relationships
     user = relationship("User", back_populates="bank_balances")
+    bank_account = relationship("BankAccount")

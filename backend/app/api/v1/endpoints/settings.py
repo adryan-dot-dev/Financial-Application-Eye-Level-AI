@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_data_context, DataContext
 from app.api.v1.schemas.settings import SettingsResponse, SettingsUpdate
 from app.db.models.settings import Settings
 from app.db.models.user import User
 from app.db.session import get_db
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -37,6 +39,7 @@ async def get_settings(
 async def update_settings(
     data: SettingsUpdate,
     current_user: User = Depends(get_current_user),
+    ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -53,6 +56,7 @@ async def update_settings(
     for field, value in update_data.items():
         setattr(settings, field, value)
 
+    await log_action(db, user_id=current_user.id, action="update", entity_type="settings", entity_id=str(settings.id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()
     await db.refresh(settings)
     return settings

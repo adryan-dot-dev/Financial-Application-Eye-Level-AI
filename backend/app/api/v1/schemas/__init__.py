@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.api.v1.schemas.auth import (
     PasswordChange,
     TokenRefresh,
