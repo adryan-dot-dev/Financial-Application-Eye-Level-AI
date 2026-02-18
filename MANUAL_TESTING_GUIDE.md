@@ -1,350 +1,470 @@
-# Cash Flow Management - Manual Testing Guide
-## Eye Level AI
+# מדריך בדיקות ידניות — CashFlow Management
+
+> **מטרה:** לעבור שלב-אחרי-שלב על כל הפיצ'רים במערכת ולוודא שהכל עובד לפני עלייה לפרודקשן.
+> **זמן משוער:** 45-60 דקות
+> **דרישות:** Backend רץ (`uvicorn`), Frontend רץ (`npm run dev`), PostgreSQL פעיל
 
 ---
 
-## How to Start the System
-
-### 1. Start PostgreSQL (Docker)
-```bash
-cd /Users/roeiedri/dev/Financial-Application-Eye-Level-AI
-docker-compose up -d
-```
-
-### 2. Start Backend Server
-```bash
-cd backend
-source venv/bin/activate
-PYTHONPATH=. uvicorn app.main:app --reload
-```
-Backend runs at: **http://localhost:8000**
-API Docs (Swagger): **http://localhost:8000/docs**
-
-### 3. Start Frontend (when available)
-```bash
-cd frontend
-npm run dev
-```
-Frontend runs at: **http://localhost:5173**
-
----
-
-## Testing via Swagger UI (http://localhost:8000/docs)
-
-The Swagger UI lets you test ALL API endpoints directly from the browser.
-
----
-
-## Test Scenarios
-
-### Test 1: Health Check
-**Endpoint:** `GET /health`
-**Expected:** `{"status": "healthy", "version": "0.1.0"}`
-
----
-
-### Test 2: Login as Admin
-**Endpoint:** `POST /api/v1/auth/login`
-```json
-{
-  "username": "admin",
-  "password": "admin123"
-}
-```
-**Expected:** 200 with `access_token` and `refresh_token`
-**Save the `access_token`** - you'll need it for all other requests.
-
-In Swagger UI: Click "Authorize" button (top right) and paste: `Bearer <your_token>`
-
----
-
-### Test 3: View Your Profile
-**Endpoint:** `GET /api/v1/auth/me`
-**Expected:** 200 with your admin user details
-
----
-
-### Test 4: Categories
-#### List all categories
-**Endpoint:** `GET /api/v1/categories`
-**Expected:** 13 default categories (salary, freelance, rent, etc.)
-
-#### Create a custom category
-**Endpoint:** `POST /api/v1/categories`
-```json
-{
-  "name": "subscriptions",
-  "name_he": "מנויים",
-  "type": "expense",
-  "icon": "credit-card",
-  "color": "#9333EA"
-}
-```
-**Expected:** 201 Created
-
----
-
-### Test 5: Transactions
-#### Create income transaction
-**Endpoint:** `POST /api/v1/transactions`
-```json
-{
-  "amount": 15000,
-  "type": "income",
-  "date": "2026-02-01",
-  "description": "Monthly salary",
-  "notes": "February payment"
-}
-```
-
-#### Create expense transaction
-```json
-{
-  "amount": 5000,
-  "type": "expense",
-  "date": "2026-02-05",
-  "description": "Office rent"
-}
-```
-
-#### List transactions with filters
-**Endpoint:** `GET /api/v1/transactions?type=expense&sort_by=amount&sort_order=desc`
-**Expected:** Only expense transactions, sorted by amount descending
-
-#### Duplicate a transaction
-**Endpoint:** `POST /api/v1/transactions/{id}/duplicate`
-**Expected:** 201 with a new copy of the transaction
-
----
-
-### Test 6: Fixed Income/Expenses
-#### Create fixed income (salary)
-**Endpoint:** `POST /api/v1/fixed`
-```json
-{
-  "name": "Monthly Salary",
-  "amount": 25000,
-  "type": "income",
-  "day_of_month": 10,
-  "start_date": "2026-01-01"
-}
-```
-
-#### Create fixed expense (rent)
-```json
-{
-  "name": "Office Rent",
-  "amount": 8000,
-  "type": "expense",
-  "day_of_month": 1,
-  "start_date": "2026-01-01"
-}
-```
-
-#### Pause/Resume a fixed entry
-- `POST /api/v1/fixed/{id}/pause` - Pauses the entry
-- `POST /api/v1/fixed/{id}/resume` - Resumes the entry
-
----
-
-### Test 7: Installments (Payment Plans)
-**Endpoint:** `POST /api/v1/installments`
-```json
-{
-  "name": "New Laptop",
-  "total_amount": 12000,
-  "number_of_payments": 12,
-  "type": "expense",
-  "start_date": "2026-02-01",
-  "day_of_month": 15
-}
-```
-**Expected:** 201 with `monthly_amount` auto-calculated as 1000.00
-
-#### View payment schedule
-**Endpoint:** `GET /api/v1/installments/{id}`
-**Expected:** Installment details + full schedule with payment dates and statuses
-
----
-
-### Test 8: Loans
-#### Create a loan
-**Endpoint:** `POST /api/v1/loans`
-```json
-{
-  "name": "Car Loan",
-  "original_amount": 120000,
-  "monthly_payment": 3000,
-  "interest_rate": 4.5,
-  "start_date": "2026-01-01",
-  "day_of_month": 10,
-  "total_payments": 48
-}
-```
-
-#### View loan with amortization schedule
-**Endpoint:** `GET /api/v1/loans/{id}`
-**Expected:** Loan details + amortization schedule with principal/interest breakdown
-
-#### Record a payment
-**Endpoint:** `POST /api/v1/loans/{id}/payment`
-```json
-{
-  "amount": 3000
-}
-```
-**Expected:** payments_made increases, remaining_balance decreases
-
----
-
-### Test 9: Bank Balance
-#### Set initial balance
-**Endpoint:** `POST /api/v1/balance`
-```json
-{
-  "balance": 50000,
-  "effective_date": "2026-02-01",
-  "notes": "Opening balance"
-}
-```
-
-#### View current balance
-**Endpoint:** `GET /api/v1/balance`
-
-#### View history
-**Endpoint:** `GET /api/v1/balance/history`
-
----
-
-### Test 10: Cash Flow Forecast (Key Feature!)
-#### Prerequisites
-Before testing forecast, make sure you have:
-1. A bank balance set (Test 9)
-2. At least one fixed income (Test 6)
-3. At least one fixed expense (Test 6)
-4. Optionally: installments and loans
-
-#### Monthly forecast
-**Endpoint:** `GET /api/v1/forecast?months=6`
-**Expected:** 6-month projection showing:
-- `opening_balance` / `closing_balance` per month
-- `fixed_income` / `fixed_expenses`
-- `installment_payments` / `loan_payments`
-- `has_negative_months` flag
-- `first_negative_month` if applicable
-
-#### Weekly forecast
-**Endpoint:** `GET /api/v1/forecast/weekly?weeks=12`
-**Expected:** 12-week projection with income/expenses per week
-
-#### Forecast summary
-**Endpoint:** `GET /api/v1/forecast/summary?months=6`
-**Expected:** Aggregated summary with total income, expenses, net projected, alerts count
-
----
-
-### Test 11: Alerts
-#### Check for alerts
-**Endpoint:** `GET /api/v1/alerts`
-**Expected:** If your forecast shows negative months, alerts will be auto-generated
-
-#### Check unread count
-**Endpoint:** `GET /api/v1/alerts/unread`
-
-#### Test negative balance alert
-1. Set a low balance (e.g., 1000)
-2. Add large fixed expense (e.g., 10000/month)
-3. Call `GET /api/v1/forecast/summary?months=3`
-4. Check `GET /api/v1/alerts` - should see "negative_cashflow" alerts
-
----
-
-### Test 12: Expected Income
-**Endpoint:** `PUT /api/v1/expected-income/2026-03-01`
-```json
-{
-  "expected_amount": 30000,
-  "notes": "Expected bonus + salary"
-}
-```
-**Expected:** Expected income saved for March 2026
-
----
-
-### Test 13: Settings
-#### View settings
-**Endpoint:** `GET /api/v1/settings`
-
-#### Update settings
-**Endpoint:** `PUT /api/v1/settings`
-```json
-{
-  "currency": "USD",
-  "language": "en",
-  "theme": "dark",
-  "forecast_months_default": 12
-}
-```
-
----
-
-### Test 14: Edge Cases to Try Manually
-
-| Test | Action | Expected |
-|------|--------|----------|
-| Negative amount | Create transaction with amount: -100 | 422 Validation Error |
-| Zero amount | Create transaction with amount: 0 | 422 Validation Error |
-| Invalid type | Create transaction with type: "gift" | 422 Validation Error |
-| Very long text | Description > 500 chars | 422 Validation Error |
-| Wrong password | Login with wrong password | 401 Unauthorized |
-| No token | Call /api/v1/auth/me without token | 403 Forbidden |
-| Invalid token | Use random string as Bearer token | 401 Unauthorized |
-| End before start | Fixed entry with end_date < start_date | 422 Validation Error |
-| Day 32 | Fixed entry with day_of_month: 32 | 422 Validation Error |
-
----
-
-## Running Automated Tests
+## 0. הכנה
 
 ```bash
-cd /Users/roeiedri/dev/Financial-Application-Eye-Level-AI/backend
-source venv/bin/activate
-PYTHONPATH=. pytest tests/ -v
+# טרמינל 1 — Backend
+cd backend && source venv/bin/activate
+PYTHONPATH=. uvicorn app.main:app --reload --port 8000
+
+# טרמינל 2 — Frontend
+cd frontend && npm run dev
+
+# טרמינל 3 — בדיקות אוטומטיות (הרץ קודם)
+cd backend && source venv/bin/activate
+PYTHONPATH=. pytest tests/ -v --tb=short
 ```
 
-**Current test count: 155 tests (all passing)**
-
-| Test File | Tests | Coverage |
-|-----------|-------|----------|
-| test_auth.py | 8 | Login, register, refresh, password change |
-| test_categories.py | 5 | CRUD + filter by type |
-| test_transactions.py | 6 | CRUD + duplicate + pagination |
-| test_fixed.py | 7 | CRUD + pause/resume |
-| test_installments.py | 7 | CRUD + schedule + payments |
-| test_loans.py | 9 | CRUD + amortization + payments |
-| test_balance.py | 5 | CRUD + history |
-| test_expected_income.py | 5 | CRUD + month normalization |
-| test_forecast.py | 7 | Monthly, weekly, summary, negative detection |
-| test_alerts.py | 5 | CRUD + auto-generation |
-| test_settings.py | 3 | Get + update + validation |
-| test_edge_cases.py | 88 | Auth, IDOR, boundaries, validation |
+**✅ ציפייה:** 756+ טסטים עוברים, 0 נכשלים
 
 ---
 
-## API Routes Summary (67 routes)
+## 1. הרשמה והתחברות (Auth)
 
-| Group | Routes | Prefix |
-|-------|--------|--------|
-| Auth | 7 | /api/v1/auth/ |
-| Users (admin) | 4 | /api/v1/users/ |
-| Settings | 2 | /api/v1/settings |
-| Categories | 7 | /api/v1/categories/ |
-| Transactions | 9 | /api/v1/transactions/ |
-| Fixed Income/Expenses | 7 | /api/v1/fixed/ |
-| Installments | 6 | /api/v1/installments/ |
-| Loans | 7 | /api/v1/loans/ |
-| Balance | 4 | /api/v1/balance/ |
-| Expected Income | 3 | /api/v1/expected-income/ |
-| Forecast | 3 | /api/v1/forecast/ |
-| Alerts | 4 | /api/v1/alerts/ |
-| Dashboard | 4 | /api/v1/dashboard/ |
+### תרחיש 1.1 — הרשמה חדשה
+1. פתח `http://localhost:5173/register`
+2. הזן: שם מלא, אימייל חדש, סיסמה (8+ תווים)
+3. לחץ "הרשמה"
+
+**✅ ציפייה:** מועבר לדשבורד, רואים הודעת הצלחה
+
+### תרחיש 1.2 — הרשמה עם אימייל קיים
+1. נסה להירשם שוב עם אותו אימייל
+
+**✅ ציפייה:** הודעת שגיאה "אימייל כבר קיים" (לא crash)
+
+### תרחיש 1.3 — התחברות
+1. פתח `http://localhost:5173/login`
+2. הזן אימייל + סיסמה שנרשמת איתם
+
+**✅ ציפייה:** מועבר לדשבורד, רואים שם המשתמש
+
+### תרחיש 1.4 — התחברות עם סיסמה שגויה
+1. הזן אימייל נכון + סיסמה שגויה
+
+**✅ ציפייה:** הודעת שגיאה, לא מתחבר
+
+### תרחיש 1.5 — Auth Guard
+1. בזמן שאתה מנותק, נסה לגשת ישירות ל: `http://localhost:5173/dashboard`
+
+**✅ ציפייה:** מועבר אוטומטית לדף ההתחברות
+
+### תרחיש 1.6 — התנתקות
+1. לחץ על כפתור ההתנתקות (בתפריט הצדדי)
+
+**✅ ציפייה:** מועבר לדף ההתחברות, לא ניתן לחזור לדשבורד
+
+---
+
+## 2. דשבורד
+
+### תרחיש 2.1 — טעינה ראשונית
+1. התחבר ונכנס לדשבורד
+
+**✅ ציפייה:** רואים:
+- כרטיסיות KPI (יתרה, הכנסות, הוצאות, חיסכון)
+- גרף תחזית
+- פאנל התראות
+- פעולות מהירות
+
+### תרחיש 2.2 — מספרים נראים
+1. בדוק שכל המספרים בכרטיסיות KPI נראים במלואם
+2. שנה גודל חלון (רוחב קטן)
+
+**✅ ציפייה:** מספרים לא נחתכים, אין גלישה, אין טקסט מוסתר
+
+---
+
+## 3. עסקאות (Transactions)
+
+### תרחיש 3.1 — יצירת עסקה חדשה
+1. לך לעמוד "עסקאות"
+2. לחץ "עסקה חדשה"
+3. מלא:
+   - **סכום:** 150
+   - **תיאור:** "קניות בסופר"
+   - **סוג:** הוצאה
+   - **קטגוריה:** בחר קטגוריה קיימת
+   - **תאריך:** היום
+4. לחץ "שמור"
+
+**✅ ציפייה:** העסקה מופיעה ברשימה, סכום ותיאור נכונים
+
+### תרחיש 3.2 — עריכת עסקה
+1. לחץ על עסקה קיימת
+2. שנה את הסכום ל-200
+3. שמור
+
+**✅ ציפייה:** הסכום מתעדכן ברשימה
+
+### תרחיש 3.3 — מחיקת עסקה
+1. לחץ על כפתור מחיקה בעסקה
+2. אשר
+
+**✅ ציפייה:** העסקה נעלמת מהרשימה
+
+### תרחיש 3.4 — סינון וחיפוש
+1. הזן "סופר" בשדה החיפוש
+2. בחר סוג "הוצאה" בפילטר
+
+**✅ ציפייה:** רק עסקאות מתאימות מוצגות
+
+### תרחיש 3.5 — מיון
+1. לחץ על כותרת עמודת "סכום"
+2. לחץ שוב
+
+**✅ ציפייה:** מיון עולה → מיון יורד
+
+### תרחיש 3.6 — עמודים (Pagination)
+1. אם יש יותר מ-20 עסקאות, בדוק ניווט בין עמודים
+
+**✅ ציפייה:** מעבר חלק בין עמודים, מספרים מתעדכנים
+
+### תרחיש 3.7 — עסקה במטבע זר
+1. צור עסקה חדשה
+2. בחר מטבע: USD
+3. הזן סכום: 100
+
+**✅ ציפייה:** נשמר עם סכום מקורי (100 USD) + המרה לשקלים לפי שער
+
+---
+
+## 4. הוצאות/הכנסות קבועות (Fixed)
+
+### תרחיש 4.1 — יצירת הוצאה קבועה
+1. לך לעמוד "הוצאות קבועות"
+2. לחץ "הוספה"
+3. מלא:
+   - **שם:** "שכר דירה"
+   - **סכום:** 4500
+   - **תדירות:** חודשי
+   - **סוג:** הוצאה
+4. שמור
+
+**✅ ציפייה:** כרטיס חדש מופיע עם הפרטים
+
+### תרחיש 4.2 — השהיה וחידוש
+1. לחץ "השהה" על הוצאה קבועה
+2. בדוק שהיא מסומנת כמושהית
+3. לחץ "חדש"
+
+**✅ ציפייה:** סטטוס משתנה בין פעיל/מושהה
+
+### תרחיש 4.3 — עריכה ומחיקה
+1. ערוך סכום של הוצאה קבועה
+2. מחק הוצאה קבועה
+
+**✅ ציפייה:** שינויים נשמרים, מחיקה מסירה מהרשימה
+
+---
+
+## 5. תשלומים (Installments)
+
+### תרחיש 5.1 — יצירת תשלום
+1. לך לעמוד "תשלומים"
+2. לחץ "תשלום חדש"
+3. מלא:
+   - **שם:** "מקרר חדש"
+   - **סכום כולל:** 3600
+   - **מספר תשלומים:** 12
+4. שמור
+
+**✅ ציפייה:** מופיע עם:
+- סכום לתשלום: ₪300
+- Progress bar מראה 0/12
+- לוח תשלומים מפורט
+
+### תרחיש 5.2 — רישום תשלום
+1. לחץ "שלם" על תשלום ראשון
+
+**✅ ציפייה:** Progress bar מתעדכן ל-1/12, סכום ששולם מתעדכן
+
+---
+
+## 6. הלוואות (Loans)
+
+### תרחיש 6.1 — יצירת הלוואה
+1. לך לעמוד "הלוואות"
+2. לחץ "הלוואה חדשה"
+3. מלא:
+   - **שם:** "הלוואת רכב"
+   - **סכום:** 100,000
+   - **ריבית:** 4.5%
+   - **תקופה:** 60 חודשים
+4. שמור
+
+**✅ ציפייה:**
+- לוח סילוקין (Amortization table) מוצג
+- תשלום חודשי מחושב נכון (~₪1,864)
+- סה"כ ריבית מוצג
+
+### תרחיש 6.2 — רישום תשלום הלוואה
+1. לחץ "שלם" על תשלום ראשון
+
+**✅ ציפייה:** יתרה פוחתת, תשלום מסומן כשולם
+
+### תרחיש 6.3 — ביטול תשלום (Reverse)
+1. לחץ "בטל תשלום" על תשלום ששולם
+
+**✅ ציפייה:** יתרה חוזרת, תשלום חוזר לסטטוס "לא שולם"
+
+---
+
+## 7. קטגוריות
+
+### תרחיש 7.1 — יצירת קטגוריה
+1. לך לעמוד "קטגוריות"
+2. לחץ "קטגוריה חדשה"
+3. בחר שם, צבע ואייקון
+4. שמור
+
+**✅ ציפייה:** קטגוריה מופיעה ברשימה עם הצבע והאייקון שנבחרו
+
+### תרחיש 7.2 — ארכיון
+1. לחץ "ארכיון" על קטגוריה
+
+**✅ ציפייה:** הקטגוריה עוברת לרשימת הארכיון, לא מופיעה בבחירה בעסקאות
+
+### תרחיש 7.3 — שימוש בעסקה
+1. צור עסקה חדשה
+2. בדוק שהקטגוריה החדשה מופיעה בתפריט הבחירה
+
+**✅ ציפייה:** הקטגוריה זמינה (אם לא בארכיון)
+
+---
+
+## 8. יתרה (Balance)
+
+### תרחיש 8.1 — עדכון יתרה
+1. לך לעמוד "יתרה"
+2. עדכן יתרה נוכחית ל-15,000
+
+**✅ ציפייה:** היתרה מתעדכנת, גרף היסטוריה מראה נקודה חדשה
+
+### תרחיש 8.2 — השפעה על דשבורד
+1. חזור לדשבורד
+
+**✅ ציפייה:** כרטיסית "יתרה" מציגה 15,000
+
+---
+
+## 9. תחזית (Forecast)
+
+### תרחיש 9.1 — תחזית חודשית
+1. לך לעמוד "תחזית"
+2. בדוק טאב "חודשי"
+
+**✅ ציפייה:** גרף עם 12 חודשים קדימה, מספרים הגיוניים בהתבסס על הנתונים שהזנת
+
+### תרחיש 9.2 — What-If (מה אם)
+1. עבור לטאב "מה-אם"
+2. הוסף הכנסה חודשית של 5,000
+3. בדוק שהתחזית משתנה
+
+**✅ ציפייה:** הגרף מציג שיפור, המספרים עולים
+
+---
+
+## 10. התראות (Alerts)
+
+### תרחיש 10.1 — רשימת התראות
+1. לך לעמוד "התראות"
+
+**✅ ציפייה:** רשימת התראות (אם יש), סינון לפי חומרה
+
+### תרחיש 10.2 — נודניק (Snooze) ⚠️ בדיקת באג
+1. מצא התראה עם כפתור "נודניק"
+2. לחץ על "נודניק" — תפריט נפתח אמור להיפתח
+3. **נסה ללחוץ על אופציה** (למשל "הזכר בעוד שעה")
+
+**✅ ציפייה:** האופציה נלחצת בהצלחה ומגיבה
+**⚠️ באג ידוע:** אם הלחיצה לא עובדת — זה הבאג של `overflow-hidden` שמתועד בפרומפט הפרונטנד
+
+### תרחיש 10.3 — סימון כנקרא
+1. לחץ "סמן כנקרא" על התראה
+
+**✅ ציפייה:** ההתראה מסומנת, סופרים מתעדכנים
+
+---
+
+## 11. מנויים (Subscriptions)
+
+### תרחיש 11.1 — יצירת מנוי
+1. לך לעמוד "מנויים" (אם קיים) או צור דרך API
+2. הוסף:
+   - **שם:** "Netflix"
+   - **סכום:** 50
+   - **תדירות:** חודשי
+
+**✅ ציפייה:** המנוי מופיע, סכום חודשי נכון
+
+---
+
+## 12. הגדרות (Settings)
+
+### תרחיש 12.1 — החלפת שפה
+1. לך להגדרות
+2. שנה שפה מעברית לאנגלית
+
+**✅ ציפייה:** כל הממשק עובר לאנגלית, כיוון LTR
+
+### תרחיש 12.2 — מצב כהה/בהיר
+1. עבור בין מצב כהה לבהיר
+
+**✅ ציפייה:** צבעים משתנים, קריאות נשמרת, אין אלמנטים "שבורים"
+
+### תרחיש 12.3 — שמירה אוטומטית
+1. שנה הגדרה כלשהי
+2. רענן את הדף
+
+**✅ ציפייה:** ההגדרה נשמרה (לא חוזרת לברירת מחדל)
+
+---
+
+## 13. ארגונים (Organizations)
+
+### תרחיש 13.1 — יצירת ארגון
+1. צור ארגון חדש (דרך התפריט או API)
+2. תן שם: "החברה שלי"
+
+**✅ ציפייה:** ארגון נוצר, אתה Owner
+
+### תרחיש 13.2 — מעבר הקשר (Context Switch)
+1. עבור מהקשר אישי להקשר ארגוני
+
+**✅ ציפייה:** הדשבורד מציג נתונים של הארגון (לא הנתונים האישיים!)
+
+### תרחיש 13.3 — בידוד נתונים ⭐ בדיקה קריטית
+1. בהקשר אישי — צור עסקה "אישי-123"
+2. עבור להקשר ארגוני
+3. בדוק שהעסקה "אישי-123" **לא** מופיעה
+4. צור עסקה "ארגון-456" בהקשר ארגוני
+5. חזור להקשר אישי
+6. בדוק שהעסקה "ארגון-456" **לא** מופיעה
+
+**✅ ציפייה:** בידוד מלא — נתונים אישיים וארגוניים לא מתערבבים
+
+### תרחיש 13.4 — יתרה ארגונית
+1. בהקשר ארגוני, עדכן יתרה
+2. חזור לאישי
+
+**✅ ציפייה:** כל הקשר שומר יתרה משלו, לא משפיע על השני
+
+---
+
+## 14. עמידות (Resilience)
+
+### תרחיש 14.1 — ניתוק Backend
+1. עצור את שרת ה-Backend (Ctrl+C בטרמינל)
+2. נסה לבצע פעולה בפרונטנד
+
+**✅ ציפייה:** הודעת שגיאה ידידותית (לא מסך לבן/crash)
+
+### תרחיש 14.2 — רענון דף
+1. בזמן שאתה בעמוד עסקאות עם נתונים — רענן (F5)
+
+**✅ ציפייה:** הנתונים נטענים מחדש, לא נמחקים
+
+### תרחיש 14.3 — כפתור חזרה
+1. נווט: דשבורד → עסקאות → עסקה ספציפית → חזור
+
+**✅ ציפייה:** ניווט חלק, לא תקוע
+
+---
+
+## 15. רספונסיביות (Mobile)
+
+### תרחיש 15.1 — גודל מסך קטן
+1. פתח DevTools (F12)
+2. עבור למצב Mobile (Ctrl+Shift+M)
+3. בחר iPhone 14
+
+**✅ ציפייה בכל העמודים:**
+- תפריט מתכווץ להמבורגר
+- טבלאות גוללות אופקית
+- כפתורים נגישים (לא קטנים מדי)
+- טפסים נוחים למילוי
+
+---
+
+## 16. Swagger API
+
+### תרחיש 16.1 — בדיקת תיעוד
+1. פתח `http://localhost:8000/docs`
+
+**✅ ציפייה:** Swagger UI נטען, כל 67+ הנתיבים מוצגים
+
+### תרחיש 16.2 — בדיקת Endpoint ישירה
+1. ב-Swagger, לחץ "Authorize" והזן JWT token
+2. נסה `GET /api/v1/transactions/`
+
+**✅ ציפייה:** מחזיר את העסקאות שיצרת
+
+---
+
+## 17. בדיקות אוטומטיות (סיכום)
+
+```bash
+# Backend — כל הטסטים
+cd backend && source venv/bin/activate
+PYTHONPATH=. pytest tests/ -v --tb=short
+
+# Migration — תקינות DB
+PYTHONPATH=. alembic upgrade head
+PYTHONPATH=. alembic downgrade -1
+PYTHONPATH=. alembic upgrade head
+
+# Frontend — Build
+cd frontend && npm run build
+```
+
+**✅ ציפייה:**
+- pytest: 756+ passed, 0 failed
+- alembic: upgrade/downgrade/upgrade ללא שגיאות
+- npm build: מצליח ללא warnings קריטיים
+
+---
+
+## טבלת סיכום
+
+| # | קטגוריה | תרחישים | סטטוס |
+|---|---------|---------|-------|
+| 1 | Auth (הרשמה/התחברות) | 6 | ⬜ |
+| 2 | דשבורד | 2 | ⬜ |
+| 3 | עסקאות | 7 | ⬜ |
+| 4 | הוצאות קבועות | 3 | ⬜ |
+| 5 | תשלומים | 2 | ⬜ |
+| 6 | הלוואות | 3 | ⬜ |
+| 7 | קטגוריות | 3 | ⬜ |
+| 8 | יתרה | 2 | ⬜ |
+| 9 | תחזית | 2 | ⬜ |
+| 10 | התראות | 3 | ⬜ |
+| 11 | מנויים | 1 | ⬜ |
+| 12 | הגדרות | 3 | ⬜ |
+| 13 | ארגונים | 4 | ⬜ |
+| 14 | עמידות | 3 | ⬜ |
+| 15 | רספונסיביות | 1 | ⬜ |
+| 16 | Swagger API | 2 | ⬜ |
+| 17 | בדיקות אוטומטיות | 3 | ⬜ |
+| | **סה"כ** | **50** | |
+
+---
+
+## מתי המערכת מוכנה לפרודקשן?
+
+כשכל התנאים הבאים מתקיימים:
+
+1. ✅ כל 50 התרחישים עוברים בהצלחה
+2. ✅ pytest: 756+ passed, 0 failed
+3. ✅ `npm run build` מצליח ללא שגיאות
+4. ✅ `alembic upgrade head` + `downgrade -1` + `upgrade head` עובד
+5. ✅ בידוד נתונים ארגוני עובד (תרחיש 13.3)
+6. ✅ אין באגים קריטיים פתוחים
+
+**עברת הכל? המערכת מוכנה לפרודקשן!**
