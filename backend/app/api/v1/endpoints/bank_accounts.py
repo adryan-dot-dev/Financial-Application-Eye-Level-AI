@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -59,7 +60,7 @@ async def create_bank_account(
     return account
 
 
-@router.get("", response_model=list)
+@router.get("", response_model=List[BankAccountResponse])
 async def list_bank_accounts(
     current_user: User = Depends(get_current_user),
     ctx: DataContext = Depends(get_data_context),

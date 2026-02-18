@@ -5,7 +5,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin
@@ -191,7 +191,11 @@ async def admin_reset_user_password(
     if user.is_admin and not admin.is_super_admin:
         raise ForbiddenException("Only super admin can reset admin passwords")
 
-    user.password_hash = hash_password(data.new_password)
+    await db.execute(
+        update(User).where(User.id == user_id).values(
+            password_hash=hash_password(data.new_password),
+        )
+    )
     await log_action(db, user_id=admin.id, action="admin_reset_password", entity_type="user", entity_id=str(user_id))
     await db.commit()
     return {"message": "Password reset successfully"}

@@ -25,6 +25,7 @@ export interface CreateTransactionData {
   tags?: string[]
   entry_pattern?: string
   currency?: string
+  credit_card_id?: string
 }
 
 export type UpdateTransactionData = Partial<CreateTransactionData>

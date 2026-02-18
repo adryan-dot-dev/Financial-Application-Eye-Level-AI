@@ -48,6 +48,8 @@ const moreItems: MoreNavItem[] = [
   { key: 'balance', icon: Wallet, path: '/balance', labelKey: 'nav.balance' },
   { key: 'installments', icon: CreditCard, path: '/installments', labelKey: 'nav.installments' },
   { key: 'loans', icon: Landmark, path: '/loans', labelKey: 'nav.loans' },
+  { key: 'creditCards', icon: CreditCard, path: '/credit-cards', labelKey: 'nav.creditCards' },
+  { key: 'bankAccounts', icon: Landmark, path: '/bank-accounts', labelKey: 'nav.bankAccounts' },
   { key: 'categories', icon: Tags, path: '/categories', labelKey: 'nav.categories' },
   { key: 'alerts', icon: Bell, path: '/alerts', labelKey: 'nav.alerts' },
   { key: 'settings', icon: Settings, path: '/settings', labelKey: 'nav.settings' },

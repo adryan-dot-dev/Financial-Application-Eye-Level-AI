@@ -60,6 +60,8 @@ class BudgetUpdate(BaseModel):
 
 class BudgetResponse(BaseModel):
     id: UUID
+    user_id: UUID
+    organization_id: Optional[UUID] = None
     category_id: UUID
     period_type: str
     amount: Decimal
@@ -75,6 +77,7 @@ class BudgetResponse(BaseModel):
     remaining: Decimal = Decimal("0")
     usage_percentage: float = 0.0
     is_over_budget: bool = False
+    forecast_end_of_period: Decimal = Decimal("0")
     category_name: Optional[str] = None
 
     model_config = {"from_attributes": True}

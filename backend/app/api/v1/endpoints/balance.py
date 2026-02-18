@@ -65,11 +65,22 @@ async def update_balance(
     update_data = data.model_dump(exclude_unset=True)
     new_effective_date = update_data.get("effective_date", old_balance.effective_date)
 
+    # Validate bank_account_id if provided
+    new_bank_account_id = update_data.get("bank_account_id")
+    if new_bank_account_id:
+        ba_result = await db.execute(
+            select(BankAccount).where(BankAccount.id == new_bank_account_id, ctx.ownership_filter(BankAccount))
+        )
+        if not ba_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Bank account not found or does not belong to you")
+
     # If the effective_date is not changing, update the existing record in place
     if new_effective_date == old_balance.effective_date:
         old_balance.balance = update_data.get("balance", old_balance.balance)
         if "notes" in update_data:
             old_balance.notes = update_data["notes"]
+        if "bank_account_id" in update_data:
+            old_balance.bank_account_id = update_data["bank_account_id"]
         await log_action(db, user_id=current_user.id, action="update", entity_type="balance", entity_id=str(old_balance.id), user_email=current_user.email, organization_id=ctx.organization_id)
         await db.commit()
         await db.refresh(old_balance)
@@ -81,6 +92,7 @@ async def update_balance(
 
     new_balance_value = update_data.get("balance", old_balance.balance)
     new_notes = update_data.get("notes", old_balance.notes)
+    new_ba_id = update_data.get("bank_account_id", old_balance.bank_account_id)
 
     new_entry = BankBalance(
         **ctx.create_fields(),
@@ -88,6 +100,7 @@ async def update_balance(
         effective_date=new_effective_date,
         is_current=True,
         notes=new_notes,
+        bank_account_id=new_ba_id,
     )
     db.add(new_entry)
     await log_action(db, user_id=current_user.id, action="update", entity_type="balance", entity_id=None, user_email=current_user.email, organization_id=ctx.organization_id)

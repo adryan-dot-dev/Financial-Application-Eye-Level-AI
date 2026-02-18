@@ -7,7 +7,9 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.db.base import Base
@@ -19,6 +21,7 @@ from app.db.models import (  # noqa: F401
     Transaction, User,
 )
 from app.core.rate_limit import limiter
+from app.core.security import _token_blacklist
 from app.db.session import get_db
 from app.main import app
 
@@ -40,7 +43,7 @@ def _make_test_database_url(url: str) -> str:
 
 _TEST_DATABASE_URL = _make_test_database_url(settings.DATABASE_URL)
 
-engine = create_async_engine(_TEST_DATABASE_URL, echo=False)
+engine = create_async_engine(_TEST_DATABASE_URL, echo=False, poolclass=NullPool)
 test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -68,6 +71,43 @@ _SEED_CATEGORIES = [
 ]
 
 
+def pytest_configure(config):
+    """Run once before any test collection — full DB reset.
+
+    Terminates stale connections from prior pytest runs, then TRUNCATEs all
+    tables so every ``pytest`` invocation starts from a blank slate.
+    """
+    import asyncio as _aio
+    from sqlalchemy import text as _text
+    from sqlalchemy.ext.asyncio import create_async_engine as _create
+
+    async def _full_reset():
+        _eng = _create(_TEST_DATABASE_URL, echo=False, pool_size=1, max_overflow=0)
+        async with _eng.begin() as conn:
+            # Kill lingering connections from prior test runs / dev server
+            await conn.execute(_text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = 'cashflow_test' AND pid != pg_backend_pid()"
+            ))
+            result = await conn.execute(_text(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
+                "AND tablename != 'alembic_version'"
+            ))
+            tables = [row[0] for row in result.fetchall()]
+            if tables:
+                quoted = ", ".join(f'"{t}"' for t in tables)
+                await conn.execute(_text(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"))
+        await _eng.dispose()
+
+    try:
+        loop = _aio.get_event_loop()
+        if loop.is_closed():
+            loop = _aio.new_event_loop()
+    except RuntimeError:
+        loop = _aio.new_event_loop()
+    loop.run_until_complete(_full_reset())
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.new_event_loop()
@@ -75,101 +115,40 @@ def event_loop():
     loop.close()
 
 
-async def _ensure_admin_and_seed():
-    """Ensure admin user, settings, and seed categories exist."""
-    from app.core.security import hash_password
+# Cache bcrypt hash for performance (bcrypt is slow, ~0.3s per call)
+_ADMIN_HASH: str = ""
 
-    async with test_session() as session:
-        result = await session.execute(
-            User.__table__.select().where(User.__table__.c.username == "admin")
-        )
-        admin_row = result.fetchone()
 
-        if admin_row is None:
-            admin_result = await session.execute(
-                insert(User).values(
-                    username="admin",
-                    email="admin@eyelevel.ai",
-                    password_hash=hash_password("Admin2026!"),
-                    is_admin=True,
-                    is_active=True,
-                ).returning(User.__table__.c.id)
-            )
-            admin_id = admin_result.scalar_one()
-
-            await session.execute(insert(Settings).values(user_id=admin_id))
-
-            for cat in _SEED_CATEGORIES:
-                await session.execute(
-                    insert(Category).values(user_id=admin_id, **cat)
-                )
-            await session.commit()
-        else:
-            admin_id = admin_row[0]
-            # Reset admin password and state (including password_changed_at
-            # to prevent "Token invalidated by password change" errors)
-            await session.execute(
-                update(User).where(User.id == admin_id).values(
-                    password_hash=hash_password("Admin2026!"),
-                    is_active=True,
-                    password_changed_at=None,
-                )
-            )
-            # Ensure settings exist
-            settings_result = await session.execute(
-                Settings.__table__.select().where(Settings.user_id == admin_id)
-            )
-            if not settings_result.fetchone():
-                await session.execute(insert(Settings).values(user_id=admin_id))
-
-            # Reset admin settings to defaults
-            await session.execute(
-                update(Settings).where(Settings.user_id == admin_id).values(
-                    currency="ILS",
-                    language="he",
-                    theme="light",
-                    forecast_months_default=6,
-                    notifications_enabled=True,
-                    onboarding_completed=False,
-                )
-            )
-
-            # Un-archive seed categories
-            await session.execute(
-                update(Category).where(
-                    Category.user_id == admin_id,
-                    Category.name.in_(_SEED_CATEGORY_NAMES),
-                ).values(is_archived=False)
-            )
-
-            await session.commit()
+def _admin_password_hash() -> str:
+    global _ADMIN_HASH
+    if not _ADMIN_HASH:
+        from app.core.security import hash_password
+        _ADMIN_HASH = hash_password("Admin2026!")
+    return _ADMIN_HASH
 
 
 async def _cleanup_test_data():
-    """Clean up all test data, preserving admin user and seed categories."""
-    async with test_session() as session:
-        # Get admin user id
-        admin_result = await session.execute(
-            User.__table__.select().where(User.__table__.c.username == "admin")
-        )
-        admin_rows = admin_result.fetchall()
-        admin_ids = [r[0] for r in admin_rows]
+    """Delete all test data, upsert admin + seed data.
 
-        # Audit logs (no FK cascade concerns)
+    Uses DELETE in FK-safe order (not TRUNCATE, which requires
+    AccessExclusiveLock and deadlocks with concurrent test sessions).
+    Admin user is preserved (DB trigger prevents deletion) and reset
+    via INSERT ... ON CONFLICT DO UPDATE to handle both fresh-DB and
+    existing-admin cases atomically in a single session.
+    """
+    async with test_session() as session:
+        # Audit logs (no FK deps)
         await session.execute(AuditLog.__table__.delete())
 
-        # New tables that reference existing tables
+        # Org-related tables
         await session.execute(ExpenseApproval.__table__.delete())
         await session.execute(OrgReport.__table__.delete())
         await session.execute(OrgBudget.__table__.delete())
-
-        # Organization members and orgs (FK deps on users)
         await session.execute(OrganizationMember.__table__.delete())
-        # Clear current_organization_id FK before deleting organizations
-        await session.execute(
-            update(User).values(current_organization_id=None)
-        )
-        await session.execute(Organization.__table__.delete())
+
+        # Clear user FK to organizations before deleting orgs
+        await session.execute(update(User).values(current_organization_id=None))
+        await session.execute(Organization.__table__.delete())  # cascades to org_settings
 
         # Subscriptions and backups
         await session.execute(Subscription.__table__.delete())
@@ -178,7 +157,7 @@ async def _cleanup_test_data():
         # Forecast scenarios
         await session.execute(ForecastScenario.__table__.delete())
 
-        # Phase 2 tables (no FK dependencies to worry about)
+        # Phase 2 tables
         await session.execute(Alert.__table__.delete())
         await session.execute(ExpectedIncome.__table__.delete())
         await session.execute(BankBalance.__table__.delete())
@@ -186,47 +165,71 @@ async def _cleanup_test_data():
         await session.execute(Installment.__table__.delete())
         await session.execute(FixedIncomeExpense.__table__.delete())
 
-        # Phase 1 tables
+        # Transactions (FK to categories, users)
         await session.execute(Transaction.__table__.delete())
 
-        # Tables referenced by the above (must come after)
+        # Credit cards and bank accounts
         await session.execute(CreditCard.__table__.delete())
         await session.execute(BankAccount.__table__.delete())
 
-        # Delete non-seed categories (created by tests)
-        if admin_ids:
-            await session.execute(
-                Category.__table__.delete().where(
-                    Category.user_id.notin_(admin_ids)
-                )
-            )
-            await session.execute(
-                Category.__table__.delete().where(
-                    Category.user_id.in_(admin_ids),
-                    Category.name.notin_(_SEED_CATEGORY_NAMES),
-                )
-            )
+        # Delete ALL categories and settings (including admin's — recreated below)
+        await session.execute(Category.__table__.delete())
+        await session.execute(Settings.__table__.delete())
 
-        # Delete non-admin settings and users
-        if admin_ids:
-            await session.execute(
-                Settings.__table__.delete().where(
-                    Settings.user_id.notin_(admin_ids)
-                )
-            )
+        # Delete non-admin users (trigger trg_prevent_admin_delete blocks admin deletion)
         await session.execute(
-            User.__table__.delete().where(User.__table__.c.username != "admin")
+            User.__table__.delete().where(User.__table__.c.is_admin == False)
         )
 
-        await session.commit()
+        # Upsert admin: INSERT if DB is empty (after TRUNCATE), UPDATE if exists
+        admin_stmt = pg_insert(User.__table__).values(
+            username="admin",
+            email="admin@eyelevel.ai",
+            password_hash=_admin_password_hash(),
+            is_admin=True,
+            is_active=True,
+        ).on_conflict_do_update(
+            index_elements=["username"],
+            set_={
+                "email": "admin@eyelevel.ai",
+                "password_hash": _admin_password_hash(),
+                "is_active": True,
+                "is_admin": True,
+                "password_changed_at": None,
+            },
+        ).returning(User.__table__.c.id)
+        result = await session.execute(admin_stmt)
+        admin_id = result.scalar_one()
 
-    # Now ensure admin user is in correct state (separate session to avoid conflicts)
-    await _ensure_admin_and_seed()
+        # Upsert admin settings
+        settings_stmt = pg_insert(Settings.__table__).values(
+            user_id=admin_id,
+        ).on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={
+                "currency": "ILS",
+                "language": "he",
+                "theme": "light",
+                "forecast_months_default": 6,
+                "notifications_enabled": True,
+                "onboarding_completed": False,
+            },
+        )
+        await session.execute(settings_stmt)
+
+        # Insert seed categories (all were deleted above)
+        for cat in _SEED_CATEGORIES:
+            await session.execute(
+                insert(Category).values(user_id=admin_id, **cat)
+            )
+
+        await session.commit()
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def cleanup():
     """Auto-cleanup before each test to ensure test isolation."""
+    _token_blacklist.clear()
     await _cleanup_test_data()
     yield
     # No cleanup after test - only before each test to avoid race conditions

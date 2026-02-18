@@ -40,6 +40,8 @@ import {
   X,
   ChevronUp,
   ChevronDown,
+  Gauge,
+  AlertOctagon,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
 import type { DashboardSummary, DashboardPeriodData, CategoryBreakdownResponse, UpcomingPaymentsResponse, SubscriptionsSummaryResponse } from '@/api/dashboard'
@@ -50,6 +52,11 @@ import { FinancialHealthWidget } from '@/components/dashboard/FinancialHealthWid
 import { InstallmentsSummaryWidget } from '@/components/dashboard/InstallmentsSummaryWidget'
 import { LoansSummaryWidget } from '@/components/dashboard/LoansSummaryWidget'
 import { TopExpensesWidget } from '@/components/dashboard/TopExpensesWidget'
+import { ObligoWidget } from '@/components/dashboard/ObligoWidget'
+import { creditCardsApi } from '@/api/credit-cards'
+import { budgetsApi } from '@/api/budgets'
+import type { CreditCardSummary } from '@/types'
+import type { BudgetSummary } from '@/types'
 import { cn } from '@/lib/utils'
 import { useCurrency } from '@/hooks/useCurrency'
 import { useCountUp } from '@/hooks/useCountUp'
@@ -1727,6 +1734,20 @@ export default function DashboardPage() {
     queryFn: () => dashboardApi.weekly(),
   })
 
+  // Credit card summary for utilization widget
+  const creditCardSummaryQuery = useQuery<CreditCardSummary>({
+    queryKey: queryKeys.creditCards.summary(),
+    queryFn: () => creditCardsApi.getSummary(),
+    retry: 1,
+  })
+
+  // Budget summary for budget alerts widget
+  const budgetSummaryQuery = useQuery<BudgetSummary>({
+    queryKey: queryKeys.budgets.summary(),
+    queryFn: () => budgetsApi.getSummary(),
+    retry: 1,
+  })
+
   // --- Derived state ---
   const summary = summaryQuery.data
   const forecastData = forecastQuery.data
@@ -1779,6 +1800,9 @@ export default function DashboardPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.balance.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.forecast.all }),
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'weekly-sparkline'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.obligo.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
       ])
       toast.success(t('dashboard.refreshed'))
     } finally {
@@ -2044,6 +2068,322 @@ export default function DashboardPage() {
       {!isAllError && (
         <div className="scroll-reveal">
           <SubscriptionsWidget />
+        </div>
+      )}
+
+      {/* --- Obligo Widget --- */}
+      {!isAllError && (
+        <div className="scroll-reveal">
+          <ObligoWidget />
+        </div>
+      )}
+
+      {/* --- Credit Utilization + Budget Alerts --- */}
+      {!isAllError && (
+        <div className="scroll-reveal grid grid-cols-1 gap-4 sm:gap-6 lg:gap-8 lg:grid-cols-2">
+          {/* Credit Utilization Mini-Widget */}
+          <div className="card card-hover animate-fade-in-up overflow-hidden flex flex-col">
+            {/* Header */}
+            <div
+              className="flex items-center justify-between border-b px-7 py-5"
+              style={{ borderColor: 'var(--border-primary)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: 'rgba(59, 130, 246, 0.08)' }}
+                >
+                  <Gauge className="h-5 w-5" style={{ color: 'var(--color-brand-500)' }} />
+                </div>
+                <h3
+                  className="text-sm font-bold"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {t('dashboard.creditUtilization')}
+                </h3>
+              </div>
+              <Link
+                to="/credit-cards"
+                className="flex items-center gap-1 text-xs font-semibold"
+                style={{ color: 'var(--color-brand-500)' }}
+              >
+                {t('common.viewAll')}
+                <ChevronRight className={cn('h-3.5 w-3.5', isRtl && 'rotate-180')} />
+              </Link>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 p-6">
+              {creditCardSummaryQuery.isLoading ? (
+                <div className="skeleton-group space-y-4">
+                  <SkeletonBox className="h-5 w-full rounded-full" />
+                  <SkeletonBox className="h-4 w-40 rounded" />
+                  <SkeletonBox className="h-12 w-full rounded-xl" />
+                </div>
+              ) : creditCardSummaryQuery.isError || !creditCardSummaryQuery.data ? (
+                <div className="flex flex-col items-center justify-center py-6">
+                  <Gauge className="h-6 w-6 mb-2" style={{ color: 'var(--text-tertiary)' }} />
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('common.noData')}
+                  </p>
+                </div>
+              ) : (() => {
+                const ccSummary = creditCardSummaryQuery.data
+                const totalUtil = parseFloat(ccSummary.total_utilization) || 0
+                const totalLimit = parseFloat(ccSummary.total_credit_limit) || 0
+                const avgPct = ccSummary.average_utilization_pct ?? 0
+                const utilizationBarColor = avgPct >= 80
+                  ? 'var(--color-danger)'
+                  : avgPct >= 60
+                    ? 'var(--color-warning)'
+                    : 'var(--color-income)'
+
+                return (
+                  <div className="space-y-4">
+                    {/* Total utilization bar */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          {formatAmount(totalUtil)} / {formatAmount(totalLimit)}
+                        </span>
+                        <span
+                          className="rounded-md px-2 py-0.5 text-xs font-bold"
+                          style={{
+                            color: utilizationBarColor,
+                            backgroundColor: `color-mix(in srgb, ${utilizationBarColor} 12%, transparent)`,
+                          }}
+                        >
+                          {avgPct.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div
+                        className="h-3 w-full overflow-hidden rounded-full"
+                        style={{ backgroundColor: 'var(--bg-hover)' }}
+                      >
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${Math.min(avgPct, 100)}%`,
+                            backgroundColor: utilizationBarColor,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Per-card bars */}
+                    {ccSummary.cards.length > 0 && (
+                      <div className="space-y-2.5 max-h-[200px] overflow-y-auto">
+                        {ccSummary.cards.map((card) => {
+                          const cardPct = card.utilization_percentage ?? 0
+                          const cardColor = cardPct >= 80
+                            ? 'var(--color-danger)'
+                            : cardPct >= 60
+                              ? 'var(--color-warning)'
+                              : 'var(--color-income)'
+                          return (
+                            <div key={card.id} className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span
+                                  className="text-[12px] font-medium truncate"
+                                  style={{ color: 'var(--text-primary)' }}
+                                >
+                                  {card.name} ****{card.last_four_digits}
+                                </span>
+                                <span
+                                  className="text-[11px] font-semibold ltr-nums shrink-0"
+                                  style={{ color: cardColor }}
+                                >
+                                  {cardPct.toFixed(0)}%
+                                </span>
+                              </div>
+                              <div
+                                className="h-1.5 w-full overflow-hidden rounded-full"
+                                style={{ backgroundColor: 'var(--bg-hover)' }}
+                              >
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{
+                                    width: `${Math.min(cardPct, 100)}%`,
+                                    backgroundColor: cardColor,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+
+          {/* Budget Alerts Widget */}
+          <div className="card card-hover animate-fade-in-up overflow-hidden flex flex-col">
+            {/* Header */}
+            <div
+              className="flex items-center justify-between border-b px-7 py-5"
+              style={{ borderColor: 'var(--border-primary)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: 'rgba(245, 158, 11, 0.08)' }}
+                >
+                  <AlertOctagon className="h-5 w-5" style={{ color: 'var(--color-warning)' }} />
+                </div>
+                <div>
+                  <h3
+                    className="text-sm font-bold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {t('dashboard.budgetAlerts')}
+                  </h3>
+                  {budgetSummaryQuery.data && budgetSummaryQuery.data.over_budget_count > 0 && (
+                    <p className="text-[10px] font-medium" style={{ color: 'var(--color-danger)' }}>
+                      {budgetSummaryQuery.data.over_budget_count} {t('dashboard.overBudget')}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Link
+                to="/settings?tab=budgets"
+                className="flex items-center gap-1 text-xs font-semibold"
+                style={{ color: 'var(--color-brand-500)' }}
+              >
+                {t('common.viewAll')}
+                <ChevronRight className={cn('h-3.5 w-3.5', isRtl && 'rotate-180')} />
+              </Link>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 p-6">
+              {budgetSummaryQuery.isLoading ? (
+                <div className="skeleton-group space-y-3">
+                  <SkeletonBox className="h-14 w-full rounded-xl" />
+                  <SkeletonBox className="h-14 w-full rounded-xl" />
+                  <SkeletonBox className="h-14 w-full rounded-xl" />
+                </div>
+              ) : budgetSummaryQuery.isError || !budgetSummaryQuery.data ? (
+                <div className="flex flex-col items-center justify-center py-6">
+                  <AlertOctagon className="h-6 w-6 mb-2" style={{ color: 'var(--text-tertiary)' }} />
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('common.noData')}
+                  </p>
+                </div>
+              ) : (() => {
+                const budgetData = budgetSummaryQuery.data
+                const isHe = i18n.language === 'he'
+                // Show budgets that are over or approaching limit (>= 75%)
+                const alertBudgets = budgetData.budgets
+                  .filter((b) => b.usage_percentage >= 75)
+                  .sort((a, b) => b.usage_percentage - a.usage_percentage)
+
+                if (alertBudgets.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-6">
+                      <div
+                        className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
+                        style={{ backgroundColor: 'rgba(5, 205, 153, 0.08)' }}
+                      >
+                        <Target className="h-5 w-5" style={{ color: 'var(--color-income)' }} />
+                      </div>
+                      <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                        {t('dashboard.allBudgetsOk')}
+                      </p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                    {alertBudgets.map((budget) => {
+                      const isOver = budget.is_over_budget
+                      const pct = budget.usage_percentage
+                      const barColor = isOver
+                        ? 'var(--color-danger)'
+                        : pct >= 90
+                          ? 'var(--color-warning)'
+                          : 'var(--color-accent-teal)'
+                      const categoryName = isHe
+                        ? (budget.category_name_he || budget.category_name || '')
+                        : (budget.category_name || '')
+
+                      return (
+                        <div
+                          key={budget.id}
+                          className="rounded-xl px-4 py-3 transition-colors"
+                          style={{ backgroundColor: 'var(--bg-hover)' }}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {budget.category_color && (
+                                <div
+                                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: budget.category_color }}
+                                />
+                              )}
+                              <span
+                                className="text-[13px] font-semibold truncate"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                {categoryName}
+                              </span>
+                              {isOver && (
+                                <span
+                                  className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase"
+                                  style={{
+                                    backgroundColor: 'var(--bg-danger)',
+                                    color: 'var(--color-danger)',
+                                  }}
+                                >
+                                  {t('dashboard.overBudget')}
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              className="text-[12px] font-bold ltr-nums shrink-0"
+                              style={{ color: barColor }}
+                            >
+                              {pct.toFixed(0)}%
+                            </span>
+                          </div>
+                          {/* Progress bar */}
+                          <div
+                            className="h-1.5 w-full overflow-hidden rounded-full"
+                            style={{ backgroundColor: 'var(--bg-card)' }}
+                          >
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${Math.min(pct, 100)}%`,
+                                backgroundColor: barColor,
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span
+                              className="text-[10px] font-medium ltr-nums"
+                              style={{ color: 'var(--text-tertiary)' }}
+                            >
+                              {formatAmount(budget.actual_amount)} / {formatAmount(budget.amount)}
+                            </span>
+                            <span
+                              className="text-[10px] font-medium ltr-nums"
+                              style={{ color: parseFloat(budget.remaining) < 0 ? 'var(--color-danger)' : 'var(--color-income)' }}
+                            >
+                              {t('dashboard.remaining')}: {formatAmount(budget.remaining)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
         </div>
       )}
 

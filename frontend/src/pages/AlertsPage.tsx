@@ -310,7 +310,7 @@ function SnoozeDropdown({
 
       {isOpen && (
         <div
-          className="animate-fade-in-scale absolute top-full z-50 mt-1.5 min-w-52 overflow-hidden rounded-xl border shadow-lg"
+          className="animate-fade-in-scale absolute top-full z-50 mt-1.5 min-w-52 overflow-visible rounded-xl border shadow-lg"
           style={{
             backgroundColor: 'var(--bg-card)',
             borderColor: 'var(--border-primary)',
@@ -650,7 +650,9 @@ export default function AlertsPage() {
   const [markingUnreadIds, setMarkingUnreadIds] = useState<Set<string>>(new Set())
   const [dismissingIds, setDismissingIds] = useState<Set<string>>(new Set())
   const [snoozingIds, setSnoozingIds] = useState<Set<string>>(new Set())
-  const [soundEnabled, setSoundEnabled] = useState(true)
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem('alertSoundEnabled') !== 'false'
+  })
   const prevUnreadCountRef = useRef<number | null>(null)
 
   // -- Data --
@@ -662,6 +664,7 @@ export default function AlertsPage() {
   } = useQuery({
     queryKey: queryKeys.alerts.list(),
     queryFn: () => alertsApi.list(),
+    refetchInterval: 30000,
   })
 
   // Load user settings to respect notifications_enabled
@@ -900,7 +903,10 @@ export default function AlertsPage() {
         <div className="flex items-center gap-2">
           {/* Sound toggle */}
           <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
+            onClick={() => setSoundEnabled(prev => {
+              localStorage.setItem('alertSoundEnabled', String(!prev))
+              return !prev
+            })}
             aria-label={soundEnabled ? t('alerts.soundOff') : t('alerts.soundOn')}
             className={cn(
               'btn-press inline-flex h-9 w-9 items-center justify-center rounded-xl',
@@ -1008,7 +1014,7 @@ export default function AlertsPage() {
               className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-white"
             >
               <RefreshCw className="h-4 w-4" />
-              {t('errors.tryAgain')}
+              {t('error.tryAgain')}
             </button>
           </div>
         ) : filteredAlerts.length === 0 ? (

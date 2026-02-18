@@ -22,6 +22,8 @@ const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const UsersPage = lazy(() => import('@/pages/UsersPage'))
 const BackupsPage = lazy(() => import('@/pages/BackupsPage'))
 const SubscriptionsPage = lazy(() => import('@/pages/SubscriptionsPage'))
+const CreditCardsPage = lazy(() => import('@/pages/CreditCardsPage'))
+const BankAccountsPage = lazy(() => import('@/pages/BankAccountsPage'))
 const OrganizationPage = lazy(() => import('@/pages/OrganizationPage'))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
@@ -118,6 +120,22 @@ export const router = createBrowserRouter([
             element: (
               <SuspenseWrapper>
                 <SubscriptionsPage />
+              </SuspenseWrapper>
+            ),
+          },
+          {
+            path: '/credit-cards',
+            element: (
+              <SuspenseWrapper>
+                <CreditCardsPage />
+              </SuspenseWrapper>
+            ),
+          },
+          {
+            path: '/bank-accounts',
+            element: (
+              <SuspenseWrapper>
+                <BankAccountsPage />
               </SuspenseWrapper>
             ),
           },

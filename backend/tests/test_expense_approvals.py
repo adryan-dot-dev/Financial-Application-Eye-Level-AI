@@ -57,9 +57,9 @@ async def _register_and_login(
         json={"username": username, "password": "TestPass123!"},
     )
     assert login_resp.status_code == 200, login_resp.text
-    data = login_resp.json()
-    headers = {"Authorization": f"Bearer {data['access_token']}"}
-    user_id = data["user"]["id"]
+    headers = {"Authorization": f"Bearer {login_resp.json()['access_token']}"}
+    me_resp = await client.get("/api/v1/auth/me", headers=headers)
+    user_id = me_resp.json()["id"]
     return headers, user_id
 
 

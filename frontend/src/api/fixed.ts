@@ -15,6 +15,7 @@ export interface CreateFixedData {
   end_date?: string
   description?: string
   currency?: string
+  credit_card_id?: string
 }
 
 export type UpdateFixedData = Partial<CreateFixedData>

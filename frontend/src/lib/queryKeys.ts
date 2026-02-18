@@ -77,4 +77,40 @@ export const queryKeys = {
     detail: (id: string) => ['organizations', 'detail', id] as const,
     members: (id: string) => ['organizations', 'members', id] as const,
   },
+  creditCards: {
+    all: ['credit-cards'] as const,
+    list: () => ['credit-cards', 'list'] as const,
+    summary: () => ['credit-cards', 'summary'] as const,
+    detail: (id: string) => ['credit-cards', id] as const,
+    charges: (id: string) => ['credit-cards', id, 'charges'] as const,
+    nextBilling: (id: string) => ['credit-cards', id, 'next-billing'] as const,
+  },
+  bankAccounts: {
+    all: ['bank-accounts'] as const,
+    list: () => ['bank-accounts', 'list'] as const,
+    detail: (id: string) => ['bank-accounts', id] as const,
+  },
+  obligo: {
+    all: ['obligo'] as const,
+    summary: () => ['obligo', 'summary'] as const,
+  },
+  budgets: {
+    all: ['budgets'] as const,
+    list: () => ['budgets', 'list'] as const,
+    summary: () => ['budgets', 'summary'] as const,
+    detail: (id: string) => ['budgets', id] as const,
+  },
+  approvals: {
+    all: (orgId: string) => ['approvals', orgId] as const,
+    list: (orgId: string, status?: string) => ['approvals', orgId, 'list', status] as const,
+    pending: (orgId: string) => ['approvals', orgId, 'pending'] as const,
+  },
+  orgReports: {
+    all: (orgId: string) => ['org-reports', orgId] as const,
+    detail: (orgId: string, id: string) => ['org-reports', orgId, id] as const,
+  },
+  auditLog: {
+    all: (orgId: string) => ['audit-log', orgId] as const,
+    list: (orgId: string, params?: Record<string, unknown>) => ['audit-log', orgId, 'list', params] as const,
+  },
 }

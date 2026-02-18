@@ -5,12 +5,14 @@ export interface CreateBalanceData {
   balance: number
   effective_date: string
   notes?: string
+  bank_account_id?: string
 }
 
 export interface UpdateBalanceData {
   balance: number
   effective_date: string
   notes?: string
+  bank_account_id?: string
 }
 
 export const balanceApi = {

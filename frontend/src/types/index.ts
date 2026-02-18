@@ -163,6 +163,7 @@ export interface BankBalance {
   effective_date: string
   is_current: boolean
   notes: string | null
+  bank_account_id?: string | null
 }
 
 // Forecast
@@ -254,4 +255,216 @@ export interface OrgMember {
   role: OrgRole
   joined_at: string
   is_active: boolean
+}
+
+// Credit Cards
+export interface CreditCard {
+  id: string
+  name: string
+  last_four_digits: string
+  card_network: 'visa' | 'mastercard' | 'amex' | 'isracard' | 'diners'
+  issuer: string
+  credit_limit: string
+  billing_day: number
+  currency: string
+  is_active: boolean
+  color: string
+  notes?: string
+  total_monthly_charges: string
+  utilization_amount: string
+  utilization_percentage: number
+  available_credit: string
+  linked_installments_count: number
+  linked_subscriptions_count: number
+  linked_fixed_count: number
+}
+
+export interface CreditCardCreate {
+  name: string
+  last_four_digits: string
+  card_network: 'visa' | 'mastercard' | 'amex' | 'isracard' | 'diners'
+  issuer: string
+  credit_limit: number
+  billing_day: number
+  currency?: string
+  color?: string
+  notes?: string
+}
+
+export type CreditCardUpdate = Partial<CreditCardCreate>
+
+export interface CreditCardSummary {
+  cards: CreditCard[]
+  total_credit_limit: string
+  total_utilization: string
+  total_available: string
+  average_utilization_pct: number
+}
+
+export interface CreditCardCharges {
+  subscriptions: Array<{
+    id: string
+    name: string
+    amount: string
+    currency: string
+    billing_cycle: string
+  }>
+  installments: Array<{
+    id: string
+    name: string
+    monthly_amount: string
+    currency: string
+    payments_completed: number
+    total_payments: number
+  }>
+  fixed: Array<{
+    id: string
+    name: string
+    amount: string
+    currency: string
+  }>
+}
+
+export interface CreditCardNextBilling {
+  billing_date: string
+  total_expected: string
+  available_after_billing: string
+  items: Array<{
+    name: string
+    amount: string
+    source_type: 'subscription' | 'installment' | 'fixed'
+  }>
+}
+
+// Bank Accounts
+export interface BankAccount {
+  id: string
+  name: string
+  bank_name: string
+  account_last_digits?: string
+  overdraft_limit: string
+  currency: string
+  is_primary: boolean
+  notes?: string
+  current_balance?: string
+  available_balance?: string
+  linked_loans_count?: number
+}
+
+export interface BankAccountCreate {
+  name: string
+  bank_name: string
+  account_last_digits?: string
+  overdraft_limit: number
+  currency?: string
+  is_primary?: boolean
+  notes?: string
+}
+
+export type BankAccountUpdate = Partial<BankAccountCreate>
+
+// Obligo
+export interface ObligoSummary {
+  total_credit_card_limits: string
+  total_credit_utilization: string
+  total_loan_outstanding: string
+  total_overdraft_limits: string
+  total_obligo: string
+  total_available_credit: string
+  obligo_utilization_pct: number
+}
+
+// Budgets
+export interface Budget {
+  id: string
+  category_id: string
+  category_name?: string
+  category_name_he?: string
+  category_color?: string
+  category_icon?: string
+  period_type: 'monthly' | 'quarterly' | 'annual'
+  amount: string
+  currency: string
+  start_date: string
+  is_active: boolean
+  alert_at_percentage: number
+  actual_amount: string
+  remaining: string
+  usage_percentage: number
+  is_over_budget: boolean
+}
+
+export interface BudgetCreate {
+  category_id: string
+  period_type: 'monthly' | 'quarterly' | 'annual'
+  amount: number
+  currency?: string
+  start_date: string
+  alert_at_percentage?: number
+}
+
+export type BudgetUpdate = Partial<BudgetCreate>
+
+export interface BudgetSummary {
+  budgets: Budget[]
+  total_budgeted: string
+  total_actual: string
+  total_remaining: string
+  over_budget_count: number
+}
+
+// Expense Approvals
+export interface ExpenseApproval {
+  id: string
+  requested_by: string
+  requested_by_email?: string
+  approved_by?: string
+  status: 'pending' | 'approved' | 'rejected'
+  amount: string
+  currency: string
+  description: string
+  category_id?: string
+  category_name?: string
+  rejection_reason?: string
+  requested_at: string
+  resolved_at?: string
+}
+
+export interface ExpenseApprovalCreate {
+  amount: number
+  description: string
+  category_id?: string
+  currency?: string
+}
+
+// Organization Reports
+export interface OrgReport {
+  id: string
+  report_type: 'monthly' | 'quarterly'
+  period: string
+  generated_at: string
+  generated_by: string
+  total_income: string
+  total_expenses: string
+  net: string
+}
+
+// Audit Log
+export interface AuditLogEntry {
+  id: string
+  user_id: string
+  user_email: string
+  action: string
+  entity_type: string
+  entity_id?: string
+  details?: string
+  created_at: string
+}
+
+export interface AuditLogResponse {
+  items: AuditLogEntry[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
 }

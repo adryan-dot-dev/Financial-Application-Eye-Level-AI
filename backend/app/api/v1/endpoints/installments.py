@@ -442,6 +442,18 @@ async def reverse_installment_payment(
     if inst.payments_completed <= 0:
         raise HTTPException(status_code=400, detail="No payments to reverse")
 
+    # Delete the orphaned transaction created during the original mark-paid
+    payment_number = inst.payments_completed  # current count = the payment to reverse
+    orphan_result = await db.execute(
+        select(Transaction).where(
+            Transaction.installment_id == installment_id,
+            Transaction.installment_number == payment_number,
+        )
+    )
+    orphan_tx = orphan_result.scalar_one_or_none()
+    if orphan_tx:
+        await db.delete(orphan_tx)
+
     inst.payments_completed -= 1
     await log_action(db, user_id=current_user.id, action="reverse_payment", entity_type="installment", entity_id=str(installment_id), user_email=current_user.email, organization_id=ctx.organization_id)
     await db.commit()

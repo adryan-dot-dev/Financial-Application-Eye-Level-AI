@@ -69,7 +69,7 @@ async def create_budget(
     return resp
 
 
-@router.get("", response_model=list)
+@router.get("", response_model=List[BudgetResponse])
 async def list_budgets(
     current_user: User = Depends(get_current_user),
     ctx: DataContext = Depends(get_data_context),

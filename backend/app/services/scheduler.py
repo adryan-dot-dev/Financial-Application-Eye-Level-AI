@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.db.models.user import User
 from app.db.session import async_session
 from app.services.automation_service import process_recurring_charges
+from app.services.alert_service import generate_alerts
 from app.services.backup_service import create_backup, cleanup_old_backups
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,32 @@ async def _daily_backup() -> None:
         logger.exception("Daily backup failed")
 
 
+async def _generate_all_alerts() -> None:
+    """Generate alerts for all active users."""
+    logger.info("Starting scheduled alert generation")
+    async with async_session() as db:
+        result = await db.execute(
+            select(User.id).where(User.is_active == True)
+        )
+        user_ids = [row[0] for row in result.all()]
+
+    generated = 0
+    failed = 0
+    for user_id in user_ids:
+        try:
+            async with async_session() as db:
+                alerts = await generate_alerts(db, user_id)
+                generated += len(alerts)
+        except Exception:
+            failed += 1
+            logger.exception("Alert generation failed for user %s", user_id)
+
+    logger.info(
+        "Alert generation complete: %d users, %d alerts generated, %d failed",
+        len(user_ids), generated, failed,
+    )
+
+
 async def _daily_backup_cleanup() -> None:
     """Clean up old backup files past retention period."""
     logger.info("Starting backup cleanup")
@@ -213,6 +240,16 @@ def start_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,  # Allow up to 1 hour late execution
     )
 
+    # Daily alert generation at 00:10 (after recurring charges)
+    _scheduler.add_job(
+        _generate_all_alerts,
+        trigger=CronTrigger(hour=0, minute=10, timezone="Asia/Jerusalem"),
+        id="daily_alert_generation",
+        name="Daily Alert Generation",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     # Daily backup at 02:00 Israel time
     _scheduler.add_job(
         _daily_backup,
@@ -235,7 +272,7 @@ def start_scheduler() -> AsyncIOScheduler:
 
     _scheduler.start()
     logger.info(
-        "Scheduler started - daily recurring charges at 00:05, "
+        "Scheduler started - recurring charges at 00:05, alerts at 00:10, "
         "backup at 02:00, cleanup at 03:00 (Asia/Jerusalem)"
     )
 

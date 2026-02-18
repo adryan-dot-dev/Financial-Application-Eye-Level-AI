@@ -29,6 +29,7 @@ class BalanceCreate(BaseModel):
     effective_date: date
     notes: Optional[str] = Field(None, max_length=1000)
     bank_account_id: Optional[UUID] = None
+    currency: Optional[str] = Field(None, pattern="^[A-Z]{3}$")
 
     @field_validator('balance')
     @classmethod
@@ -40,6 +41,8 @@ class BalanceUpdate(BaseModel):
     balance: Decimal = Field(..., max_digits=15, decimal_places=2)
     effective_date: Optional[date] = None
     notes: Optional[str] = Field(None, max_length=1000)
+    bank_account_id: Optional[UUID] = None
+    currency: Optional[str] = Field(None, pattern="^[A-Z]{3}$")
 
     @field_validator('balance')
     @classmethod
@@ -50,6 +53,7 @@ class BalanceUpdate(BaseModel):
 class BalanceResponse(BaseModel):
     id: UUID
     balance: Decimal
+    currency: str = "ILS"
     effective_date: date
     is_current: bool
     notes: Optional[str]

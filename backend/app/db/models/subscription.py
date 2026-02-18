@@ -64,6 +64,7 @@ class Subscription(Base):
         Index("ix_subscriptions_next_renewal_date", "next_renewal_date"),
         Index("ix_subscriptions_category_id", "category_id"),
         Index("ix_subscriptions_org_id", "organization_id"),
+        Index("ix_subscriptions_credit_card_id", "credit_card_id"),
     )
 
     # Relationships

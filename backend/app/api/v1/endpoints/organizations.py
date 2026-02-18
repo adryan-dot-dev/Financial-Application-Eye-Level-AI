@@ -7,7 +7,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -639,7 +639,7 @@ async def generate_report(
         sa_func.count(Transaction.id).label("transaction_count"),
         sa_func.coalesce(
             sa_func.sum(
-                sa_func.case(
+                case(
                     (Transaction.type == "income", Transaction.amount),
                     else_=Decimal("0"),
                 )
@@ -648,7 +648,7 @@ async def generate_report(
         ).label("total_income"),
         sa_func.coalesce(
             sa_func.sum(
-                sa_func.case(
+                case(
                     (Transaction.type == "expense", Transaction.amount),
                     else_=Decimal("0"),
                 )

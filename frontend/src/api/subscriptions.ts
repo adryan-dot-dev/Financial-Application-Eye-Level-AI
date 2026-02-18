@@ -20,6 +20,7 @@ export interface CreateSubscriptionData {
   provider?: string
   provider_url?: string
   notes?: string
+  credit_card_id?: string
 }
 
 export type UpdateSubscriptionData = Partial<CreateSubscriptionData>

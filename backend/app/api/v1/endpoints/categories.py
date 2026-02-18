@@ -154,7 +154,9 @@ async def update_category(
                     status_code=400, detail="Circular reference detected"
                 )
             if current in visited:
-                break
+                raise HTTPException(
+                    status_code=400, detail="Circular reference detected"
+                )
             visited.add(current)
             parent = await db.get(Category, current)
             current = parent.parent_id if parent else None

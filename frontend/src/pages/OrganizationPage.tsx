@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -18,6 +18,12 @@ import {
   ChevronLeft,
   Mail,
   UserMinus,
+  BarChart3,
+  FileText,
+  CheckSquare,
+  ScrollText,
+  Settings2,
+  Wallet,
 } from 'lucide-react'
 import type { Organization, OrgMember, OrgRole } from '@/types'
 import { organizationsApi } from '@/api/organizations'
@@ -28,6 +34,47 @@ import { useToast } from '@/contexts/ToastContext'
 import { getApiErrorMessage } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { queryKeys } from '@/lib/queryKeys'
+
+// ---------------------------------------------------------------------------
+// Lazy tab components
+// ---------------------------------------------------------------------------
+
+const OrgOverviewTab = lazy(() => import('@/components/organization/OrgOverviewTab'))
+const OrgBudgetsTab = lazy(() => import('@/components/organization/OrgBudgetsTab'))
+const OrgApprovalsTab = lazy(() => import('@/components/organization/OrgApprovalsTab'))
+const OrgReportsTab = lazy(() => import('@/components/organization/OrgReportsTab'))
+const OrgAuditLogTab = lazy(() => import('@/components/organization/OrgAuditLogTab'))
+const OrgSettingsTab = lazy(() => import('@/components/organization/OrgSettingsTab'))
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type OrgTab = 'overview' | 'members' | 'budgets' | 'reports' | 'approvals' | 'audit' | 'settings'
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const TABS: Array<{ id: OrgTab; icon: typeof Building2 }> = [
+  { id: 'overview', icon: BarChart3 },
+  { id: 'members', icon: Users },
+  { id: 'budgets', icon: Wallet },
+  { id: 'reports', icon: FileText },
+  { id: 'approvals', icon: CheckSquare },
+  { id: 'audit', icon: ScrollText },
+  { id: 'settings', icon: Settings2 },
+]
+
+const TAB_LABELS: Record<OrgTab, string> = {
+  overview: 'dashboard.title',
+  members: 'organizations.members',
+  budgets: 'budgets.title',
+  reports: 'orgReports.title',
+  approvals: 'approvals.title',
+  audit: 'auditLog.title',
+  settings: 'settings.title',
+}
 
 // ---------------------------------------------------------------------------
 // Role helpers
@@ -314,6 +361,7 @@ export default function OrganizationPage() {
   // State
   // ---------------------------------------------------------------------------
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<OrgTab>('overview')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
@@ -477,7 +525,7 @@ export default function OrganizationPage() {
         <div className="animate-fade-in-up stagger-1 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setSelectedOrgId(null)}
+              onClick={() => { setSelectedOrgId(null); setActiveTab('overview') }}
               className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors hover:bg-[var(--bg-hover)]"
               style={{ color: 'var(--text-secondary)' }}
               title={t('common.back')}
@@ -511,15 +559,6 @@ export default function OrganizationPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdminOrOwner && (
-              <button
-                onClick={() => setShowAddMemberModal(true)}
-                className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
-              >
-                <UserPlus className="h-4 w-4" />
-                {t('organizations.addMember')}
-              </button>
-            )}
             {isOwner && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
@@ -537,76 +576,140 @@ export default function OrganizationPage() {
           </div>
         </div>
 
-        {/* Members section */}
-        <div className="animate-fade-in-up stagger-2 card overflow-hidden">
-          <div
-            className="flex items-center gap-3.5 border-b px-6 py-5"
-            style={{ borderColor: 'var(--border-primary)' }}
-          >
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl"
-              style={{ backgroundColor: 'var(--bg-info)', color: 'var(--color-info)' }}
-            >
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <h2
-                className="text-[15px] font-bold tracking-tight"
-                style={{ color: 'var(--text-primary)' }}
+        {/* Tab Navigation */}
+        <div
+          className="animate-fade-in-up stagger-2 flex gap-1 overflow-x-auto rounded-xl p-1 scrollbar-hide"
+          style={{ backgroundColor: 'var(--bg-secondary)' }}
+          role="tablist"
+        >
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.id)}
+                className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm transition-all duration-200 whitespace-nowrap"
+                style={{
+                  backgroundColor: isActive ? 'var(--color-brand-500)' : 'transparent',
+                  color: isActive ? '#fff' : 'var(--text-secondary)',
+                  fontWeight: isActive ? 600 : 500,
+                }}
               >
-                {t('organizations.members')}
-              </h2>
-              <p className="mt-0.5 text-[13px]" style={{ color: 'var(--text-tertiary)' }}>
-                {t('organizations.memberCount', { count: members.length })}
-              </p>
-            </div>
-          </div>
+                <Icon className="h-4 w-4" />
+                {t(TAB_LABELS[tab.id])}
+              </button>
+            )
+          })}
+        </div>
 
-          {membersQuery.isLoading ? (
-            <PageSkeleton />
-          ) : membersQuery.isError ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-20">
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-2xl"
-                style={{ backgroundColor: 'var(--bg-danger)' }}
-              >
-                <AlertTriangle className="h-8 w-8" style={{ color: 'var(--color-danger)' }} />
+        {/* Tab Content */}
+        <div className="animate-fade-in-up stagger-3">
+          <Suspense fallback={<PageSkeleton />}>
+            {activeTab === 'overview' && (
+              <OrgOverviewTab orgId={selectedOrgId} />
+            )}
+            {activeTab === 'members' && (
+              <div className="card overflow-hidden">
+                <div
+                  className="flex items-center justify-between border-b px-6 py-5"
+                  style={{ borderColor: 'var(--border-primary)' }}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: 'var(--bg-info)', color: 'var(--color-info)' }}
+                    >
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2
+                        className="text-[15px] font-bold tracking-tight"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {t('organizations.members')}
+                      </h2>
+                      <p className="mt-0.5 text-[13px]" style={{ color: 'var(--text-tertiary)' }}>
+                        {t('organizations.memberCount', { count: members.length })}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdminOrOwner && (
+                    <button
+                      onClick={() => setShowAddMemberModal(true)}
+                      className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      {t('organizations.addMember')}
+                    </button>
+                  )}
+                </div>
+
+                {membersQuery.isLoading ? (
+                  <PageSkeleton />
+                ) : membersQuery.isError ? (
+                  <div className="flex flex-col items-center justify-center gap-4 py-20">
+                    <div
+                      className="flex h-16 w-16 items-center justify-center rounded-2xl"
+                      style={{ backgroundColor: 'var(--bg-danger)' }}
+                    >
+                      <AlertTriangle className="h-8 w-8" style={{ color: 'var(--color-danger)' }} />
+                    </div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {t('common.error')}
+                    </p>
+                  </div>
+                ) : members.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-4 py-20">
+                    <div
+                      className="flex h-16 w-16 items-center justify-center rounded-2xl"
+                      style={{ backgroundColor: 'var(--bg-hover)' }}
+                    >
+                      <Users className="h-8 w-8" style={{ color: 'var(--text-tertiary)' }} />
+                    </div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {t('organizations.noMembers')}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 p-5">
+                    {members.map((member) => (
+                      <MemberRow
+                        key={member.id}
+                        member={member}
+                        isSelf={member.user_id === currentUser?.id}
+                        canChangeRole={isOwner}
+                        canRemove={isAdminOrOwner}
+                        onChangeRole={(userId, role) =>
+                          changeRoleMutation.mutate({ userId, data: { role } })
+                        }
+                        onRemove={(userId) => removeMemberMutation.mutate(userId)}
+                        isChangingRole={changeRoleMutation.isPending}
+                        isRemoving={removeMemberMutation.isPending}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {t('common.error')}
-              </p>
-            </div>
-          ) : members.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-20">
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-2xl"
-                style={{ backgroundColor: 'var(--bg-hover)' }}
-              >
-                <Users className="h-8 w-8" style={{ color: 'var(--text-tertiary)' }} />
-              </div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {t('organizations.noMembers')}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2 p-5">
-              {members.map((member) => (
-                <MemberRow
-                  key={member.id}
-                  member={member}
-                  isSelf={member.user_id === currentUser?.id}
-                  canChangeRole={isOwner}
-                  canRemove={isAdminOrOwner}
-                  onChangeRole={(userId, role) =>
-                    changeRoleMutation.mutate({ userId, data: { role } })
-                  }
-                  onRemove={(userId) => removeMemberMutation.mutate(userId)}
-                  isChangingRole={changeRoleMutation.isPending}
-                  isRemoving={removeMemberMutation.isPending}
-                />
-              ))}
-            </div>
-          )}
+            )}
+            {activeTab === 'budgets' && (
+              <OrgBudgetsTab orgId={selectedOrgId} />
+            )}
+            {activeTab === 'reports' && (
+              <OrgReportsTab orgId={selectedOrgId} />
+            )}
+            {activeTab === 'approvals' && (
+              <OrgApprovalsTab orgId={selectedOrgId} />
+            )}
+            {activeTab === 'audit' && (
+              <OrgAuditLogTab orgId={selectedOrgId} />
+            )}
+            {activeTab === 'settings' && (
+              <OrgSettingsTab orgId={selectedOrgId} />
+            )}
+          </Suspense>
         </div>
 
         {/* ================================================================= */}

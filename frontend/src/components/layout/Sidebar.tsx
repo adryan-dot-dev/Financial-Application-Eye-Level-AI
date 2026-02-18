@@ -47,6 +47,8 @@ const navItems: NavItem[] = [
   { key: 'fixed', icon: CalendarRange, path: '/fixed', group: 'finance' },
   { key: 'installments', icon: CreditCard, path: '/installments', group: 'finance' },
   { key: 'loans', icon: Landmark, path: '/loans', group: 'finance' },
+  { key: 'creditCards', icon: CreditCard, path: '/credit-cards', group: 'finance' },
+  { key: 'bankAccounts', icon: Landmark, path: '/bank-accounts', group: 'finance' },
   { key: 'subscriptions', icon: RefreshCw, path: '/subscriptions', group: 'finance' },
   { key: 'forecast', icon: TrendingUp, path: '/forecast', group: 'finance' },
   { key: 'categories', icon: Tags, path: '/categories', group: 'system' },

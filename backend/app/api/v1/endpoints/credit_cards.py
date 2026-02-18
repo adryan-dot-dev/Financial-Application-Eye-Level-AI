@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
+from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -64,7 +65,7 @@ async def create_credit_card(
     return response
 
 
-@router.get("", response_model=list)
+@router.get("", response_model=List[CreditCardResponse])
 async def list_credit_cards(
     current_user: User = Depends(get_current_user),
     ctx: DataContext = Depends(get_data_context),
@@ -209,7 +210,7 @@ async def delete_credit_card(
     return {"detail": "Credit card deleted"}
 
 
-@router.get("/{credit_card_id}/charges", response_model=list)
+@router.get("/{credit_card_id}/charges", response_model=List[CardChargeItem])
 async def get_credit_card_charges(
     credit_card_id: UUID,
     current_user: User = Depends(get_current_user),
