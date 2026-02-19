@@ -6,7 +6,8 @@ from typing import AsyncGenerator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import insert, text
+from sqlalchemy import insert, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -29,7 +30,7 @@ limiter.enabled = False
 
 
 # ---------------------------------------------------------------------------
-# Test database engine – uses a SEPARATE database (cashflow_test) to avoid
+# Test database engine -- uses a SEPARATE database (cashflow_test) to avoid
 # interfering with the production / development database.
 # The test database is set up via:
 #   DATABASE_URL="...cashflow_test" alembic upgrade head
@@ -71,31 +72,29 @@ _SEED_CATEGORIES = [
 
 
 def pytest_configure(config):
-    """Run once before any test collection — full DB reset.
+    """Run once before test collection — kill stale connections only.
 
-    Terminates stale connections from prior pytest runs, then TRUNCATEs all
-    tables so every ``pytest`` invocation starts from a blank slate.
+    The per-test cleanup (_cleanup_test_data) handles data reset via DELETEs.
+    We only terminate lingering DB connections from prior pytest or dev-server
+    runs so they don't interfere with our NullPool connections.
+
+    IMPORTANT: Do NOT add TRUNCATE here.  TRUNCATE requires
+    AccessExclusiveLock which deadlocks with any concurrent session —
+    including those spawned by the test-app's own async request handlers.
     """
     import asyncio as _aio
-    from sqlalchemy import text as _text
-    from sqlalchemy.ext.asyncio import create_async_engine as _create
+    from sqlalchemy.ext.asyncio import create_async_engine as _cae
 
-    async def _full_reset():
-        _eng = _create(_TEST_DATABASE_URL, echo=False, pool_size=1, max_overflow=0)
-        async with _eng.begin() as conn:
-            # Kill lingering connections from prior test runs / dev server
-            await conn.execute(_text(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = 'cashflow_test' AND pid != pg_backend_pid()"
-            ))
-            result = await conn.execute(_text(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
-                "AND tablename != 'alembic_version'"
-            ))
-            tables = [row[0] for row in result.fetchall()]
-            if tables:
-                quoted = ", ".join(f'"{t}"' for t in tables)
-                await conn.execute(_text(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"))
+    async def _kill_stale():
+        _eng = _cae(_TEST_DATABASE_URL, echo=False, poolclass=NullPool)
+        try:
+            async with _eng.begin() as conn:
+                await conn.execute(text(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE datname = 'cashflow_test' AND pid != pg_backend_pid()"
+                ))
+        except Exception:
+            pass
         await _eng.dispose()
 
     try:
@@ -104,7 +103,7 @@ def pytest_configure(config):
             loop = _aio.new_event_loop()
     except RuntimeError:
         loop = _aio.new_event_loop()
-    loop.run_until_complete(_full_reset())
+    loop.run_until_complete(_kill_stale())
 
 
 @pytest.fixture(scope="session")
@@ -127,56 +126,104 @@ def _admin_password_hash() -> str:
 
 
 async def _cleanup_test_data():
-    """Fast cleanup: TRUNCATE all tables then re-seed admin + categories.
+    """Delete all test data, upsert admin + seed data.
 
-    Uses a single TRUNCATE CASCADE (fast, atomic) instead of 20+ DELETEs.
-    The DB trigger trg_prevent_admin_delete is temporarily disabled so
-    TRUNCATE can clear the users table completely.
+    Uses DELETE in FK-safe order (not TRUNCATE, which requires
+    AccessExclusiveLock and deadlocks with concurrent test sessions).
+    Admin user is preserved (DB trigger prevents deletion) and reset
+    via INSERT ... ON CONFLICT DO UPDATE to handle both fresh-DB and
+    existing-admin cases atomically in a single session.
+
+    IMPORTANT: Do NOT replace this with TRUNCATE -- TRUNCATE requires
+    AccessExclusiveLock which deadlocks with RowExclusiveLock held by
+    concurrent API sessions running in the same async event loop.
     """
     async with test_session() as session:
-        # Disable the admin-delete prevention trigger for TRUNCATE
-        await session.execute(text(
-            "ALTER TABLE users DISABLE TRIGGER trg_prevent_admin_delete"
-        ))
+        # Audit logs (no FK deps)
+        await session.execute(AuditLog.__table__.delete())
 
-        # Single TRUNCATE for all tables — orders of magnitude faster
-        result = await session.execute(text(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
-            "AND tablename != 'alembic_version'"
-        ))
-        tables = [row[0] for row in result.fetchall()]
-        if tables:
-            quoted = ", ".join(f'"{t}"' for t in tables)
-            await session.execute(text(
-                f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"
-            ))
+        # Org-related tables
+        await session.execute(ExpenseApproval.__table__.delete())
+        await session.execute(OrgReport.__table__.delete())
+        await session.execute(OrgBudget.__table__.delete())
+        await session.execute(OrganizationMember.__table__.delete())
 
-        # Re-enable trigger
-        await session.execute(text(
-            "ALTER TABLE users ENABLE TRIGGER trg_prevent_admin_delete"
-        ))
+        # Clear user FK to organizations before deleting orgs
+        await session.execute(update(User).values(current_organization_id=None))
+        await session.execute(Organization.__table__.delete())
 
-        # Insert admin user
-        admin_stmt = insert(User.__table__).values(
+        # Subscriptions and backups
+        await session.execute(Subscription.__table__.delete())
+        await session.execute(Backup.__table__.delete())
+
+        # Forecast scenarios
+        await session.execute(ForecastScenario.__table__.delete())
+
+        # Phase 2 tables
+        await session.execute(Alert.__table__.delete())
+        await session.execute(ExpectedIncome.__table__.delete())
+        await session.execute(BankBalance.__table__.delete())
+        await session.execute(Loan.__table__.delete())
+        await session.execute(Installment.__table__.delete())
+        await session.execute(FixedIncomeExpense.__table__.delete())
+
+        # Transactions (FK to categories, users)
+        await session.execute(Transaction.__table__.delete())
+
+        # Credit cards and bank accounts
+        await session.execute(CreditCard.__table__.delete())
+        await session.execute(BankAccount.__table__.delete())
+
+        # Delete ALL categories and settings (including admin's -- recreated below)
+        await session.execute(Category.__table__.delete())
+        await session.execute(Settings.__table__.delete())
+
+        # Delete non-admin users (trigger trg_prevent_admin_delete blocks admin deletion)
+        await session.execute(
+            User.__table__.delete().where(User.__table__.c.is_admin == False)  # noqa: E712
+        )
+
+        # Upsert admin: INSERT if DB is empty (after TRUNCATE), UPDATE if exists
+        admin_stmt = pg_insert(User.__table__).values(
             username="admin",
             email="admin@eyelevel.ai",
             password_hash=_admin_password_hash(),
             is_admin=True,
             is_active=True,
+        ).on_conflict_do_update(
+            index_elements=["username"],
+            set_={
+                "email": "admin@eyelevel.ai",
+                "password_hash": _admin_password_hash(),
+                "is_active": True,
+                "is_admin": True,
+                "password_changed_at": None,
+            },
         ).returning(User.__table__.c.id)
         result = await session.execute(admin_stmt)
         admin_id = result.scalar_one()
 
-        # Insert admin settings
-        await session.execute(insert(Settings.__table__).values(
+        # Upsert admin settings
+        settings_stmt = pg_insert(Settings.__table__).values(
             user_id=admin_id,
-        ))
-
-        # Bulk insert seed categories
-        await session.execute(
-            insert(Category.__table__),
-            [{"user_id": admin_id, **cat} for cat in _SEED_CATEGORIES],
+        ).on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={
+                "currency": "ILS",
+                "language": "he",
+                "theme": "light",
+                "forecast_months_default": 6,
+                "notifications_enabled": True,
+                "onboarding_completed": False,
+            },
         )
+        await session.execute(settings_stmt)
+
+        # Insert seed categories (all were deleted above)
+        for cat in _SEED_CATEGORIES:
+            await session.execute(
+                insert(Category).values(user_id=admin_id, **cat)
+            )
 
         await session.commit()
 
