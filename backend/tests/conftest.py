@@ -6,8 +6,7 @@ from typing import AsyncGenerator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import insert, text, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -128,100 +127,56 @@ def _admin_password_hash() -> str:
 
 
 async def _cleanup_test_data():
-    """Delete all test data, upsert admin + seed data.
+    """Fast cleanup: TRUNCATE all tables then re-seed admin + categories.
 
-    Uses DELETE in FK-safe order (not TRUNCATE, which requires
-    AccessExclusiveLock and deadlocks with concurrent test sessions).
-    Admin user is preserved (DB trigger prevents deletion) and reset
-    via INSERT ... ON CONFLICT DO UPDATE to handle both fresh-DB and
-    existing-admin cases atomically in a single session.
+    Uses a single TRUNCATE CASCADE (fast, atomic) instead of 20+ DELETEs.
+    The DB trigger trg_prevent_admin_delete is temporarily disabled so
+    TRUNCATE can clear the users table completely.
     """
     async with test_session() as session:
-        # Audit logs (no FK deps)
-        await session.execute(AuditLog.__table__.delete())
+        # Disable the admin-delete prevention trigger for TRUNCATE
+        await session.execute(text(
+            "ALTER TABLE users DISABLE TRIGGER trg_prevent_admin_delete"
+        ))
 
-        # Org-related tables
-        await session.execute(ExpenseApproval.__table__.delete())
-        await session.execute(OrgReport.__table__.delete())
-        await session.execute(OrgBudget.__table__.delete())
-        await session.execute(OrganizationMember.__table__.delete())
+        # Single TRUNCATE for all tables — orders of magnitude faster
+        result = await session.execute(text(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
+            "AND tablename != 'alembic_version'"
+        ))
+        tables = [row[0] for row in result.fetchall()]
+        if tables:
+            quoted = ", ".join(f'"{t}"' for t in tables)
+            await session.execute(text(
+                f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"
+            ))
 
-        # Clear user FK to organizations before deleting orgs
-        await session.execute(update(User).values(current_organization_id=None))
-        await session.execute(Organization.__table__.delete())  # cascades to org_settings
+        # Re-enable trigger
+        await session.execute(text(
+            "ALTER TABLE users ENABLE TRIGGER trg_prevent_admin_delete"
+        ))
 
-        # Subscriptions and backups
-        await session.execute(Subscription.__table__.delete())
-        await session.execute(Backup.__table__.delete())
-
-        # Forecast scenarios
-        await session.execute(ForecastScenario.__table__.delete())
-
-        # Phase 2 tables
-        await session.execute(Alert.__table__.delete())
-        await session.execute(ExpectedIncome.__table__.delete())
-        await session.execute(BankBalance.__table__.delete())
-        await session.execute(Loan.__table__.delete())
-        await session.execute(Installment.__table__.delete())
-        await session.execute(FixedIncomeExpense.__table__.delete())
-
-        # Transactions (FK to categories, users)
-        await session.execute(Transaction.__table__.delete())
-
-        # Credit cards and bank accounts
-        await session.execute(CreditCard.__table__.delete())
-        await session.execute(BankAccount.__table__.delete())
-
-        # Delete ALL categories and settings (including admin's — recreated below)
-        await session.execute(Category.__table__.delete())
-        await session.execute(Settings.__table__.delete())
-
-        # Delete non-admin users (trigger trg_prevent_admin_delete blocks admin deletion)
-        await session.execute(
-            User.__table__.delete().where(User.__table__.c.is_admin == False)
-        )
-
-        # Upsert admin: INSERT if DB is empty (after TRUNCATE), UPDATE if exists
-        admin_stmt = pg_insert(User.__table__).values(
+        # Insert admin user
+        admin_stmt = insert(User.__table__).values(
             username="admin",
             email="admin@eyelevel.ai",
             password_hash=_admin_password_hash(),
             is_admin=True,
             is_active=True,
-        ).on_conflict_do_update(
-            index_elements=["username"],
-            set_={
-                "email": "admin@eyelevel.ai",
-                "password_hash": _admin_password_hash(),
-                "is_active": True,
-                "is_admin": True,
-                "password_changed_at": None,
-            },
         ).returning(User.__table__.c.id)
         result = await session.execute(admin_stmt)
         admin_id = result.scalar_one()
 
-        # Upsert admin settings
-        settings_stmt = pg_insert(Settings.__table__).values(
+        # Insert admin settings
+        await session.execute(insert(Settings.__table__).values(
             user_id=admin_id,
-        ).on_conflict_do_update(
-            index_elements=["user_id"],
-            set_={
-                "currency": "ILS",
-                "language": "he",
-                "theme": "light",
-                "forecast_months_default": 6,
-                "notifications_enabled": True,
-                "onboarding_completed": False,
-            },
-        )
-        await session.execute(settings_stmt)
+        ))
 
-        # Insert seed categories (all were deleted above)
-        for cat in _SEED_CATEGORIES:
-            await session.execute(
-                insert(Category).values(user_id=admin_id, **cat)
-            )
+        # Bulk insert seed categories
+        await session.execute(
+            insert(Category.__table__),
+            [{"user_id": admin_id, **cat} for cat in _SEED_CATEGORIES],
+        )
 
         await session.commit()
 
@@ -232,7 +187,6 @@ async def cleanup():
     _token_blacklist.clear()
     await _cleanup_test_data()
     yield
-    # No cleanup after test - only before each test to avoid race conditions
 
 
 @pytest_asyncio.fixture
