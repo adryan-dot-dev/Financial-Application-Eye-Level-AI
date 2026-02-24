@@ -5,172 +5,159 @@
 ## Languages
 
 **Primary:**
-- Python 3.9.6 - Backend API, business logic, database migrations
-- TypeScript 5.9.3 - Frontend application, type-safe React components
-- JavaScript (Node.js 20+) - Build tooling, package management
+- Python 3.9.6 - Backend API, services, automation, scheduling, business logic
+- TypeScript 5.9.3 - Frontend React application, type safety
+- JavaScript (ES2022) - Build tooling, configuration
+- SQL - Database queries via SQLAlchemy ORM
 
 **Secondary:**
-- SQL - Database queries (via SQLAlchemy ORM)
+- CSS 4 - Tailwind CSS with `@theme` directive, dark/light mode theming
+- HTML5 - React JSX templates
 
 ## Runtime
 
 **Environment:**
-- Python 3.9.6 with async/await support (IMPORTANT: no `X | Y` union syntax, uses `from __future__ import annotations`)
-- Node.js 20+ for frontend development
-- Uvicorn ASGI server for running FastAPI application
+- Node.js 20+ (frontend development and build)
+- Python 3.9.6 (backend - **no union syntax `X | Y`, use `Optional[X]`**)
+- PostgreSQL 16 Alpine (containerized via Docker)
 
 **Package Manager:**
-- Backend: pip with requirements.txt
-- Frontend: npm with package-lock.json (locked dependency tree)
-- Lockfiles: Both present and committed
+- Frontend: `npm` (npm dependencies in `package.json`)
+- Backend: `pip` with `requirements.txt` (Python 3.9 compatible)
+- Lockfile: `package-lock.json` (frontend); `requirements.txt` pinned (backend)
 
 ## Frameworks
 
 **Core:**
-- FastAPI 0.115.6 - REST API framework with automatic OpenAPI documentation
-- React 19.2.0 - UI framework with hooks and modern patterns
-- Tailwind CSS 4.1.18 - Utility-first CSS framework with Vite integration
+- FastAPI 0.115.6 - Backend REST API, async-first, auto OpenAPI/Swagger docs
+- React 19.2.0 - Frontend UI library, JSX components, hooks
+- React Router v7.13.0 - Client-side routing with lazy loading and `ProtectedRoute`
 
-**Backend Support:**
-- SQLAlchemy 2.0.36 - Async ORM with type hints, uses `sqlalchemy[asyncio]`
-- Pydantic 2.x (via pydantic-settings 2.7.1) - Data validation and settings management
-- Alembic 1.14.1 - Database migration management integrated with SQLAlchemy
+**Database/ORM:**
+- SQLAlchemy 2.0.36 (async) - ORM with full type hints, async query support
+- asyncpg 0.30.0 - PostgreSQL async driver
+- Alembic 1.14.1 - Database migrations, version control for schema
 
-**Frontend Support:**
-- React Router v7.13.0 - Client-side routing with lazy loading
-- TanStack Query (React Query) 5.90.20 - Server state management and caching
-- Vite 7.3.1 - Fast build tool and dev server with HMR
-- Recharts 3.7.0 - Chart library built on React components
-
-**Testing:**
-- Backend: pytest 8.3.4 + pytest-asyncio 0.25.0 for async test support
-- Frontend: ESLint 9.39.1 + typescript-eslint for linting
+**State Management:**
+- React Context API - Auth and Theme contexts (localStorage persistence)
+- TanStack React Query v5.90.20 - Server state, caching, automatic refetch
+- Axios 1.13.5 - HTTP client with JWT token injection and refresh logic
 
 **Build/Dev:**
-- @vitejs/plugin-react 5.1.1 - React Fast Refresh plugin for Vite
-- @tailwindcss/vite 4.1.18 - Tailwind CSS integration as Vite plugin
-- TypeScript 5.9.3 - Type checking compiler
+- Vite 7.3.1 - Frontend bundler, dev server with instant HMR
+- TypeScript 5.9.3 - Type checking via `tsc -b`
+- ESLint 9.39.1 - JavaScript/TypeScript linting (flat config)
+- Tailwind CSS 4.1.18 - Utility-first CSS with `@tailwindcss/vite` plugin
 
-## Key Dependencies
+**Testing:**
+- pytest 8.3.4 - Backend unit/integration tests
+- pytest-asyncio 0.25.0 - Async test support with fixtures
+- httpx 0.28.1 - Async HTTP client for test requests
 
-**Critical Backend:**
-- asyncpg 0.30.0 - Async PostgreSQL driver, required for SQLAlchemy async
-- python-jose[cryptography] 3.3.0 - JWT token creation and validation
-- passlib[bcrypt] 1.7.4 + bcrypt 4.0.1 - Password hashing (pinned bcrypt for Python 3.9 compatibility)
-- eval-type-backport 0.3.1 - Python 3.9 compatibility for type hint evaluation
+**Charting/UI:**
+- Recharts 3.7.0 - React-native charts (dashboard, forecast, balance)
+- lucide-react 0.563.0 - Icon library (26+ icons used)
+- @number-flow/react 0.5.12 - Animated number transitions for KPI displays
+- cmdk 1.1.1 - Command palette / search UI component
+- motion 12.34.1 - Framer motion for animations
+- clsx 2.1.1 - Conditional CSS class concatenation
 
-**Critical Frontend:**
-- axios 1.13.5 - HTTP client for API communication with interceptors
-- i18next 25.8.4 + react-i18next 16.5.4 - Internationalization with Hebrew RTL support
-- lucide-react 0.563.0 - Icon library (used for all UI icons)
-- clsx 2.1.1 - Utility for conditional CSS classnames
-- motion 12.34.1 - Animation library
+**Internationalization:**
+- i18next 25.8.4 - Translation framework (Hebrew RTL + English)
+- i18next-browser-languagedetector 8.2.0 - Auto-detect browser language
+- react-i18next 16.5.4 - React integration for i18n
 
-**Infrastructure:**
-- slowapi 0.1.9 - Rate limiting middleware for FastAPI
-- APScheduler 3.10.4 - Job scheduler for background tasks
-- python-dateutil 2.9.0 - Date/time utilities
-- httpx 0.28.1 - Async HTTP client (used for exchange rate API calls)
+**Security & Validation:**
+- python-jose 3.3.0 (cryptography) - JWT token creation/verification
+- passlib 1.7.4 (bcrypt) - Password hashing context
+- bcrypt 4.0.1 - Bcrypt hashing library (pinned for Python 3.9 compatibility)
+- email-validator 2.2.0 - Email format validation
+- pydantic 2.7.1 - Request/response schema validation
+
+**Rate Limiting:**
+- slowapi 0.1.9 - FastAPI rate limiter decorator with Redis migration path
+
+**Automation & Scheduling:**
+- APScheduler 3.10.4 - Job scheduler for daily recurring charges, backups, alerts
+- python-dateutil 2.9.0 - Date manipulation utilities
+
+**Utilities:**
+- greenlet 3.1.1 - Required by SQLAlchemy async context switching
+- eval-type-backport 0.3.1 - Enable `from __future__ import annotations` on Python 3.9
+- pydantic-settings 2.7.1 - Environment variable parsing with validation
+- python-multipart 0.0.20 - Multipart form data parsing
 
 ## Configuration
 
 **Environment:**
-- Backend: `.env` file (in `.gitignore`) with pydantic-settings loader
-- Frontend: `.env.example` present, uses Vite's `import.meta.env` pattern
-- Key backend configs:
-  - `DATABASE_URL`: PostgreSQL connection string with asyncpg driver
-  - `SECRET_KEY`: JWT signing key (auto-generated if not provided)
-  - `ALGORITHM`: JWT algorithm (HS256)
-  - `ACCESS_TOKEN_EXPIRE_MINUTES`: 15 minutes default
-  - `REFRESH_TOKEN_EXPIRE_DAYS`: 7 days default
-  - `CORS_ORIGINS`: JSON array or comma-separated list of allowed origins
-  - `ADMIN_DEFAULT_PASSWORD`: For initial admin user creation
-  - `DEBUG`: Boolean for debug mode (controls OpenAPI docs exposure)
+- Backend: `.env` file with pydantic-settings validation
+- Frontend: `.env` file with Vite environment variables (prefixed `VITE_`)
+- Database connection: `DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/db`
+- CORS origins: JSON array or comma-separated list in `CORS_ORIGINS`
 
 **Build:**
-- Backend: `alembic.ini` - Database migration configuration
-- Backend: `pytest.ini` - Pytest configuration
-- Frontend: `vite.config.ts` - Vite build config with React and Tailwind plugins
-- Frontend: `tsconfig.json` - TypeScript configuration with app and node configs
-- Frontend: `eslint.config.js` - ESLint configuration for TS/TSX files
+- Frontend: `vite.config.ts` with React plugin, Tailwind plugin, `@/` path alias
+- Backend: `app/config.py` with `Settings` class for environment validation
+- TypeScript: `tsconfig.json` references `tsconfig.app.json` + `tsconfig.node.json`
+  - Strict mode enabled, `verbatimModuleSyntax: true`, ES2022 target
+- ESLint: `eslint.config.js` (flat config) with TypeScript, React hooks, React refresh
+
+## Key Dependencies
+
+**Critical:**
+- FastAPI 0.115.6 - All API endpoints, request/response handling, middleware
+- React 19.2.0 - All UI components and state management
+- PostgreSQL 16 - Data persistence, ACID compliance, financial precision (DECIMAL)
+- SQLAlchemy 2.0.36 - Type-safe async ORM, parameterized queries (prevents SQL injection)
+- Tailwind CSS 4.1.18 - All styling with dark/light mode theming
+
+**Infrastructure & Async:**
+- asyncpg 0.30.0 - PostgreSQL async driver, connection pooling
+- Alembic 1.14.1 - Schema migrations, version control
+- uvicorn 0.34.0 - ASGI server for FastAPI (with `--reload` for dev)
+- greenlet 3.1.1 - Context switching for async/await
+
+**Auth & Security:**
+- python-jose 3.3.0 - JWT generation and validation (HS256 algorithm)
+- bcrypt 4.0.1 - Password hashing with salt (15-minute access tokens, 7-day refresh)
+
+**Observability:**
+- slowapi 0.1.9 - Rate limiting with per-endpoint decorators (3-10/min on auth endpoints)
+- Structured logging via stdlib `logging` (JSON format in production)
+
+**Frontend State:**
+- TanStack React Query 5.90.20 - Server state, background refetch, cache invalidation
+- Axios 1.13.5 - HTTP client with request interceptors (JWT injection), response interceptors (401 refresh loop)
 
 ## Platform Requirements
 
 **Development:**
-- PostgreSQL 16+ (via Docker)
-- Python 3.9.6+ (CRITICAL: 3.9 compatibility required, no 3.10+ union syntax)
-- Node.js 20+ for frontend tooling
-- Docker and docker-compose for local database setup
+- Python 3.9.6+ (3.9 specifically for compatibility with `eval-type-backport`)
+- Node.js 20+ (supports ES2022 target)
+- Docker & docker-compose (for PostgreSQL + pgAdmin)
+- macOS/Linux/Windows with Docker Desktop
 
 **Production:**
-- PostgreSQL 16+ database (ACID compliance, financial precision support)
-- Linux/Unix server (for running Uvicorn + FastAPI)
-- Node.js or similar for frontend static hosting (pre-built with `npm run build`)
-- Memory: PostgreSQL container limited to 512M, pgAdmin to 256M (see docker-compose.yml)
+- PostgreSQL 16 database
+- Python 3.9.6+ ASGI server (uvicorn, gunicorn, hypercorn)
+- Node.js 20+ for frontend build artifact generation
+- Reverse proxy (nginx, Cloudflare, etc.) for TLS termination
+- Memory: 256M+ for backend service, 512M+ for PostgreSQL
 
-## Database
+## Deployment Architecture
 
-**Connection:**
-- PostgreSQL 16-alpine via Docker (containerized development)
-- Connection string: `postgresql+asyncpg://cashflow:cashflow@localhost:5432/cashflow`
-- Async connection pooling: pool_size=10, max_overflow=20
-- Query timeout: 30 seconds (server_settings statement_timeout)
-- Pool recycling: 3600 seconds (hourly)
-- Health checks enabled on Docker service
+**Local Development:**
+```yaml
+docker-compose.yml:
+  - PostgreSQL 16 Alpine (memory: 512M limit, 256M reserved)
+  - pgAdmin 4 (memory: 256M limit, 128M reserved)
+  - Health checks: pg_isready every 5s with 30s timeout
+  - Persistent volumes: postgres_data, pgadmin_data, backup_data
+```
 
-**Data Types:**
-- Financial fields: `DECIMAL(15,2)` - no FLOAT used for currency
-- Timestamps: DateTime with timezone awareness
-- Soft deletes: `is_archived` boolean flag on categories (not hard deletes)
-- Currency field: `VARCHAR(3)` with default 'ILS' on all financial tables
-
-## Integrations (External APIs)
-
-**Exchange Rates:**
-- Frankfurter.app free API - No authentication required
-- Used for multi-currency support (ILS, USD, EUR)
-- In-memory cache with 1-hour TTL
-- Fallback mechanism for expired cached rates if API fails
-- Supported currencies hardcoded: ILS, USD, EUR
-
-**pgAdmin (Development Only):**
-- Container image: dpage/pgadmin4
-- Exposed on port 5050 for database management
-- Not for production use
-
-## Security Stack
-
-**Authentication:**
-- JWT (JSON Web Tokens) with HS256 algorithm
-- Tokens stored in localStorage (access token) and localStorage (refresh token)
-- Token validation on frontend app mount
-- Token blacklist in-memory (MVP) - can migrate to Redis in Phase 6+
-
-**Password Management:**
-- bcrypt with passlib for hashing and verification
-- Configurable rounds (bcrypt 4.0.1 pinned for Python 3.9 compatibility)
-
-**API Security:**
-- CORS middleware with explicit origin whitelist (no wildcard allowed)
-- Rate limiting via slowapi (configurable per endpoint)
-- Security headers middleware (ASGI-based, not BaseHTTPMiddleware)
-- Headers: X-Content-Type-Options, X-Frame-Options, HSTS, CSP, etc.
-
-## Internationalization (i18n)
-
-**Framework:**
-- i18next 25.8.4 - Core library
-- react-i18next 16.5.4 - React integration
-- i18next-browser-languagedetector 8.2.0 - Browser language detection
-
-**Languages:**
-- Hebrew (he) - Default, RTL support
-- English (en) - Secondary
-
-**Configuration:**
-- Namespace-based organization (e.g., 'common', 'dashboard', 'errors')
-- localStorage persistence of language selection
-- System language detection with fallback
+**Build Process:**
+- Frontend: `npm run build` → Vite bundle → TypeScript compilation + minification
+- Backend: Direct Python execution (no build step) with Alembic migrations
 
 ---
 

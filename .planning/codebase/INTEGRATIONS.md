@@ -4,189 +4,172 @@
 
 ## APIs & External Services
 
-**Currency Exchange:**
-- Frankfurter.app (https://api.frankfurter.app) - Free exchange rate API
-  - SDK/Client: httpx (async HTTP client)
-  - Auth: None (public API, no keys required)
-  - Implementation: `app/services/exchange_rate_service.py`
-  - Supported currencies: ILS, USD, EUR
-  - Cache strategy: In-memory with 1-hour TTL
-  - Fallback: Uses expired cached rate if API unreachable
-  - Used by: Multi-currency transaction conversion (Phase 5+)
+**Internal Only:**
+- No third-party payment processors (Stripe, PayPal)
+- No banking APIs or Plaid integration
+- No accounting software APIs (QuickBooks, Xero)
+- No external analytics services
+
+**Self-Service REST API (Internal):**
+- 67 API routes across 10 modules: transactions, categories, fixed, installments, loans, balance, forecast, alerts, settings, dashboard
+- API versioning: `/api/v1/` prefix
+- Built with FastAPI auto-documentation (OpenAPI/Swagger at `/docs`, ReDoc at `/redoc`)
 
 ## Data Storage
 
 **Databases:**
-- PostgreSQL 16 (primary)
-  - Connection: Via `DATABASE_URL` env var (asyncpg dialect)
+- PostgreSQL 16 (Alpine Docker image)
+  - Connection: `postgresql+asyncpg://user:pass@localhost:5432/cashflow`
   - Client: SQLAlchemy 2.0 async ORM with asyncpg driver
-  - Container: postgres:16-alpine via docker-compose
-  - Location: `app/db/session.py` - async session factory
-  - Connection pooling: 10 base connections, 20 overflow, 3600s recycle
-  - Query timeout: 30 seconds server-side
-
-**Backup Storage:**
-- Local filesystem (development)
-  - Path: `/backups` volume (Docker mount point)
-  - Retention: 30 days (configurable via `BACKUP_RETENTION_DAYS`)
-  - Backup mechanism: Custom scripts in `backend/scripts/`
-  - Used for: Database backups and exports
+  - Pool size: 10 connections, max overflow: 20, recycled every 3600s
+  - Statement timeout: 30 seconds (prevents slow queries)
+  - Health checks: `pg_isready` via docker-compose every 5s
 
 **File Storage:**
-- Local filesystem only - No S3/cloud storage in current phases
-- Public assets: `frontend/public/` (logo.jpeg and locales)
+- Local filesystem only (no S3, Azure Blob, etc.)
+  - Backups: `/backups` directory (Docker volume `backup_data`)
+  - Retention: 30 days (cleanup via scheduler job)
 
 **Caching:**
-- In-memory Python dict (MVP) - Token blacklist, exchange rates
-  - Location: `app/core/security.py` - `_token_blacklist` set
-  - Location: `app/services/exchange_rate_service.py` - `_RateCache` class
-- Future: Can migrate to Redis (documented migration path in security.py)
+- In-memory token blacklist (MVP, per `app/core/security.py`)
+  - **Migration path to Redis:** Redis client for distributed token blacklist across workers
+  - Environment: `REDIS_URL` (future)
+
+**Session Storage:**
+- Browser localStorage for JWT tokens
+  - `access_token`: 15-minute TTL
+  - `refresh_token`: 7-day TTL
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Custom JWT implementation (no external auth provider)
-  - Implementation: `app/core/security.py`
-  - Token creation: `create_access_token()` and `create_refresh_token()`
-  - Algorithm: HS256 with configurable SECRET_KEY
-  - Access token expiry: 15 minutes (configurable)
-  - Refresh token expiry: 7 days (configurable)
-  - Token invalidation: JTI-based blacklist on logout
+- Custom JWT-based (no OAuth2, no third-party IdP)
+  - Token creation: `python-jose` with HS256 algorithm
+  - Password hashing: bcrypt with salt (passlib context)
+  - Token validation: JWT signature verification in `app/core/security.py`
 
-**Frontend Auth Flow:**
-- AuthContext: `frontend/src/contexts/AuthContext.tsx`
-- Token storage: localStorage (access_token, refresh_token keys)
-- Token validation: Automatic on app mount via `authApi.getMe()`
-- Endpoints: `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/logout`
+**Credentials Flow:**
+1. User submits username + password to `POST /api/v1/auth/login`
+2. Backend hashes input, compares with stored bcrypt hash
+3. Backend generates JWT with `jti` (JWT ID) for blacklist support
+4. Returns `access_token` and `refresh_token` (httpOnly cookies in future)
+5. Frontend stores tokens in localStorage, injects into `Authorization: Bearer` header
+6. On 401, frontend calls `POST /api/v1/auth/refresh` with `refresh_token`
+7. Backend validates refresh token, issues new access token
+
+**Implementation Files:**
+- `backend/app/core/security.py`: `hash_password()`, `verify_password()`, JWT creation/validation
+- `backend/app/api/v1/endpoints/auth.py`: Login, register, logout, refresh routes
+- `frontend/src/api/auth.ts`: API client methods
+- `frontend/src/contexts/AuthContext.tsx`: Login/logout state, token persistence
+
+**Token Blacklist:**
+- Current: In-memory `_token_blacklist` set in `app/core/security.py`
+- Clears on process restart, not shared across workers (MVP limitation)
+- Production plan: Move to Redis with TTL auto-expiry
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- Not detected - No external error tracking service integrated
-- Error handling: In-app only with custom exception classes
+- None (no Sentry, DataDog, etc.)
+- All exceptions logged via Python `logging` module (stderr)
+- FastAPI global exception handler: `app/main.py` catches unhandled exceptions
 
 **Logs:**
-- Structured logging with Python logging module
-  - Config: `app/core/logging_config.py` - JSON and standard formatters
-  - Request logging middleware: `app/core/request_logger.py` - All HTTP requests logged
-  - Slow query logging: `app/core/slow_query_logger.py` - SQLAlchemy event listeners
-  - Output: Console and file logs (rotate daily)
-  - Logs directory: `backend/logs/` (in .gitignore for local dev)
+- Python stdlib `logging` with JSON formatting (production-ready in `app/core/logging_config.py`)
+- Request logging middleware: `RequestLoggingMiddleware` in `app/core/request_logger.py`
+- Database slow query logging: `app/core/slow_query_logger.py` (logs queries > 1s)
+- Debug mode: `DEBUG=true` enables SQL echo, exception details
+
+**Health Checks:**
+- `/health` endpoint returns `{"status": "healthy", "version": "0.1.0"}`
+- Docker compose health check: PostgreSQL `pg_isready` every 5s
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Not detected - Application is self-hosted
-- Expected targets: Linux/Unix with Python 3.9+ and PostgreSQL 16+
+- Not configured (self-hosted path only)
+- Local: Uvicorn dev server on `http://localhost:8000`
+- Docker-compose for local database (no cloud deployment config)
 
 **CI Pipeline:**
-- Not detected - No CI/CD configured yet
-- Manual test execution: `pytest tests/ -v` for backend
+- Not configured (no GitHub Actions, GitLab CI, etc.)
+- Manual test execution: `pytest tests/ -v` in backend
+- Manual build: `npm run build` for frontend
 
 **Containerization:**
-- Docker Compose: `docker-compose.yml` (development environment)
-- Services:
-  - `db` - PostgreSQL 16-alpine with health checks
-  - `pgAdmin` - Management UI on port 5050 (dev only)
-- Volumes: postgres_data, pgadmin_data, backup_data (persistent)
+- `docker-compose.yml` includes PostgreSQL 16 + pgAdmin 4
+- No backend Dockerfile (frontend can be containerized via Node multi-stage build)
+- No orchestration (no Kubernetes manifests)
 
 ## Environment Configuration
 
-**Required env vars (Backend):**
-- `DATABASE_URL` - PostgreSQL connection (required)
-- `SECRET_KEY` - JWT signing key (auto-generated if missing)
-- `CORS_ORIGINS` - Allowed frontend origins (JSON array or comma-separated)
-- `DEBUG` - Boolean, enables OpenAPI docs
+**Required Backend Env Vars:**
+- `DATABASE_URL` (PostgreSQL connection string, required)
+- `SECRET_KEY` (JWT signing key, auto-generated if missing)
+- `ALGORITHM` (default: HS256)
+- `ACCESS_TOKEN_EXPIRE_MINUTES` (default: 15)
+- `REFRESH_TOKEN_EXPIRE_DAYS` (default: 7)
+- `CORS_ORIGINS` (default: `["http://localhost:5173"]`, JSON array or comma-separated)
+- `ADMIN_DEFAULT_PASSWORD` (used by seed script)
+- `DEBUG` (default: false, enables SQL echo and exception details)
+- `BACKUP_DIR` (default: `/backups`)
+- `BACKUP_RETENTION_DAYS` (default: 30)
 
-**Optional env vars (Backend):**
-- `ALGORITHM` - JWT algorithm (default: HS256)
-- `ACCESS_TOKEN_EXPIRE_MINUTES` - Access token TTL (default: 15)
-- `REFRESH_TOKEN_EXPIRE_DAYS` - Refresh token TTL (default: 7)
-- `ADMIN_DEFAULT_PASSWORD` - For seed script (default: empty)
-- `BACKUP_DIR` - Backup location (default: /backups)
-- `BACKUP_RETENTION_DAYS` - Keep backups for N days (default: 30)
+**Required Frontend Env Vars:**
+- `VITE_API_URL` (backend API base URL, default: `http://localhost:8000/api/v1`)
 
-**Secrets location:**
-- Backend: `.env` file in `backend/` directory (git-ignored)
-- Frontend: `.env` in `frontend/` (git-ignored, minimal - no secrets stored)
-- Template: `.env.example` files provide structure without secrets
+**Secrets Location:**
+- Backend: `.env` file in project root (gitignored)
+- Frontend: `.env` file in `frontend/` (gitignored)
+- **CRITICAL:** Never commit `.env` files. Use `.env.example` with placeholder values.
+
+**Default Credentials (Development Only):**
+- Admin user created by `backend/scripts/seed_data.py`
+- Username: `admin`
+- Password: Value of `ADMIN_DEFAULT_PASSWORD` (default: `admin123`)
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- Not detected - No incoming webhooks configured
+- None configured (no Stripe webhooks, bank webhooks, etc.)
 
 **Outgoing:**
-- Not detected - No external webhook calls (Phase 5+ feature)
+- None (no integrations with external systems)
 
-## API Design
+**Internal Scheduled Jobs (APScheduler):**
+- Daily job (configurable cron): `_process_all_users_recurring()`
+  - Processes recurring charges for all active users
+  - Calls `process_recurring_charges()` per user
+  - Logs per-user results to `/backups/scheduler_logs/`
 
-**REST API Structure:**
-- Base URL: `http://localhost:8000/api/v1/`
-- Framework: FastAPI with automatic OpenAPI documentation
-- Documentation endpoints: `/docs` (Swagger UI) and `/redoc` (ReDoc)
-- Prefix: `/api/v1/` for versioning
+**Job Results Logging:**
+- Last run time and summary stored in module-level variables (`_last_run_time`, `_last_run_result`)
+- Results endpoint: `GET /api/v1/dashboard/job-status` (future)
 
-**API Modules (10 total):**
-- `transactions` - Transaction CRUD and filtering
-- `categories` - Category management with archive support
-- `fixed` - Fixed income/expenses
-- `installments` - Installment payment tracking
-- `loans` - Loan management with amortization
-- `balance` - Current and historical balance queries
-- `forecast` - Cash flow forecasting
-- `alerts` - Alert management and notifications
-- `settings` - User preferences
-- `dashboard` - KPI aggregations and summaries
-- Additional: `auth`, `users` (admin), `organizations`, `bank_accounts`, `credit_cards`, `budgets`, `expected_income`, `subscriptions`, `expense_approvals`, `automation`, `backups`, `export`
+## Database Schema Patterns
 
-**API Response Format:**
-- HTTP status codes: 200, 201, 400, 401, 403, 404, 409, 422, 500
-- Error format: `{error: string, message: string, details?: object}`
-- Pydantic schemas for request/response validation
-- Pagination: Limit/offset pattern on list endpoints
+**Financial Precision:**
+- All monetary amounts: `DECIMAL(15,2)` (not FLOAT or INT)
+- All transactions include `currency` field: `VARCHAR(3) DEFAULT 'ILS'` (future multi-currency)
 
-**Frontend API Client:**
-- Location: `frontend/src/api/client.ts`
-- HTTP library: axios 1.13.5
-- Request interceptor: Automatically adds JWT Bearer token from localStorage
-- Error handling: Translates HTTP status codes to user-friendly i18n messages
-- Baseurl: `/api/v1` (proxied through Vite dev server)
+**Soft Deletes:**
+- Categories: `is_archived` boolean (deleted records remain in DB)
+- Other entities: Hard delete (via cascade)
 
-## Database Schema
+**Audit Trail:**
+- Basic fields: `created_at`, `updated_at` timestamps
+- Full audit log: **Out of scope for MVP** (Phase 8 planned)
 
-**Core Tables:**
-- `users` - User accounts with hashed passwords
-- `organizations` - Multi-org structure (future expansion)
-- `org_members` - User-org membership with roles
-- `categories` - Transaction categories (soft-deleted via is_archived)
-- `transactions` - Income/expense transactions
-- `fixed_income_expenses` - Recurring monthly items
-- `loans` - Loan records with payment schedules
-- `installments` - Installment plans
-- `subscriptions` - Recurring charges
-- `bank_accounts` - Connected bank accounts
-- `credit_cards` - Credit card accounts
-- `alerts` - System-generated alerts
-- `settings` - User preferences (not JSONB)
-- `audit_log` - Change tracking (Phase 8+)
-- Additional: `expected_income`, `expense_approvals`, `forecast_scenarios`, `org_budgets`, `org_reports`, `org_settings`, `backups`
+## Import/Export
 
-**Data Consistency:**
-- Foreign keys with CASCADE/SET NULL as appropriate
-- Indexes on: foreign keys, filtering columns, date ranges
-- Unique constraints on: email, username, org_member (user_id, org_id)
-- Timezone awareness: All timestamps in UTC
-- Financial precision: DECIMAL(15,2) for all monetary amounts
-- Currency: VARCHAR(3) with default 'ILS' on all financial tables
+**Currently Supported:**
+- CSV export (commented out in `requirements.txt`: `# openpyxl==3.1.5`, `# reportlab==4.2.5`)
 
-## Rate Limiting
-
-**Implementation:**
-- Library: slowapi 0.1.9 (FastAPI plugin)
-- Configuration: `app/core/rate_limit.py`
-- Exception handler: Registered in `app/main.py`
-- Default: Configurable per endpoint via `@limiter.limit()` decorator
+**In Development (Phase 5):**
+- Excel export (`openpyxl` package)
+- PDF export (`reportlab` package)
+- CSV import validation
 
 ---
 
