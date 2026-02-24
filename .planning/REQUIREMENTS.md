@@ -86,37 +86,38 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| BUG-01 | Phase 5A | — |
-| BUG-02 | Phase 5A | — |
-| BUG-03 | Phase 5A | — |
-| BUG-04 | Phase 5A | — |
-| BUG-05 | Phase 5A | — |
-| BUG-06 | Phase 5A | — |
-| FE-01 | Phase 5A | — |
-| FE-02 | Phase 5A | — |
-| FE-03 | Phase 5A | — |
-| DEPLOY-01 | Phase 5A | — |
-| DEPLOY-02 | Phase 5A | — |
-| DEPLOY-03 | Phase 5A | — |
-| DEPLOY-04 | Phase 5A | — |
-| DEPLOY-05 | Phase 5A | — |
-| DEPLOY-06 | Phase 5A | — |
-| DEPLOY-07 | Phase 5A | — |
-| DEPLOY-08 | Phase 5A | — |
-| INFRA-01 | Phase 5B | — |
-| INFRA-02 | Phase 5B | — |
-| INFRA-03 | Phase 5B | — |
-| INFRA-04 | Phase 5B | — |
-| INFRA-05 | Phase 5B | — |
-| INFRA-06 | Phase 5B | — |
-| INFRA-07 | Phase 5B | — |
-| INFRA-08 | Phase 5B | — |
-| INFRA-09 | Phase 5B | — |
-| HARD-01 | Phase 5C | — |
-| HARD-02 | Phase 5C | — |
-| HARD-03 | Phase 5C | — |
-| HARD-04 | Phase 5C | — |
+| BUG-01 | Phase 5A | Pending |
+| BUG-02 | Phase 5A | Pending |
+| BUG-03 | Phase 5A | Pending |
+| BUG-04 | Phase 5A | Pending |
+| BUG-05 | Phase 5A | Pending |
+| BUG-06 | Phase 5A | Pending |
+| FE-01 | Phase 5A | Pending |
+| FE-02 | Phase 5A | Pending |
+| FE-03 | Phase 5A | Pending |
+| DEPLOY-01 | Phase 5A | Pending |
+| DEPLOY-02 | Phase 5A | Pending |
+| DEPLOY-03 | Phase 5A | Pending |
+| DEPLOY-04 | Phase 5A | Pending |
+| DEPLOY-05 | Phase 5A | Pending |
+| DEPLOY-06 | Phase 5A | Pending |
+| DEPLOY-07 | Phase 5A | Pending |
+| DEPLOY-08 | Phase 5A | Pending |
+| INFRA-01 | Phase 5B | Pending |
+| INFRA-02 | Phase 5B | Pending |
+| INFRA-03 | Phase 5B | Pending |
+| INFRA-04 | Phase 5B | Pending |
+| INFRA-05 | Phase 5B | Pending |
+| INFRA-06 | Phase 5B | Pending |
+| INFRA-07 | Phase 5B | Pending |
+| INFRA-08 | Phase 5B | Pending |
+| INFRA-09 | Phase 5B | Pending |
+| HARD-01 | Phase 5C | Pending |
+| HARD-02 | Phase 5C | Pending |
+| HARD-03 | Phase 5C | Pending |
+| HARD-04 | Phase 5C | Pending |
 
 ---
 
 *Requirements defined: 2026-02-24, Phase 5 initialization*
+*Traceability updated: 2026-02-24, Roadmap created*
