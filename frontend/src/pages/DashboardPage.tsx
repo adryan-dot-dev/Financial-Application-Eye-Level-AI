@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import NumberFlow from '@number-flow/react'
 import { useTranslation } from 'react-i18next'
@@ -253,7 +253,7 @@ function HeroBalanceCard({
 }) {
   const { t } = useTranslation()
   const { currency } = useCurrency()
-  const { value: trendVal, isPositive } = parseTrend(balanceTrend)
+  const { value: trendVal } = parseTrend(balanceTrend)
 
   if (isLoading) {
     return (
@@ -332,7 +332,7 @@ function HeroBalanceCard({
           </div>
 
           {/* Trend badge on hero */}
-          {trendVal > 0 && (
+          {Math.abs(trendVal) >= 0.1 && (
             <div
               className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold self-start sm:self-auto"
               style={{
@@ -341,12 +341,12 @@ function HeroBalanceCard({
                 color: 'white',
               }}
             >
-              {isPositive ? (
+              {trendVal >= 0 ? (
                 <ChevronUp className="h-3.5 w-3.5" />
               ) : (
                 <ChevronDown className="h-3.5 w-3.5" />
               )}
-              {trendVal.toFixed(1)}%
+              {Math.abs(trendVal).toFixed(1)}%
             </div>
           )}
         </div>
@@ -1718,9 +1718,16 @@ export default function DashboardPage() {
     queryFn: () => dashboardApi.summary(period.startDate, period.endDate),
   })
 
+  const forecastMonths = useMemo(() => {
+    const start = new Date(period.startDate)
+    const end = new Date(period.endDate)
+    const diff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
+    return Math.max(1, Math.min(diff + 1, 12))
+  }, [period.startDate, period.endDate])
+
   const forecastQuery = useQuery({
-    queryKey: queryKeys.forecast.monthly(6),
-    queryFn: () => forecastApi.monthly(6),
+    queryKey: queryKeys.forecast.monthly(forecastMonths),
+    queryFn: () => forecastApi.monthly(forecastMonths),
   })
 
   const alertsQuery = useQuery({
@@ -1811,10 +1818,15 @@ export default function DashboardPage() {
   }, [queryClient, toast, t])
 
   // --- KPI definitions (no balance - it's in the hero card) ---
+  const periodKey = period.preset
+  const incomeLabel = t(`dashboard.income${periodKey}`, { defaultValue: t('dashboard.monthlyIncome') })
+  const expensesLabel = t(`dashboard.expenses${periodKey}`, { defaultValue: t('dashboard.monthlyExpenses') })
+  const netLabel = t(`dashboard.net${periodKey}`, { defaultValue: t('dashboard.netCashflow') })
+
   const kpis: Omit<KpiCardProps, 'isLoading'>[] = [
     {
       icon: <TrendingUp className="h-5 w-5" />,
-      label: t('dashboard.monthlyIncome'),
+      label: incomeLabel,
       value: summary ? formatAmount(animatedIncome) : '--',
       rawValue: rawIncome,
       trend: summary?.income_trend ?? '0',
@@ -1826,7 +1838,7 @@ export default function DashboardPage() {
     },
     {
       icon: <TrendingDown className="h-5 w-5" />,
-      label: t('dashboard.monthlyExpenses'),
+      label: expensesLabel,
       value: summary ? formatAmount(animatedExpenses) : '--',
       rawValue: rawExpenses,
       trend: summary?.expense_trend ?? '0',
@@ -1838,7 +1850,7 @@ export default function DashboardPage() {
     },
     {
       icon: <BarChart3 className="h-5 w-5" />,
-      label: t('dashboard.netCashflow'),
+      label: netLabel,
       value: summary ? formatAmount(animatedNet) : '--',
       rawValue: rawNet,
       trend: '0',
@@ -2248,7 +2260,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <Link
-                to="/settings?tab=budgets"
+                to="/alerts"
                 className="flex items-center gap-1 text-xs font-semibold"
                 style={{ color: 'var(--color-brand-500)' }}
               >

@@ -228,27 +228,40 @@ function EmptyState({ message, severity }: { message: string; severity?: string 
 function SnoozeDropdown({
   onSnooze,
   isSnoozePending,
+  onOpenChange,
 }: {
   onSnooze: (snoozedUntil: string) => void
   isSnoozePending: boolean
+  onOpenChange?: (isOpen: boolean) => void
 }) {
   const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Notify parent when open state changes (used to keep actions visible)
+  const setOpenState = useCallback((open: boolean) => {
+    setIsOpen(open)
+    onOpenChange?.(open)
+  }, [onOpenChange])
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+        setOpenState(false)
         setShowDatePicker(false)
       }
     }
     if (isOpen) {
+      // Use mousedown instead of click to prevent race conditions:
+      // mousedown fires BEFORE click, so the outside handler closes the dropdown
+      // before the click event even reaches the option button. By using mousedown,
+      // we ensure the dropdown only closes when user presses outside, not when
+      // they're trying to click an option inside.
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
+  }, [isOpen, setOpenState])
 
   const snoozeOptions = [
     {
@@ -281,9 +294,14 @@ function SnoozeDropdown({
   return (
     <div ref={dropdownRef} className="relative">
       <button
+        onMouseDown={(e) => {
+          // Use mousedown + stopPropagation so the document-level mousedown
+          // handler doesn't immediately close the dropdown we're about to open
+          e.stopPropagation()
+        }}
         onClick={(e) => {
           e.stopPropagation()
-          setIsOpen(!isOpen)
+          setOpenState(!isOpen)
         }}
         disabled={isSnoozePending}
         aria-label={t('alerts.snooze')}
@@ -316,15 +334,17 @@ function SnoozeDropdown({
             borderColor: 'var(--border-primary)',
             insetInlineEnd: 0,
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <div className="p-1">
             {snoozeOptions.map((option, idx) => (
               <button
                 key={idx}
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation()
                   onSnooze(option.getDate())
-                  setIsOpen(false)
+                  setOpenState(false)
                 }}
                 className={cn(
                   'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-xs font-medium',
@@ -344,6 +364,7 @@ function SnoozeDropdown({
           <div className="p-1">
             {!showDatePicker ? (
               <button
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowDatePicker(true)
@@ -363,11 +384,12 @@ function SnoozeDropdown({
                   type="datetime-local"
                   className="input w-full text-xs"
                   min={new Date().toISOString().slice(0, 16)}
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
                     if (e.target.value) {
                       onSnooze(new Date(e.target.value).toISOString())
-                      setIsOpen(false)
+                      setOpenState(false)
                       setShowDatePicker(false)
                     }
                   }}
@@ -414,6 +436,7 @@ function AlertCard({
   const sev = severityConfig(alert.severity)
   const isUnread = !alert.is_read
   const locale = isRtl ? 'he' : 'en'
+  const [isSnoozeOpen, setIsSnoozeOpen] = useState(false)
 
   // Strip emojis from title and message for clean display
   const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F]/gu
@@ -425,7 +448,7 @@ function AlertCard({
       role="article"
       aria-label={`${t(`alerts.${alert.severity}`)} ${t('alerts.alertLabel')}: ${cleanTitle}${isUnread ? ` (${t('alerts.unread')})` : ''}`}
       className={cn(
-        'row-enter hover-lift group rounded-2xl border transition-all duration-200',
+        'row-enter hover-lift group overflow-visible rounded-2xl border transition-all duration-200',
         isUnread ? 'card-hover' : '',
       )}
       style={{
@@ -517,7 +540,7 @@ function AlertCard({
           </p>
 
           {/* Footer: timestamp + actions */}
-          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 overflow-visible">
             {/* Timestamp - relative format */}
             <span
               className="ltr-nums text-xs"
@@ -534,8 +557,15 @@ function AlertCard({
             {/* Actions */}
             <div
               className={cn(
-                'flex flex-wrap items-center gap-1.5',
-                'opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100',
+                'flex flex-wrap items-center gap-1.5 overflow-visible',
+                'transition-opacity duration-200',
+                // CRITICAL FIX: When snooze dropdown is open, force full opacity.
+                // Without this, moving the mouse to the dropdown (which extends outside
+                // the group boundary) loses :hover on the group, triggering opacity-0,
+                // which hides the entire actions bar including the open dropdown.
+                isSnoozeOpen
+                  ? 'opacity-100'
+                  : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100',
               )}
               role="group"
               aria-label={t('alerts.actionsLabel')}
@@ -596,6 +626,7 @@ function AlertCard({
               <SnoozeDropdown
                 onSnooze={onSnooze}
                 isSnoozePending={isSnoozePending}
+                onOpenChange={setIsSnoozeOpen}
               />
 
               {/* Dismiss */}
