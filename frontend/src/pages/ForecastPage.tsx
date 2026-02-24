@@ -2412,6 +2412,22 @@ export default function ForecastPage() {
           <p className="text-sm font-bold" style={{ color: 'var(--color-expense)' }}>
             {t('common.error')}
           </p>
+          <button
+            onClick={() => {
+              if (activeTab === 'monthly' || activeTab === 'comparison') monthlyQuery.refetch()
+              if (activeTab === 'weekly') weeklyQuery.refetch()
+              if (activeTab === 'summary') summaryQuery.refetch()
+            }}
+            className="btn-press mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all"
+            style={{
+              backgroundColor: 'var(--bg-hover)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-primary)',
+            }}
+          >
+            <RotateCcw className="h-4 w-4" />
+            {t('error.tryAgain')}
+          </button>
         </div>
       )}
 
