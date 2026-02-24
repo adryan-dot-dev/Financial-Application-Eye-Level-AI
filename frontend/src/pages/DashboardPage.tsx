@@ -2002,6 +2002,32 @@ export default function DashboardPage() {
               <SkeletonBox className="mb-6 h-5 w-44" />
               <SkeletonBox className="h-[340px] w-full rounded-xl" />
             </div>
+          ) : forecastQuery.isError ? (
+            <div className="card animate-fade-in-up section-delay-2 flex h-full items-center justify-center p-12">
+              <div className="text-center">
+                <div
+                  className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: 'var(--bg-danger)' }}
+                >
+                  <AlertTriangle className="h-5 w-5" style={{ color: 'var(--color-expense)' }} />
+                </div>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-expense)' }}>
+                  {t('common.error')}
+                </p>
+                <button
+                  onClick={() => forecastQuery.refetch()}
+                  className="btn-press mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+                  style={{
+                    backgroundColor: 'var(--bg-hover)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-primary)',
+                  }}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  {t('error.tryAgain')}
+                </button>
+              </div>
+            </div>
           ) : chartData.length > 0 ? (
             <ForecastChart data={chartData} isRtl={isRtl} />
           ) : (
