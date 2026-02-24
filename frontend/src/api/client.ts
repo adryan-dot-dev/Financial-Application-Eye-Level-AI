@@ -3,7 +3,7 @@ import type { AxiosError } from 'axios'
 import i18n from '@/i18n/config'
 
 const apiClient = axios.create({
-  baseURL: '/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
