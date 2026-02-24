@@ -22,12 +22,12 @@ Phase 5 takes a fully built financial application (Phases 0-4 complete, 155+ tes
   3. The frontend CreditCardsPage displays fully translated Hebrew text with no raw translation keys visible (FE-01, FE-02)
   4. The alerts snooze dropdown opens and is clickable without being clipped by parent overflow (FE-03)
   5. A render.yaml file exists at repo root defining three services (Web Service, Static Site, PostgreSQL) with correct build/start commands and preDeployCommand for Alembic (DEPLOY-08)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 5A-01: Backend bug fixes (BUG-01 through BUG-06) + Alembic migration for schema fields and indexes
-- [ ] 5A-02: Frontend UI fixes (FE-01, FE-02, FE-03)
-- [ ] 5A-03: Deployment code changes (DEPLOY-01 through DEPLOY-08) — config.py, session.py, client.ts, CSP, health check, render.yaml
+- [ ] 5A-01-PLAN.md — Backend bug fixes (BUG-01 through BUG-06) + Alembic migration for constraints and indexes
+- [ ] 5A-02-PLAN.md — Frontend UI fixes (FE-01, FE-02, FE-03) — CreditCardsPage translations + alerts overflow
+- [ ] 5A-03-PLAN.md — Deployment code changes (DEPLOY-01 through DEPLOY-08) — config.py, session.py, main.py, client.ts, .python-version, render.yaml
 
 ### Phase 5B: Deployment + Go-Live
 **Goal**: The application is live and accessible at Render URLs with working auth, CORS, database, and seed data
