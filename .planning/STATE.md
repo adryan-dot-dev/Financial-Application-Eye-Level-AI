@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** The user sees an accurate picture of their cash flow — what went out, what's coming in, what's ahead — with no incorrect data.
-**Current focus:** Phase 5A — Pre-Deploy Fixes
+**Current focus:** Phase 5B — Deployment + Go-Live
 
 ## Current Position
 
-Phase: 5A of 5C (Pre-Deploy Fixes)
-Plan: 3 of 3 in current phase
-Status: Complete
-Last activity: 2026-02-24 — Completed 5A-03 (Render deployment code changes)
+Phase: 5B of 5C (Deployment + Go-Live)
+Plan: 0 of 2 in current phase
+Status: Ready to plan
+Last activity: 2026-02-24 — Phase 5A complete (757 tests passing, all deployment code in place, verification passed)
 
 Progress: [███░░░░░░░] 30%
 
