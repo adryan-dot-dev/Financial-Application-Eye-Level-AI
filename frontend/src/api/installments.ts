@@ -13,6 +13,8 @@ export interface CreateInstallmentData {
   currency?: string
   first_payment_made?: boolean
   credit_card_id?: string
+  payment_method?: string
+  bank_account_id?: string
 }
 
 export type UpdateInstallmentData = Partial<CreateInstallmentData>

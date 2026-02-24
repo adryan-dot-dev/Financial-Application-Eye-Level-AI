@@ -34,6 +34,7 @@ class CreditCardCreate(BaseModel):
     currency: str = Field(default="ILS", min_length=3, max_length=3, pattern="^[A-Z]{3}$")
     color: Optional[str] = Field(None, pattern="^#[0-9a-fA-F]{6}$")
     notes: Optional[str] = Field(None, max_length=1000)
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('credit_limit')
     @classmethod
@@ -84,6 +85,7 @@ class CreditCardUpdate(BaseModel):
     is_active: Optional[bool] = None
     color: Optional[str] = Field(None, pattern="^#[0-9a-fA-F]{6}$")
     notes: Optional[str] = Field(None, max_length=1000)
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('credit_limit')
     @classmethod
@@ -104,6 +106,7 @@ class CreditCardResponse(BaseModel):
     currency: str
     is_active: bool
     color: Optional[str] = None
+    bank_account_id: Optional[UUID] = None
     notes: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -115,6 +118,7 @@ class CreditCardResponse(BaseModel):
     linked_installments_count: int = 0
     linked_subscriptions_count: int = 0
     linked_fixed_count: int = 0
+    linked_transactions_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -128,7 +132,7 @@ class CreditCardSummaryResponse(BaseModel):
 
 
 class CardChargeItem(BaseModel):
-    source_type: str  # 'installment', 'subscription', 'fixed'
+    source_type: str  # 'installment', 'subscription', 'fixed', 'transaction'
     source_id: UUID
     name: str
     amount: Decimal

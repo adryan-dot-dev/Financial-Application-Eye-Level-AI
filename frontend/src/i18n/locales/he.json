@@ -60,6 +60,27 @@
     "monthlyIncome": "הכנסות החודש",
     "monthlyExpenses": "הוצאות החודש",
     "netCashflow": "תזרים נטו",
+    "income7D": "הכנסות 7 ימים אחרונים",
+    "expenses7D": "הוצאות 7 ימים אחרונים",
+    "net7D": "נטו 7 ימים אחרונים",
+    "income1M": "הכנסות החודש",
+    "expenses1M": "הוצאות החודש",
+    "net1M": "נטו חודשי",
+    "income3M": "הכנסות 3 חודשים",
+    "expenses3M": "הוצאות 3 חודשים",
+    "net3M": "נטו 3 חודשים",
+    "income6M": "הכנסות 6 חודשים",
+    "expenses6M": "הוצאות 6 חודשים",
+    "net6M": "נטו 6 חודשים",
+    "income1Y": "הכנסות שנתיות",
+    "expenses1Y": "הוצאות שנתיות",
+    "net1Y": "נטו שנתי",
+    "incomeYTD": "הכנסות מתחילת השנה",
+    "expensesYTD": "הוצאות מתחילת השנה",
+    "netYTD": "נטו מתחילת השנה",
+    "incomeCUSTOM": "הכנסות בתקופה",
+    "expensesCUSTOM": "הוצאות בתקופה",
+    "netCUSTOM": "נטו בתקופה",
     "forecast": "צפי ל-6 חודשים",
     "recentTransactions": "תנועות אחרונות",
     "alerts": "התראות",
@@ -283,7 +304,8 @@
     "update": "עדכן יתרה",
     "history": "היסטוריית יתרות",
     "effectiveDate": "תאריך תוקף",
-    "points": "נק׳"
+    "points": "נק׳",
+    "bankAccount": "חשבון בנק"
   },
   "forecast": {
     "title": "צפי תזרים",
@@ -560,7 +582,8 @@
     "confirmDelete": "אישור מחיקה",
     "noResults": "לא נמצאו תוצאות",
     "search": "חיפוש",
-    "view": "צפייה"
+    "view": "צפייה",
+    "none": "ללא"
   },
   "toast": {
     "createSuccess": "נוצר בהצלחה",
@@ -673,7 +696,17 @@
     "summaryPhone": "טלפון",
     "stepCurrencyBalance": "מטבע ויתרה התחלתית",
     "stepCurrencyBalanceDesc": "בחר מטבע והזן את יתרת הבנק הנוכחית שלך",
-    "personalInfoSkip": "אמשיך אחר כך"
+    "personalInfoSkip": "אמשיך אחר כך",
+    "bankAccountsTitle": "חשבונות בנק",
+    "bankAccountsSubtitle": "הוסף את חשבונות הבנק שלך כדי לעקוב אחרי יתרות ואובליגו",
+    "creditCardsTitle": "כרטיסי אשראי",
+    "creditCardsSubtitle": "הוסף את כרטיסי האשראי שלך כדי לעקוב אחרי מסגרת וחיובים",
+    "loansTitle": "הלוואות",
+    "loansSubtitle": "הוסף הלוואות קיימות כדי לעקוב אחרי תשלומים ויתרה",
+    "subscriptionsTitle": "מנויים",
+    "subscriptionsSubtitle": "הוסף מנויים חודשיים כמו נטפליקס, ספוטיפיי וכו'",
+    "addAnother": "הוסף נוסף",
+    "skipStep": "דלג"
   },
   "organizations": {
     "title": "ארגונים",
@@ -868,6 +901,7 @@
     "chargeSubscriptions": "חיובי מנויים",
     "chargeInstallments": "חיובי תשלומים",
     "chargeFixed": "חיובים קבועים",
+    "chargeTransactions": "עסקאות",
     "noCharges": "אין חיובים",
     "totalExpected": "סה\"כ צפוי",
     "availableAfterBilling": "אשראי זמין לאחר חיוב",
@@ -875,7 +909,10 @@
     "emptyDesc": "הוסף את כרטיס האשראי הראשון שלך כדי לעקוב אחר ניצול המסגרת.",
     "currency": "מטבע",
     "linkedItems": "פריטים מקושרים",
-    "namePlaceholder": "הזן שם כרטיס"
+    "namePlaceholder": "הזן שם כרטיס",
+    "bankAccount": "חשבון בנק לחיוב",
+    "selectBankAccount": "בחר חשבון בנק",
+    "noBankAccount": "ללא חשבון"
   },
   "bankAccounts": {
     "title": "חשבונות בנק",
@@ -895,7 +932,10 @@
     "noAccountsDesc": "הוסף את חשבון הבנק הראשון שלך.",
     "deleteConfirmTitle": "מחיקת חשבון בנק",
     "deleteConfirmMessage": "האם אתה בטוח שברצונך למחוק חשבון זה?",
-    "notes": "הערות"
+    "notes": "הערות",
+    "updateBalance": "עדכון יתרה",
+    "balanceAmount": "סכום יתרה",
+    "balanceSaved": "היתרה עודכנה בהצלחה"
   },
   "obligo": {
     "title": "אובליגו בנקאי",
@@ -981,6 +1021,16 @@
     "generateReport": "צור דוח חדש",
     "selectType": "בחר סוג דוח",
     "selectPeriod": "בחר תקופה"
+  },
+  "paymentMethod": {
+    "label": "אמצעי תשלום",
+    "cash": "מזומן",
+    "credit_card": "כרטיס אשראי",
+    "bank_transfer": "העברה בנקאית",
+    "selectCard": "בחר כרטיס אשראי",
+    "selectAccount": "בחר חשבון בנק",
+    "noCards": "אין כרטיסי אשראי - הוסף כרטיס דרך ניהול כרטיסים",
+    "noAccounts": "אין חשבונות בנק - הוסף חשבון דרך ניהול חשבונות"
   },
   "auditLog": {
     "title": "לוג פעולות",

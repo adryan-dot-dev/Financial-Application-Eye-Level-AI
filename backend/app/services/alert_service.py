@@ -18,6 +18,39 @@ from app.services.forecast_service import compute_monthly_forecast
 logger = logging.getLogger(__name__)
 
 
+async def _alert_exists_today(
+    db: AsyncSession,
+    user_id: UUID,
+    alert_type: str,
+    related_entity_type: Optional[str] = None,
+    related_entity_id: Optional[UUID] = None,
+    related_month: Optional[date] = None,
+) -> bool:
+    """Check if a similar alert was already created today (deduplication).
+
+    Prevents creating duplicate alerts for the same entity/type/day, even
+    if earlier alerts were dismissed or read.
+    """
+    today_start = datetime.combine(date.today(), datetime.min.time())
+
+    conditions = [
+        Alert.user_id == user_id,
+        Alert.alert_type == alert_type,
+        Alert.created_at >= today_start,
+    ]
+    if related_entity_type is not None:
+        conditions.append(Alert.related_entity_type == related_entity_type)
+    if related_entity_id is not None:
+        conditions.append(Alert.related_entity_id == related_entity_id)
+    if related_month is not None:
+        conditions.append(Alert.related_month == related_month)
+
+    result = await db.execute(
+        select(Alert.id).where(and_(*conditions)).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 def _ensure_ctx(user_id: Optional[UUID] = None, ctx: Optional[DataContext] = None) -> DataContext:
     """Backward-compat helper: build a personal DataContext from user_id if ctx is missing."""
     if ctx is not None:
@@ -323,6 +356,13 @@ async def _generate_high_single_expense_alerts(
             existing.severity = "warning"
             alerts.append(existing)
         else:
+            # Dedup: skip if already created today
+            if await _alert_exists_today(
+                db, user_id, "high_single_expense",
+                related_entity_type="transaction",
+                related_entity_id=tx.id,
+            ):
+                continue
             alert = Alert(
                 user_id=user_id,
                 organization_id=ctx.organization_id,
@@ -400,6 +440,13 @@ async def _generate_high_income_alert(
         existing.severity = "info"
         alerts.append(existing)
     else:
+        # Dedup: skip if already created today
+        if await _alert_exists_today(
+            db, user_id, "high_income",
+            related_entity_type="income",
+            related_month=current_month_start,
+        ):
+            return alerts
         alert = Alert(
             user_id=user_id,
             organization_id=ctx.organization_id,
@@ -463,6 +510,13 @@ async def _generate_payment_overdue_alerts(
                 existing.severity = "critical"
                 alerts.append(existing)
             else:
+                # Dedup: skip if already created today
+                if await _alert_exists_today(
+                    db, user_id, "payment_overdue",
+                    related_entity_type="installment",
+                    related_entity_id=inst.id,
+                ):
+                    continue
                 alert = Alert(
                     user_id=user_id,
                     organization_id=ctx.organization_id,
@@ -512,6 +566,13 @@ async def _generate_payment_overdue_alerts(
                 existing.severity = "critical"
                 alerts.append(existing)
             else:
+                # Dedup: skip if already created today
+                if await _alert_exists_today(
+                    db, user_id, "payment_overdue",
+                    related_entity_type="loan",
+                    related_entity_id=loan.id,
+                ):
+                    continue
                 alert = Alert(
                     user_id=user_id,
                     organization_id=ctx.organization_id,
@@ -575,6 +636,13 @@ async def _generate_upcoming_payment_alerts(
                 existing.severity = "info"
                 alerts.append(existing)
             else:
+                # Dedup: skip if already created today
+                if await _alert_exists_today(
+                    db, user_id, "upcoming_payment",
+                    related_entity_type="installment",
+                    related_entity_id=inst.id,
+                ):
+                    continue
                 alert = Alert(
                     user_id=user_id,
                     organization_id=ctx.organization_id,
@@ -624,6 +692,13 @@ async def _generate_upcoming_payment_alerts(
                 existing.severity = "info"
                 alerts.append(existing)
             else:
+                # Dedup: skip if already created today
+                if await _alert_exists_today(
+                    db, user_id, "upcoming_payment",
+                    related_entity_type="loan",
+                    related_entity_id=loan.id,
+                ):
+                    continue
                 alert = Alert(
                     user_id=user_id,
                     organization_id=ctx.organization_id,
@@ -676,6 +751,13 @@ async def _generate_loan_ending_soon_alerts(
                 existing.severity = "info"
                 alerts.append(existing)
             else:
+                # Dedup: skip if already created today
+                if await _alert_exists_today(
+                    db, user_id, "loan_ending_soon",
+                    related_entity_type="loan",
+                    related_entity_id=loan.id,
+                ):
+                    continue
                 alert = Alert(
                     user_id=user_id,
                     organization_id=ctx.organization_id,
@@ -726,6 +808,13 @@ async def _generate_installment_ending_soon_alerts(
                 existing.severity = "info"
                 alerts.append(existing)
             else:
+                # Dedup: skip if already created today
+                if await _alert_exists_today(
+                    db, user_id, "installment_ending_soon",
+                    related_entity_type="installment",
+                    related_entity_id=inst.id,
+                ):
+                    continue
                 alert = Alert(
                     user_id=user_id,
                     organization_id=ctx.organization_id,
@@ -795,7 +884,7 @@ async def generate_alerts(
     # ORANGE-7: Load user settings for configurable alert thresholds
     # Settings are always personal (per-user), not org-scoped
     settings_result = await db.execute(
-        select(Settings).where(Settings.user_id == user_id)
+        select(Settings).where(Settings.user_id == user_id).limit(1)
     )
     user_settings = settings_result.scalar_one_or_none()
     warning_threshold = Decimal(str(user_settings.alert_warning_threshold)) if user_settings else Decimal("5000")
@@ -852,21 +941,27 @@ async def generate_alerts(
                     existing.message = message
                     result_alerts.append(existing)
                 else:
-                    alert = Alert(
-                        user_id=user_id,
-                        organization_id=ctx.organization_id,
-                        alert_type="negative_cashflow",
-                        severity=severity,
-                        title=title,
-                        message=message,
+                    # Dedup: skip if already created today
+                    if not await _alert_exists_today(
+                        db, user_id, "negative_cashflow",
                         related_entity_type="forecast",
                         related_month=month_date,
-                        is_read=False,
-                        is_dismissed=False,
-                        created_at=datetime.now(timezone.utc),
-                    )
-                    db.add(alert)
-                    result_alerts.append(alert)
+                    ):
+                        alert = Alert(
+                            user_id=user_id,
+                            organization_id=ctx.organization_id,
+                            alert_type="negative_cashflow",
+                            severity=severity,
+                            title=title,
+                            message=message,
+                            related_entity_type="forecast",
+                            related_month=month_date,
+                            is_read=False,
+                            is_dismissed=False,
+                            created_at=datetime.now(timezone.utc),
+                        )
+                        db.add(alert)
+                        result_alerts.append(alert)
 
             # --- Approaching negative alert (positive but below threshold) ---
             elif Decimal("0") <= closing < critical_threshold:
@@ -883,21 +978,27 @@ async def generate_alerts(
                     existing.message = message
                     result_alerts.append(existing)
                 else:
-                    alert = Alert(
-                        user_id=user_id,
-                        organization_id=ctx.organization_id,
-                        alert_type="approaching_negative",
-                        severity="info",
-                        title=title,
-                        message=message,
+                    # Dedup: skip if already created today
+                    if not await _alert_exists_today(
+                        db, user_id, "approaching_negative",
                         related_entity_type="forecast",
                         related_month=month_date,
-                        is_read=False,
-                        is_dismissed=False,
-                        created_at=datetime.now(timezone.utc),
-                    )
-                    db.add(alert)
-                    result_alerts.append(alert)
+                    ):
+                        alert = Alert(
+                            user_id=user_id,
+                            organization_id=ctx.organization_id,
+                            alert_type="approaching_negative",
+                            severity="info",
+                            title=title,
+                            message=message,
+                            related_entity_type="forecast",
+                            related_month=month_date,
+                            is_read=False,
+                            is_dismissed=False,
+                            created_at=datetime.now(timezone.utc),
+                        )
+                        db.add(alert)
+                        result_alerts.append(alert)
 
             # --- High expenses alert ---
             if net < Decimal("-10000"):
@@ -914,21 +1015,27 @@ async def generate_alerts(
                     existing.message = message
                     result_alerts.append(existing)
                 else:
-                    alert = Alert(
-                        user_id=user_id,
-                        organization_id=ctx.organization_id,
-                        alert_type="high_expenses",
-                        severity="info",
-                        title=title,
-                        message=message,
+                    # Dedup: skip if already created today
+                    if not await _alert_exists_today(
+                        db, user_id, "high_expenses",
                         related_entity_type="forecast",
                         related_month=month_date,
-                        is_read=False,
-                        is_dismissed=False,
-                        created_at=datetime.now(timezone.utc),
-                    )
-                    db.add(alert)
-                    result_alerts.append(alert)
+                    ):
+                        alert = Alert(
+                            user_id=user_id,
+                            organization_id=ctx.organization_id,
+                            alert_type="high_expenses",
+                            severity="info",
+                            title=title,
+                            message=message,
+                            related_entity_type="forecast",
+                            related_month=month_date,
+                            is_read=False,
+                            is_dismissed=False,
+                            created_at=datetime.now(timezone.utc),
+                        )
+                        db.add(alert)
+                        result_alerts.append(alert)
 
     # Remove stale forecast alerts
     for key, alert in forecast_map.items():

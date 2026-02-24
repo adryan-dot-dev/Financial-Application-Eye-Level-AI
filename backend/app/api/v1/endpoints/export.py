@@ -264,7 +264,7 @@ async def export_all_data(
 
     # Settings (personal — always by user_id, not org-scoped)
     settings_result = await db.execute(
-        select(Settings).where(Settings.user_id == current_user.id)
+        select(Settings).where(Settings.user_id == current_user.id).limit(1)
     )
     user_settings = settings_result.scalar_one_or_none()
     settings_data = None

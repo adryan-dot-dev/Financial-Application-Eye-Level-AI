@@ -49,7 +49,7 @@ async def update_balance(
     ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
-    # Lock existing current balance rows with FOR UPDATE to prevent race conditions
+    # Lock ALL current balance rows with FOR UPDATE to serialize concurrent requests
     result = await db.execute(
         select(BankBalance)
         .where(
@@ -58,7 +58,18 @@ async def update_balance(
         )
         .with_for_update()
     )
-    old_balance = result.scalar_one_or_none()
+    all_current = result.scalars().all()
+    # Find the balance for the specific bank_account_id (or global if None)
+    old_balance = None
+    for b in all_current:
+        if data.bank_account_id:
+            if b.bank_account_id == data.bank_account_id:
+                old_balance = b
+                break
+        else:
+            if b.bank_account_id is None:
+                old_balance = b
+                break
     if not old_balance:
         raise NotFoundException("No current balance. Use POST to create one.")
 
@@ -117,7 +128,7 @@ async def create_balance(
     ctx: DataContext = Depends(get_data_context),
     db: AsyncSession = Depends(get_db),
 ):
-    # Lock existing current balance rows with FOR UPDATE to prevent race conditions
+    # Lock ALL current balance rows with FOR UPDATE to serialize concurrent requests
     result = await db.execute(
         select(BankBalance)
         .where(
@@ -127,8 +138,14 @@ async def create_balance(
         .with_for_update()
     )
     existing_current = result.scalars().all()
+    # Only archive balances for the SAME bank_account_id (or global if None)
     for existing in existing_current:
-        existing.is_current = False
+        if data.bank_account_id:
+            if existing.bank_account_id == data.bank_account_id:
+                existing.is_current = False
+        else:
+            if existing.bank_account_id is None:
+                existing.is_current = False
 
     if data.bank_account_id:
         ba_result = await db.execute(

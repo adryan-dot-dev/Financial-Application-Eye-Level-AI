@@ -21,7 +21,7 @@ async def get_settings(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Settings).where(Settings.user_id == current_user.id)
+        select(Settings).where(Settings.user_id == current_user.id).limit(1)
     )
     settings = result.scalar_one_or_none()
 
@@ -43,7 +43,7 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Settings).where(Settings.user_id == current_user.id)
+        select(Settings).where(Settings.user_id == current_user.id).limit(1)
     )
     settings = result.scalar_one_or_none()
 

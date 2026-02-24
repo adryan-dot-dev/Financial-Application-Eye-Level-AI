@@ -25,7 +25,7 @@ import {
   AlertTriangle,
   Wallet,
 } from 'lucide-react'
-import type { Transaction, Category } from '@/types'
+import type { Transaction, Category, PaymentMethod } from '@/types'
 import { transactionsApi } from '@/api/transactions'
 import type { TransactionListParams, CreateTransactionData } from '@/api/transactions'
 import { categoriesApi } from '@/api/categories'
@@ -37,6 +37,7 @@ import { getApiErrorMessage } from '@/api/client'
 import { useCurrency } from '@/hooks/useCurrency'
 import CurrencySelector from '@/components/CurrencySelector'
 import DatePicker from '@/components/ui/DatePicker'
+import PaymentMethodSelector from '@/components/ui/PaymentMethodSelector'
 import PeriodSelector from '@/components/ui/PeriodSelector'
 import type { PeriodSelection } from '@/components/ui/PeriodSelector'
 import { getDateRangeForPreset } from '@/components/ui/PeriodSelector'
@@ -66,6 +67,9 @@ interface FormData {
   category_id: string
   notes: string
   currency: string
+  payment_method: PaymentMethod
+  credit_card_id: string
+  bank_account_id: string
 }
 
 const EMPTY_FILTERS: Filters = {
@@ -88,6 +92,9 @@ const EMPTY_FORM: FormData = {
   category_id: '',
   notes: '',
   currency: 'ILS',
+  payment_method: 'cash',
+  credit_card_id: '',
+  bank_account_id: '',
 }
 
 const PAGE_SIZE = 15
@@ -326,6 +333,9 @@ export default function TransactionsPage() {
       category_id: tx.category_id ?? '',
       notes: tx.notes ?? '',
       currency: tx.currency ?? defaultCurrency,
+      payment_method: tx.payment_method ?? 'cash',
+      credit_card_id: tx.credit_card_id ?? '',
+      bank_account_id: tx.bank_account_id ?? '',
     })
     setFormErrors({})
     setModalOpen(true)
@@ -370,6 +380,9 @@ export default function TransactionsPage() {
       category_id: formData.category_id || undefined,
       notes: formData.notes || undefined,
       currency: formData.currency,
+      payment_method: formData.payment_method,
+      credit_card_id: formData.payment_method === 'credit_card' && formData.credit_card_id ? formData.credit_card_id : undefined,
+      bank_account_id: formData.payment_method === 'bank_transfer' && formData.bank_account_id ? formData.bank_account_id : undefined,
     }
 
     if (editingTransaction) {
@@ -1554,6 +1567,17 @@ export default function TransactionsPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* Payment Method */}
+                <PaymentMethodSelector
+                  paymentMethod={formData.payment_method}
+                  onPaymentMethodChange={(method) => setFormData((prev) => ({ ...prev, payment_method: method }))}
+                  creditCardId={formData.credit_card_id || null}
+                  onCreditCardChange={(id) => setFormData((prev) => ({ ...prev, credit_card_id: id ?? '' }))}
+                  bankAccountId={formData.bank_account_id || null}
+                  onBankAccountChange={(id) => setFormData((prev) => ({ ...prev, bank_account_id: id ?? '' }))}
+                  showForType={formData.type}
+                />
 
                 {/* Currency */}
                 <div>

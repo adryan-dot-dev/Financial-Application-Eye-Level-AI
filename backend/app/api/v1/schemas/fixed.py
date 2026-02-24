@@ -35,7 +35,9 @@ class FixedCreate(BaseModel):
     start_date: date
     end_date: Optional[date] = None
     description: Optional[str] = Field(None, max_length=1000)
+    payment_method: str = Field(default="cash", pattern="^(cash|credit_card|bank_transfer)$")
     credit_card_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('amount')
     @classmethod
@@ -78,7 +80,9 @@ class FixedUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     description: Optional[str] = Field(None, max_length=1000)
+    payment_method: Optional[str] = Field(None, pattern="^(cash|credit_card|bank_transfer)$")
     credit_card_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('amount')
     @classmethod
@@ -103,7 +107,9 @@ class FixedResponse(BaseModel):
     end_date: Optional[date]
     is_active: bool
     description: Optional[str]
+    payment_method: str = "cash"
     credit_card_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

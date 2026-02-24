@@ -12,6 +12,7 @@ from app.db.models.credit_card import CreditCard
 from app.db.models.fixed_income_expense import FixedIncomeExpense
 from app.db.models.installment import Installment
 from app.db.models.subscription import Subscription
+from app.db.models.transaction import Transaction
 
 # Monthly equivalent factors for billing cycles
 _CYCLE_MONTHLY_FACTOR = {
@@ -71,7 +72,30 @@ async def compute_card_utilization(
     fixed_total = Decimal(str(fixed_row[0]))
     fixed_count = fixed_row[1]
 
-    total = inst_total + sub_total + fixed_total
+    # Transactions linked to this card in the current billing cycle month
+    today = date.today()
+    cycle_start = today.replace(day=1)
+    # End of current month
+    if today.month == 12:
+        cycle_end = date(today.year + 1, 1, 1)
+    else:
+        cycle_end = date(today.year, today.month + 1, 1)
+
+    txn_result = await db.execute(
+        select(
+            func.coalesce(func.sum(Transaction.amount), 0),
+            func.count(Transaction.id),
+        ).where(
+            Transaction.credit_card_id == card_id,
+            Transaction.date >= cycle_start,
+            Transaction.date < cycle_end,
+        )
+    )
+    txn_row = txn_result.one()
+    txn_total = Decimal(str(txn_row[0]))
+    txn_count = txn_row[1]
+
+    total = inst_total + sub_total + fixed_total + txn_total
     limit = Decimal(str(card.credit_limit))
     pct = float((total / limit) * 100) if limit > 0 else 0.0
     available = limit - total
@@ -84,6 +108,7 @@ async def compute_card_utilization(
         "linked_installments_count": inst_count,
         "linked_subscriptions_count": sub_count,
         "linked_fixed_count": fixed_count,
+        "linked_transactions_count": txn_count,
     }
 
 
@@ -144,6 +169,31 @@ async def get_card_charges(
             "name": fixed.name,
             "amount": fixed.amount,
             "currency": fixed.currency,
+            "billing_cycle": None,
+        })
+
+    # Transactions in current billing cycle month
+    today = date.today()
+    cycle_start = today.replace(day=1)
+    if today.month == 12:
+        cycle_end = date(today.year + 1, 1, 1)
+    else:
+        cycle_end = date(today.year, today.month + 1, 1)
+
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.credit_card_id == card_id,
+            Transaction.date >= cycle_start,
+            Transaction.date < cycle_end,
+        )
+    )
+    for txn in result.scalars().all():
+        charges.append({
+            "source_type": "transaction",
+            "source_id": txn.id,
+            "name": txn.description or f"Transaction {str(txn.id)[:8]}",
+            "amount": txn.amount,
+            "currency": txn.currency,
             "billing_cycle": None,
         })
 

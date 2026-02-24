@@ -182,7 +182,7 @@ async def get_base_currency(
 ) -> str:
     """Return the user's configured base currency (default ILS)."""
     result = await db.execute(
-        select(Settings.currency).where(Settings.user_id == current_user.id)
+        select(Settings.currency).where(Settings.user_id == current_user.id).limit(1)
     )
     currency = result.scalar_one_or_none()
     return currency or "ILS"

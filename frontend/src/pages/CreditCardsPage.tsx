@@ -19,9 +19,12 @@ import {
   Link2,
   StickyNote,
   AlertTriangle,
+  Building2,
+  ChevronDown,
 } from 'lucide-react'
-import type { CreditCard, CreditCardCreate } from '@/types'
+import type { CreditCard, CreditCardCreate, BankAccount } from '@/types'
 import { creditCardsApi } from '@/api/credit-cards'
+import { bankAccountsApi } from '@/api/bank-accounts'
 import { cn } from '@/lib/utils'
 import { useCurrency } from '@/hooks/useCurrency'
 import { queryKeys } from '@/lib/queryKeys'
@@ -44,6 +47,7 @@ interface FormData {
   currency: string
   color: string
   notes: string
+  bank_account_id: string
 }
 
 const EMPTY_FORM: FormData = {
@@ -56,6 +60,7 @@ const EMPTY_FORM: FormData = {
   currency: 'ILS',
   color: '#4318FF',
   notes: '',
+  bank_account_id: '',
 }
 
 const CARD_COLORS = [
@@ -174,6 +179,13 @@ export default function CreditCardsPage() {
     queryFn: () => creditCardsApi.list(),
   })
 
+  // Bank accounts for linking
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: queryKeys.bankAccounts.list(),
+    queryFn: bankAccountsApi.list,
+    staleTime: 5 * 60 * 1000,
+  })
+
   // Detail modal queries
   const { data: chargesData } = useQuery({
     queryKey: queryKeys.creditCards.charges(detailTarget?.id ?? ''),
@@ -272,6 +284,7 @@ export default function CreditCardsPage() {
       currency: entry.currency,
       color: entry.color || '#4318FF',
       notes: entry.notes ?? '',
+      bank_account_id: entry.bank_account_id ?? '',
     })
     setFormErrors({})
     setModalOpen(true)
@@ -322,6 +335,7 @@ export default function CreditCardsPage() {
       currency: formData.currency || 'ILS',
       color: formData.color || '#4318FF',
       notes: formData.notes || undefined,
+      bank_account_id: formData.bank_account_id || undefined,
     }
 
     if (editingEntry) {
@@ -976,6 +990,48 @@ export default function CreditCardsPage() {
                   />
                 </div>
 
+                {/* Bank Account */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5" />
+                      {t('creditCards.bankAccount')}
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={formData.bank_account_id}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, bank_account_id: e.target.value }))
+                      }
+                      className={cn(
+                        'w-full appearance-none rounded-xl border px-4 py-3 pe-9 text-sm outline-none transition-all',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                      )}
+                      style={{
+                        backgroundColor: 'var(--bg-input)',
+                        borderColor: 'var(--border-primary)',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      <option value="">{t('creditCards.noBankAccount')}</option>
+                      {bankAccounts.map((account: BankAccount) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name} - {account.bank_name}
+                          {account.account_last_digits ? ` ****${account.account_last_digits}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      className="pointer-events-none absolute top-1/2 -translate-y-1/2 h-4 w-4 end-3"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    />
+                  </div>
+                </div>
+
                 {/* Color picker */}
                 <div>
                   <label
@@ -1256,10 +1312,45 @@ export default function CreditCardsPage() {
                     </div>
                   )}
 
+                  {/* Transactions */}
+                  {chargesData.transactions && chargesData.transactions.length > 0 && (
+                    <div>
+                      <h4
+                        className="mb-2 text-xs font-semibold uppercase tracking-wider"
+                        style={{ color: 'var(--text-tertiary)' }}
+                      >
+                        {t('creditCards.chargeTransactions')} ({chargesData.transactions.length})
+                      </h4>
+                      <div className="space-y-1.5">
+                        {chargesData.transactions.map((txn) => (
+                          <div
+                            key={txn.id}
+                            className="flex items-center justify-between rounded-lg px-3 py-2"
+                            style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                          >
+                            <span
+                              className="truncate text-sm font-medium"
+                              style={{ color: 'var(--text-primary)' }}
+                            >
+                              {txn.name}
+                            </span>
+                            <span
+                              className="fin-number text-sm font-bold ltr-nums"
+                              style={{ color: 'var(--color-expense)' }}
+                            >
+                              {formatAmount(txn.amount, txn.currency)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Empty charges state */}
                   {chargesData.subscriptions.length === 0 &&
                    chargesData.installments.length === 0 &&
-                   chargesData.fixed.length === 0 && (
+                   chargesData.fixed.length === 0 &&
+                   (!chargesData.transactions || chargesData.transactions.length === 0) && (
                     <p
                       className="text-center text-sm"
                       style={{ color: 'var(--text-tertiary)' }}
@@ -1297,7 +1388,7 @@ export default function CreditCardsPage() {
                         className="fin-number text-lg font-bold ltr-nums"
                         style={{ color: 'var(--color-expense)' }}
                       >
-                        {formatAmount(nextBillingData.total_expected, detailTarget.currency)}
+                        {formatAmount(nextBillingData.total_charge, detailTarget.currency)}
                       </p>
                     </div>
                     <div className="text-end">
@@ -1311,7 +1402,7 @@ export default function CreditCardsPage() {
                         className="fin-number text-lg font-bold ltr-nums"
                         style={{ color: 'var(--color-success)' }}
                       >
-                        {formatAmount(nextBillingData.available_after_billing, detailTarget.currency)}
+                        {formatAmount(nextBillingData.remaining_after_charge, detailTarget.currency)}
                       </p>
                     </div>
                   </div>

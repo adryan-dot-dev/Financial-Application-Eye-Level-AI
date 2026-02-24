@@ -79,7 +79,7 @@ async def _get_current_balance(db: AsyncSession, ctx: DataContext) -> Decimal:
 async def _get_user_base_currency(db: AsyncSession, user_id: UUID) -> str:
     """Return the user's preferred currency from settings, defaulting to ILS."""
     result = await db.execute(
-        select(Settings.currency).where(Settings.user_id == user_id)
+        select(Settings.currency).where(Settings.user_id == user_id).limit(1)
     )
     currency = result.scalar_one_or_none()
     return currency if currency else "ILS"
@@ -122,9 +122,7 @@ async def _sum_transactions_range(
 def _pct_change(current: Decimal, previous: Decimal) -> Decimal:
     """Calculate percentage change.  Returns 0 when previous is 0."""
     if previous == ZERO:
-        if current == ZERO:
-            return ZERO
-        return Decimal("100")  # went from 0 to something -> 100 %
+        return ZERO
     return ((current - previous) / abs(previous) * 100).quantize(Decimal("0.01"))
 
 
@@ -248,7 +246,7 @@ async def get_dashboard_weekly(
 
     # ORANGE-10: Read week_start_day from user settings (0=Sunday, 1=Monday, ...)
     settings_result = await db.execute(
-        select(Settings).where(Settings.user_id == current_user.id)
+        select(Settings).where(Settings.user_id == current_user.id).limit(1)
     )
     user_settings = settings_result.scalar_one_or_none()
     week_start_day = user_settings.week_start_day if user_settings else 0

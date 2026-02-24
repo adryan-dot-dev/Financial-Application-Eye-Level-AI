@@ -15,9 +15,12 @@ import {
   Link2,
   StickyNote,
   AlertTriangle,
+  Wallet,
 } from 'lucide-react'
 import type { BankAccount, BankAccountCreate } from '@/types'
 import { bankAccountsApi } from '@/api/bank-accounts'
+import { balanceApi } from '@/api/balance'
+import type { CreateBalanceData } from '@/api/balance'
 import { cn } from '@/lib/utils'
 import { useCurrency } from '@/hooks/useCurrency'
 import { queryKeys } from '@/lib/queryKeys'
@@ -124,6 +127,9 @@ export default function BankAccountsPage() {
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM)
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [deleteTarget, setDeleteTarget] = useState<BankAccount | null>(null)
+  const [balanceTarget, setBalanceTarget] = useState<BankAccount | null>(null)
+  const [balanceAmount, setBalanceAmount] = useState('')
+  const [balanceDate, setBalanceDate] = useState(new Date().toISOString().split('T')[0])
 
   // ---- Queries ----
   const {
@@ -191,7 +197,58 @@ export default function BankAccountsPage() {
     },
   })
 
+  const balanceMutation = useMutation({
+    mutationFn: async (data: CreateBalanceData) => {
+      try {
+        return await balanceApi.create(data)
+      } catch (error: unknown) {
+        // If "resource already exists" (409 conflict), fall back to update
+        if (error && typeof error === 'object' && 'response' in error) {
+          const axiosError = error as { response?: { status?: number } }
+          if (axiosError.response?.status === 409) {
+            return await balanceApi.update(data)
+          }
+        }
+        throw error
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.balance.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.bankAccounts.all })
+      closeBalanceModal()
+      toast.success(t('bankAccounts.balanceSaved'))
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.error'), getApiErrorMessage(error))
+    },
+  })
+
   // ---- Modal helpers ----
+  const openBalanceModal = (account: BankAccount) => {
+    setBalanceTarget(account)
+    setBalanceAmount(account.current_balance || '')
+    setBalanceDate(new Date().toISOString().split('T')[0])
+  }
+
+  const closeBalanceModal = useCallback(() => {
+    setBalanceTarget(null)
+    setBalanceAmount('')
+    setBalanceDate(new Date().toISOString().split('T')[0])
+  }, [])
+
+  const handleBalanceSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!balanceTarget) return
+    const amt = parseFloat(balanceAmount)
+    if (isNaN(amt)) return
+
+    balanceMutation.mutate({
+      balance: amt,
+      effective_date: balanceDate,
+      bank_account_id: balanceTarget.id,
+    })
+  }
+
   const openCreateModal = () => {
     setEditingEntry(null)
     setFormData(EMPTY_FORM)
@@ -226,6 +283,7 @@ export default function BankAccountsPage() {
   // Modal accessibility
   const { panelRef: modalPanelRef, closing: modalClosing, requestClose: requestModalClose } = useModalA11y(modalOpen, closeModal)
   const { panelRef: deletePanelRef, closing: deleteClosing, requestClose: requestDeleteClose } = useModalA11y(!!deleteTarget, closeDeleteDialog)
+  const { panelRef: balancePanelRef, closing: balanceClosing, requestClose: requestBalanceClose } = useModalA11y(!!balanceTarget, closeBalanceModal)
 
   // ---- Form validation & submit ----
   const validateForm = (): boolean => {
@@ -548,6 +606,15 @@ export default function BankAccountsPage() {
                     className="flex items-center justify-end gap-1 border-t pt-3"
                     style={{ borderColor: 'var(--border-primary)' }}
                   >
+                    <button
+                      onClick={() => openBalanceModal(account)}
+                      className="btn-press action-btn rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
+                      style={{ color: 'var(--color-brand-500)' }}
+                      title={t('bankAccounts.updateBalance')}
+                      aria-label={t('bankAccounts.updateBalance')}
+                    >
+                      <Wallet className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       onClick={() => openEditModal(account)}
                       className="btn-press action-btn action-btn-edit rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-2"
@@ -973,6 +1040,158 @@ export default function BankAccountsPage() {
                   {t('common.delete')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================
+          Modal: Update Balance for Account
+          ================================================================== */}
+      {balanceTarget && (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${balanceClosing ? 'modal-closing' : ''}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ba-balance-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) requestBalanceClose()
+          }}
+        >
+          {/* Backdrop */}
+          <div className="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm" />
+
+          {/* Panel */}
+          <div
+            ref={balancePanelRef}
+            className="modal-panel relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border"
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-primary)',
+              boxShadow: 'var(--shadow-xl)',
+            }}
+          >
+            {/* Accent bar */}
+            <div
+              className="h-1"
+              style={{ backgroundColor: 'var(--color-brand-500)' }}
+            />
+
+            <div className="p-6">
+              {/* Header */}
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                    style={{
+                      backgroundColor: 'var(--bg-info)',
+                      color: 'var(--color-brand-500)',
+                    }}
+                  >
+                    <Wallet className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2
+                      id="ba-balance-title"
+                      className="text-base font-bold"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {t('bankAccounts.updateBalance')}
+                    </h2>
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      {balanceTarget.name}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={requestBalanceClose}
+                  className="rounded-lg p-2 transition-all hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  aria-label={t('common.cancel')}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleBalanceSubmit} className="space-y-4">
+                {/* Balance amount */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('bankAccounts.balanceAmount')} *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={balanceAmount}
+                    onChange={(e) => setBalanceAmount(e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-lg font-bold ltr-nums outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                    placeholder="0.00"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Effective date */}
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {t('balance.effectiveDate')} *
+                  </label>
+                  <input
+                    type="date"
+                    value={balanceDate}
+                    onChange={(e) => setBalanceDate(e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+
+                {/* Actions */}
+                <div
+                  className="flex items-center justify-end gap-3 border-t pt-4"
+                  style={{ borderColor: 'var(--border-primary)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={requestBalanceClose}
+                    className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:bg-[var(--bg-hover)]"
+                    style={{
+                      borderColor: 'var(--border-primary)',
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'var(--bg-input)',
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={balanceMutation.isPending || !balanceAmount}
+                    className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {balanceMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t('common.save')}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

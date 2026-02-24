@@ -34,6 +34,9 @@ class CreditCard(Base):
     currency: Mapped[str] = mapped_column(String(3), default="ILS")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     color: Mapped[Optional[str]] = mapped_column(String(7), default="#6366F1")
+    bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
@@ -50,3 +53,4 @@ class CreditCard(Base):
 
     # Relationships
     user = relationship("User", back_populates="credit_cards")
+    bank_account = relationship("BankAccount")

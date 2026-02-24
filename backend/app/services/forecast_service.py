@@ -47,7 +47,7 @@ async def get_current_balance(
         select(BankBalance).where(
             ctx.ownership_filter(BankBalance),
             BankBalance.is_current == True,
-        )
+        ).order_by(BankBalance.created_at.desc()).limit(1)
     )
     balance = result.scalar_one_or_none()
     return balance.balance if balance else Decimal("0")
@@ -160,7 +160,7 @@ def _subscription_hits_month(sub_next_renewal: date, billing_cycle: str, month_s
 async def _get_user_base_currency(db: AsyncSession, user_id: UUID) -> str:
     """Return the user's preferred currency from settings, defaulting to ILS."""
     result = await db.execute(
-        select(Settings.currency).where(Settings.user_id == user_id)
+        select(Settings.currency).where(Settings.user_id == user_id).limit(1)
     )
     currency = result.scalar_one_or_none()
     return currency if currency else "ILS"

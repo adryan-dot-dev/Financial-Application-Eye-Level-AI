@@ -55,6 +55,9 @@ export interface Category {
   display_order: number
 }
 
+// Payment method type
+export type PaymentMethod = 'cash' | 'credit_card' | 'bank_transfer'
+
 // Transaction types
 export interface Transaction {
   id: string
@@ -68,6 +71,9 @@ export interface Transaction {
   is_recurring: boolean
   notes: string | null
   tags: string[] | null
+  payment_method?: PaymentMethod
+  credit_card_id?: string | null
+  bank_account_id?: string | null
 }
 
 export interface TransactionListResponse {
@@ -91,6 +97,9 @@ export interface FixedEntry {
   end_date: string | null
   is_active: boolean
   description: string | null
+  payment_method?: PaymentMethod
+  credit_card_id?: string | null
+  bank_account_id?: string | null
 }
 
 // Installment
@@ -107,6 +116,9 @@ export interface Installment {
   day_of_month: number
   payments_completed: number
   description: string | null
+  payment_method?: PaymentMethod
+  credit_card_id?: string | null
+  bank_account_id?: string | null
   // Computed fields - auto-synced with current date
   status: 'pending' | 'active' | 'completed' | 'overdue'
   expected_payments_by_now: number
@@ -277,6 +289,8 @@ export interface CreditCard {
   linked_installments_count: number
   linked_subscriptions_count: number
   linked_fixed_count: number
+  bank_account_id?: string | null
+  linked_transactions_count?: number
 }
 
 export interface CreditCardCreate {
@@ -289,6 +303,7 @@ export interface CreditCardCreate {
   currency?: string
   color?: string
   notes?: string
+  bank_account_id?: string
 }
 
 export type CreditCardUpdate = Partial<CreditCardCreate>
@@ -323,16 +338,26 @@ export interface CreditCardCharges {
     amount: string
     currency: string
   }>
+  transactions: Array<{
+    id: string
+    name: string
+    amount: string
+    currency: string
+  }>
 }
 
 export interface CreditCardNextBilling {
   billing_date: string
-  total_expected: string
-  available_after_billing: string
-  items: Array<{
+  total_charge: string
+  remaining_after_charge: string
+  card?: unknown
+  charges?: Array<{
+    source_type: string
+    source_id: string
     name: string
     amount: string
-    source_type: 'subscription' | 'installment' | 'fixed'
+    currency: string
+    billing_cycle: string | null
   }>
 }
 
@@ -369,6 +394,7 @@ export interface ObligoSummary {
   total_credit_utilization: string
   total_loan_outstanding: string
   total_overdraft_limits: string
+  total_overdraft_used: string
   total_obligo: string
   total_available_credit: string
   obligo_utilization_pct: number

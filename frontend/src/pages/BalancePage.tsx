@@ -27,9 +27,12 @@ import {
   History,
   CalendarDays,
   StickyNote,
+  Building2,
+  ChevronDown,
 } from 'lucide-react'
-import type { BankBalance } from '@/types'
+import type { BankBalance, BankAccount } from '@/types'
 import { balanceApi } from '@/api/balance'
+import { bankAccountsApi } from '@/api/bank-accounts'
 import type { CreateBalanceData } from '@/api/balance'
 import DatePicker from '@/components/ui/DatePicker'
 import { cn, formatDate } from '@/lib/utils'
@@ -46,6 +49,7 @@ interface BalanceFormData {
   balance: string
   effective_date: string
   notes: string
+  bank_account_id: string
 }
 
 interface ChartDataPoint {
@@ -64,6 +68,7 @@ const EMPTY_FORM: BalanceFormData = {
   balance: '',
   effective_date: today(),
   notes: '',
+  bank_account_id: '',
 }
 
 function buildChartData(history: BankBalance[], locale: string = 'en-US'): ChartDataPoint[] {
@@ -435,6 +440,12 @@ export default function BalancePage() {
     queryFn: () => balanceApi.history(),
   })
 
+  const { data: bankAccounts = [] } = useQuery<BankAccount[]>({
+    queryKey: ['bank-accounts'],
+    queryFn: bankAccountsApi.list,
+    staleTime: 5 * 60 * 1000,
+  })
+
   const currentBalance = currentQuery.data
   const history = historyQuery.data ?? []
   const hasBalance = !!currentBalance && !currentQuery.isError
@@ -476,6 +487,7 @@ export default function BalancePage() {
         balance: currentBalance.balance,
         effective_date: today(),
         notes: '',
+        bank_account_id: currentBalance?.bank_account_id ?? '',
       })
     } else {
       setFormData(EMPTY_FORM)
@@ -515,6 +527,7 @@ export default function BalancePage() {
       balance: parseFloat(formData.balance),
       effective_date: formData.effective_date,
       notes: formData.notes || undefined,
+      bank_account_id: formData.bank_account_id || undefined,
     }
 
     // Always use POST (create) to ensure every change is logged in history
@@ -1028,6 +1041,27 @@ export default function BalancePage() {
                     }}
                     placeholder={t('transactions.notes')}
                   />
+                </div>
+
+                {/* Bank Account */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    <Building2 className="inline-block h-3.5 w-3.5 me-1" style={{ color: 'var(--border-focus)' }} />
+                    {t('balance.bankAccount')}
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={formData.bank_account_id}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, bank_account_id: e.target.value }))}
+                      className="input-base w-full appearance-none pe-8"
+                    >
+                      <option value="">{t('common.none')}</option>
+                      {bankAccounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>{acc.name} - {acc.bank_name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute end-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
+                  </div>
                 </div>
 
                 {/* Actions */}

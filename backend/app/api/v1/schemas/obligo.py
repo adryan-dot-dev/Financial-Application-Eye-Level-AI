@@ -11,6 +11,7 @@ class ObligoSummaryResponse(BaseModel):
     total_credit_utilization: Decimal
     total_loan_outstanding: Decimal
     total_overdraft_limits: Decimal
+    total_overdraft_used: Decimal = Decimal("0")
     total_obligo: Decimal
     total_available_credit: Decimal
     obligo_utilization_pct: float

@@ -126,6 +126,7 @@ async def test_obligo_summary_fields(client: AsyncClient, auth_headers: dict):
         "total_credit_utilization",
         "total_loan_outstanding",
         "total_overdraft_limits",
+        "total_overdraft_used",
         "total_obligo",
         "total_available_credit",
         "obligo_utilization_pct",

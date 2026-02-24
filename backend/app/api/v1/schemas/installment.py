@@ -36,7 +36,9 @@ class InstallmentCreate(BaseModel):
     day_of_month: int = Field(..., ge=1, le=31)
     description: Optional[str] = Field(None, max_length=1000)
     first_payment_made: bool = False
+    payment_method: str = Field(default="cash", pattern="^(cash|credit_card|bank_transfer)$")
     credit_card_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
 
     @field_validator('total_amount')
     @classmethod
@@ -67,7 +69,9 @@ class InstallmentUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     category_id: Optional[UUID] = None
     description: Optional[str] = Field(None, max_length=1000)
+    payment_method: Optional[str] = Field(None, pattern="^(cash|credit_card|bank_transfer)$")
     credit_card_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
 
 
 class InstallmentResponse(BaseModel):
@@ -86,7 +90,9 @@ class InstallmentResponse(BaseModel):
     day_of_month: int
     payments_completed: int
     description: Optional[str] = None
+    payment_method: str = "cash"
     credit_card_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

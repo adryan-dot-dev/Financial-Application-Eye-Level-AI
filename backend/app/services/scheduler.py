@@ -13,6 +13,9 @@ from app.db.session import async_session
 from app.services.automation_service import process_recurring_charges
 from app.services.alert_service import generate_alerts
 from app.services.backup_service import create_backup, cleanup_old_backups
+from app.services.billing_service import process_credit_card_billing
+from app.services.loan_payment_service import process_daily_loan_payments
+from app.services.installment_payment_service import process_daily_installment_payments
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +168,53 @@ async def _generate_all_alerts() -> None:
     )
 
 
+async def _daily_credit_card_billing() -> None:
+    """Process credit card billing for all cards where today == billing_day."""
+    logger.info("Starting scheduled credit card billing")
+    try:
+        async with async_session() as db:
+            summary = await process_credit_card_billing(db)
+            logger.info(
+                "Credit card billing complete: %d processed, %d skipped",
+                summary.get("cards_processed", 0),
+                summary.get("cards_skipped", 0),
+            )
+    except Exception:
+        logger.exception("Credit card billing failed")
+
+
+async def _daily_loan_payments() -> None:
+    """Auto-execute loan payments for all loans where today == day_of_month."""
+    logger.info("Starting scheduled daily loan payments")
+    try:
+        async with async_session() as db:
+            summary = await process_daily_loan_payments(db)
+            logger.info(
+                "Daily loan payments: %d processed, %d skipped, %d failed",
+                summary.get("loans_processed", 0),
+                summary.get("loans_skipped", 0),
+                summary.get("loans_failed", 0),
+            )
+    except Exception:
+        logger.exception("Daily loan payments failed")
+
+
+async def _daily_installment_payments() -> None:
+    """Auto-execute installment payments for all installments where today == day_of_month."""
+    logger.info("Starting scheduled daily installment payments")
+    try:
+        async with async_session() as db:
+            summary = await process_daily_installment_payments(db)
+            logger.info(
+                "Daily installment payments: %d processed, %d skipped, %d failed",
+                summary.get("installments_processed", 0),
+                summary.get("installments_skipped", 0),
+                summary.get("installments_failed", 0),
+            )
+    except Exception:
+        logger.exception("Daily installment payments failed")
+
+
 async def _daily_backup_cleanup() -> None:
     """Clean up old backup files past retention period."""
     logger.info("Starting backup cleanup")
@@ -250,6 +300,36 @@ def start_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,
     )
 
+    # Daily credit card billing at 00:15 (after alerts)
+    _scheduler.add_job(
+        _daily_credit_card_billing,
+        trigger=CronTrigger(hour=0, minute=15, timezone="Asia/Jerusalem"),
+        id="daily_credit_card_billing",
+        name="Daily Credit Card Billing",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # Daily loan auto-payments at 00:30 (after credit card billing)
+    _scheduler.add_job(
+        _daily_loan_payments,
+        trigger=CronTrigger(hour=0, minute=30, timezone="Asia/Jerusalem"),
+        id="daily_loan_payments",
+        name="Daily Loan Auto-Payments",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # Daily installment auto-payments at 00:30 (after credit card billing)
+    _scheduler.add_job(
+        _daily_installment_payments,
+        trigger=CronTrigger(hour=0, minute=30, timezone="Asia/Jerusalem"),
+        id="daily_installment_payments",
+        name="Daily Installment Auto-Payments",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     # Daily backup at 02:00 Israel time
     _scheduler.add_job(
         _daily_backup,
@@ -273,6 +353,7 @@ def start_scheduler() -> AsyncIOScheduler:
     _scheduler.start()
     logger.info(
         "Scheduler started - recurring charges at 00:05, alerts at 00:10, "
+        "billing at 00:15, loan/installment payments at 00:30, "
         "backup at 02:00, cleanup at 03:00 (Asia/Jerusalem)"
     )
 

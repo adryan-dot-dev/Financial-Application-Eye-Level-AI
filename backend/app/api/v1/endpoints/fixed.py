@@ -12,6 +12,7 @@ from app.api.deps import get_current_user, get_data_context, get_base_currency, 
 from app.api.v1.schemas.fixed import FixedCreate, FixedResponse, FixedUpdate
 from app.core.exceptions import NotFoundException
 from app.db.models import Category, FixedIncomeExpense, User
+from app.db.models.bank_account import BankAccount
 from app.db.models.credit_card import CreditCard
 from app.db.session import get_db
 from app.services.audit_service import log_action
@@ -68,12 +69,31 @@ async def create_fixed(
                 detail=f"Category type '{cat.type}' does not match fixed type '{data.type}'",
             )
 
+    # Payment method consistency validation
+    if data.payment_method == "credit_card" and not data.credit_card_id:
+        raise HTTPException(
+            status_code=422,
+            detail="credit_card_id is required when payment_method is 'credit_card'"
+        )
+    if data.payment_method == "bank_transfer" and not data.bank_account_id:
+        raise HTTPException(
+            status_code=422,
+            detail="bank_account_id is required when payment_method is 'bank_transfer'"
+        )
+
     if data.credit_card_id:
         cc_result = await db.execute(
             select(CreditCard).where(CreditCard.id == data.credit_card_id, ctx.ownership_filter(CreditCard))
         )
         if not cc_result.scalar_one_or_none():
             raise HTTPException(status_code=422, detail="Credit card not found or does not belong to you")
+
+    if data.bank_account_id:
+        ba_result = await db.execute(
+            select(BankAccount).where(BankAccount.id == data.bank_account_id, ctx.ownership_filter(BankAccount))
+        )
+        if not ba_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Bank account not found or does not belong to you")
 
     if data.end_date and data.end_date < data.start_date:
         raise HTTPException(status_code=422, detail="end_date must be >= start_date")
@@ -152,12 +172,34 @@ async def update_fixed(
                 detail=f"Category type '{cat.type}' does not match fixed type '{effective_type}'",
             )
 
+    # Payment method consistency validation on update
+    effective_payment_method = update_data.get("payment_method", fixed.payment_method)
+    effective_cc_id = update_data.get("credit_card_id", fixed.credit_card_id)
+    effective_ba_id = update_data.get("bank_account_id", fixed.bank_account_id)
+    if effective_payment_method == "credit_card" and not effective_cc_id:
+        raise HTTPException(
+            status_code=422,
+            detail="credit_card_id is required when payment_method is 'credit_card'"
+        )
+    if effective_payment_method == "bank_transfer" and not effective_ba_id:
+        raise HTTPException(
+            status_code=422,
+            detail="bank_account_id is required when payment_method is 'bank_transfer'"
+        )
+
     if update_data.get("credit_card_id"):
         cc_result = await db.execute(
             select(CreditCard).where(CreditCard.id == update_data["credit_card_id"], ctx.ownership_filter(CreditCard))
         )
         if not cc_result.scalar_one_or_none():
             raise HTTPException(status_code=422, detail="Credit card not found or does not belong to you")
+
+    if update_data.get("bank_account_id"):
+        ba_result = await db.execute(
+            select(BankAccount).where(BankAccount.id == update_data["bank_account_id"], ctx.ownership_filter(BankAccount))
+        )
+        if not ba_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Bank account not found or does not belong to you")
 
     # Multi-currency: re-convert if amount or currency changed
     if "amount" in update_data or "currency" in update_data:

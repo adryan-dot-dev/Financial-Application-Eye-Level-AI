@@ -44,8 +44,14 @@ class Installment(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     day_of_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-31
     payments_completed: Mapped[int] = mapped_column(Integer, default=0)
+    payment_method: Mapped[str] = mapped_column(
+        String(20), default="cash"
+    )  # 'cash', 'credit_card', 'bank_transfer'
     credit_card_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("credit_cards.id", ondelete="SET NULL"), nullable=True
+    )
+    bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True
     )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -64,3 +70,4 @@ class Installment(Base):
     user = relationship("User", back_populates="installments")
     category = relationship("Category")
     credit_card = relationship("CreditCard")
+    bank_account = relationship("BankAccount")

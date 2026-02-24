@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import DataContext
 from app.db.models.bank_account import BankAccount
+from app.db.models.bank_balance import BankBalance
 from app.db.models.credit_card import CreditCard
 from app.db.models.loan import Loan
 from app.services.credit_card_service import compute_card_utilization
@@ -50,7 +51,21 @@ async def compute_obligo_summary(
     )
     total_overdraft = Decimal(str(result.scalar()))
 
-    total_obligo = total_loan_outstanding + total_card_util
+    # Bank overdraft actual usage — check current balances for negative values
+    result = await db.execute(
+        select(BankBalance.balance, BankBalance.bank_account_id).where(
+            ctx.ownership_filter(BankBalance),
+            BankBalance.is_current == True,
+        )
+    )
+    balance_rows = result.all()
+    total_overdraft_used = Decimal("0")
+    for row in balance_rows:
+        balance = Decimal(str(row.balance))
+        if balance < 0:
+            total_overdraft_used += abs(balance)
+
+    total_obligo = total_loan_outstanding + total_card_util + total_overdraft_used
     total_limits = total_card_limits + total_overdraft
     pct = float((total_obligo / total_limits) * 100) if total_limits > 0 else 0.0
     available = total_limits - total_obligo
@@ -60,6 +75,7 @@ async def compute_obligo_summary(
         "total_credit_utilization": total_card_util,
         "total_loan_outstanding": total_loan_outstanding,
         "total_overdraft_limits": total_overdraft,
+        "total_overdraft_used": total_overdraft_used,
         "total_obligo": total_obligo,
         "total_available_credit": available,
         "obligo_utilization_pct": round(pct, 2),
@@ -107,21 +123,38 @@ async def compute_obligo_details(
             "available": Decimal(str(loan.original_amount)) - Decimal(str(loan.remaining_balance)),
         })
 
-    # Bank accounts with overdraft
+    # Bank accounts with overdraft — include actual usage from current balances
     result = await db.execute(
         select(BankAccount).where(
             ctx.ownership_filter(BankAccount),
             BankAccount.overdraft_limit > 0,
         )
     )
-    for acct in result.scalars().all():
+    overdraft_accounts = result.scalars().all()
+
+    # Fetch current balances for all bank accounts in one query
+    acct_ids = [acct.id for acct in overdraft_accounts]
+    current_balances: dict = {}
+    if acct_ids:
+        bal_result = await db.execute(
+            select(BankBalance.bank_account_id, BankBalance.balance).where(
+                BankBalance.bank_account_id.in_(acct_ids),
+                BankBalance.is_current == True,
+            )
+        )
+        for row in bal_result.all():
+            current_balances[row.bank_account_id] = Decimal(str(row.balance))
+
+    for acct in overdraft_accounts:
         limit = Decimal(str(acct.overdraft_limit))
+        balance = current_balances.get(acct.id, Decimal("0"))
+        overdraft_used = abs(balance) if balance < 0 else Decimal("0")
         items.append({
             "type": "overdraft",
             "name": acct.name,
             "limit": limit,
-            "utilized": Decimal("0"),  # We don't track overdraft usage directly
-            "available": limit,
+            "utilized": overdraft_used,
+            "available": limit - overdraft_used,
         })
 
     return items

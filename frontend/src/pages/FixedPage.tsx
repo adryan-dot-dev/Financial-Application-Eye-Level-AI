@@ -15,7 +15,7 @@ import {
   Play,
   Repeat,
 } from 'lucide-react'
-import type { FixedEntry, Category } from '@/types'
+import type { FixedEntry, Category, PaymentMethod } from '@/types'
 import { fixedApi } from '@/api/fixed'
 import type { CreateFixedData } from '@/api/fixed'
 import { categoriesApi } from '@/api/categories'
@@ -27,6 +27,7 @@ import { getApiErrorMessage } from '@/api/client'
 import { useCurrency } from '@/hooks/useCurrency'
 import CurrencySelector from '@/components/CurrencySelector'
 import DatePicker from '@/components/ui/DatePicker'
+import PaymentMethodSelector from '@/components/ui/PaymentMethodSelector'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,9 @@ interface FormData {
   description: string
   category_id: string
   currency: string
+  payment_method: PaymentMethod
+  credit_card_id: string
+  bank_account_id: string
 }
 
 const today = () => new Date().toISOString().split('T')[0]
@@ -58,6 +62,9 @@ const EMPTY_FORM: FormData = {
   description: '',
   category_id: '',
   currency: 'ILS',
+  payment_method: 'cash',
+  credit_card_id: '',
+  bank_account_id: '',
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +250,9 @@ export default function FixedPage() {
       description: entry.description ?? '',
       category_id: entry.category_id ?? '',
       currency: entry.currency ?? defaultCurrency,
+      payment_method: entry.payment_method ?? 'cash',
+      credit_card_id: entry.credit_card_id ?? '',
+      bank_account_id: entry.bank_account_id ?? '',
     })
     setFormErrors({})
     setModalOpen(true)
@@ -288,6 +298,9 @@ export default function FixedPage() {
       description: formData.description || undefined,
       category_id: formData.category_id || undefined,
       currency: formData.currency,
+      payment_method: formData.payment_method,
+      credit_card_id: formData.payment_method === 'credit_card' && formData.credit_card_id ? formData.credit_card_id : undefined,
+      bank_account_id: formData.payment_method === 'bank_transfer' && formData.bank_account_id ? formData.bank_account_id : undefined,
     }
 
     if (editingEntry) {
@@ -935,6 +948,17 @@ export default function FixedPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* Payment Method */}
+                <PaymentMethodSelector
+                  paymentMethod={formData.payment_method}
+                  onPaymentMethodChange={(method) => setFormData((prev) => ({ ...prev, payment_method: method }))}
+                  creditCardId={formData.credit_card_id || null}
+                  onCreditCardChange={(id) => setFormData((prev) => ({ ...prev, credit_card_id: id ?? '' }))}
+                  bankAccountId={formData.bank_account_id || null}
+                  onBankAccountChange={(id) => setFormData((prev) => ({ ...prev, bank_account_id: id ?? '' }))}
+                  showForType={formData.type}
+                />
 
                 {/* Currency */}
                 <div>

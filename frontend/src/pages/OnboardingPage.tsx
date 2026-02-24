@@ -28,6 +28,11 @@ import {
   Phone,
   Mail,
   UserCircle,
+  Landmark,
+  CreditCard,
+  HandCoins,
+  RefreshCw,
+  Trash2,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { settingsApi } from '@/api/settings'
@@ -35,14 +40,20 @@ import { balanceApi } from '@/api/balance'
 import { categoriesApi } from '@/api/categories'
 import { fixedApi } from '@/api/fixed'
 import { authApi } from '@/api/auth'
+import { bankAccountsApi } from '@/api/bank-accounts'
+import { creditCardsApi } from '@/api/credit-cards'
+import { loansApi } from '@/api/loans'
+import { subscriptionsApi } from '@/api/subscriptions'
 import type { Category } from '@/types'
 import type { CreateFixedData } from '@/api/fixed'
+import type { CreateLoanData } from '@/api/loans'
+import type { CreateSubscriptionData } from '@/api/subscriptions'
 import DatePicker from '@/components/ui/DatePicker'
 import { cn } from '@/lib/utils'
 
 // ===== CONSTANTS =====
 const STORAGE_KEY = 'onboarding_progress'
-const TOTAL_STEPS = 7
+const TOTAL_STEPS = 11
 
 // ===== INTERFACES =====
 interface FixedItem {
@@ -53,6 +64,43 @@ interface FixedItem {
   dayOfMonth: number
   enabled: boolean
   categoryId?: string
+}
+
+interface BankAccountDraft {
+  name: string
+  bank_name: string
+  account_last_digits: string
+  overdraft_limit: string
+  is_primary: boolean
+}
+
+interface CreditCardDraft {
+  name: string
+  last_four_digits: string
+  card_network: 'visa' | 'mastercard' | 'amex' | 'isracard' | 'diners'
+  issuer: string
+  credit_limit: string
+  billing_day: string
+  bank_account_id: string
+}
+
+interface LoanDraft {
+  name: string
+  original_amount: string
+  monthly_payment: string
+  interest_rate: string
+  total_payments: string
+  payments_made: string
+  start_date: string
+  bank_account_id: string
+}
+
+interface SubscriptionDraft {
+  name: string
+  amount: string
+  billing_cycle: 'monthly' | 'quarterly' | 'semi_annual' | 'annual'
+  next_billing_date: string
+  credit_card_id: string
 }
 
 interface OnboardingState {
@@ -66,9 +114,31 @@ interface OnboardingState {
   archivedCategories: string[]
   fixedItems: FixedItem[]
   fixedItemsCreated: number
+  bankAccounts: BankAccountDraft[]
+  savedBankAccounts: Array<{ id: string; name: string }>
+  creditCards: CreditCardDraft[]
+  savedCreditCards: Array<{ id: string; name: string }>
+  loanDrafts: LoanDraft[]
+  subscriptionDrafts: SubscriptionDraft[]
 }
 
 // ===== STATE HELPERS =====
+function getDefaultBankAccount(): BankAccountDraft {
+  return { name: '', bank_name: '', account_last_digits: '', overdraft_limit: '0', is_primary: false }
+}
+
+function getDefaultCreditCard(): CreditCardDraft {
+  return { name: '', last_four_digits: '', card_network: 'visa', issuer: '', credit_limit: '', billing_day: '10', bank_account_id: '' }
+}
+
+function getDefaultLoan(): LoanDraft {
+  return { name: '', original_amount: '', monthly_payment: '', interest_rate: '', total_payments: '', payments_made: '0', start_date: new Date().toISOString().split('T')[0], bank_account_id: '' }
+}
+
+function getDefaultSubscription(): SubscriptionDraft {
+  return { name: '', amount: '', billing_cycle: 'monthly', next_billing_date: new Date().toISOString().split('T')[0], credit_card_id: '' }
+}
+
 function getDefaultState(): OnboardingState {
   const today = new Date().toISOString().split('T')[0]
   return {
@@ -88,6 +158,12 @@ function getDefaultState(): OnboardingState {
       { key: 'insurance', nameKey: 'fixedInsurance', type: 'expense', amount: '', dayOfMonth: 1, enabled: false },
     ],
     fixedItemsCreated: 0,
+    bankAccounts: [getDefaultBankAccount()],
+    savedBankAccounts: [],
+    creditCards: [getDefaultCreditCard()],
+    savedCreditCards: [],
+    loanDrafts: [getDefaultLoan()],
+    subscriptionDrafts: [getDefaultSubscription()],
   }
 }
 
@@ -199,7 +275,7 @@ export default function OnboardingPage() {
 
   // Generate confetti on final step
   useEffect(() => {
-    if (currentStep === 6) {
+    if (currentStep === 10) {
       const colors = ['#4318FF', '#05CD99', '#EE5D50']
       const pieces = Array.from({ length: 50 }, (_, i) => ({
         id: i,
@@ -432,7 +508,11 @@ export default function OnboardingPage() {
     <Coins key="s3" className="h-4 w-4" />,
     <Tags key="s4" className="h-4 w-4" />,
     <CalendarClock key="s5" className="h-4 w-4" />,
-    <Check key="s6" className="h-4 w-4" />,
+    <Landmark key="s6" className="h-4 w-4" />,
+    <CreditCard key="s7" className="h-4 w-4" />,
+    <HandCoins key="s8" className="h-4 w-4" />,
+    <RefreshCw key="s9" className="h-4 w-4" />,
+    <Check key="s10" className="h-4 w-4" />,
   ]
 
   // ====================================================================
@@ -1388,7 +1468,1043 @@ export default function OnboardingPage() {
   )
 
   // ====================================================================
-  //  STEP 6 -- DONE
+  //  STEP 6 -- BANK ACCOUNTS
+  // ====================================================================
+  const updateBankAccount = (index: number, field: keyof BankAccountDraft, value: string | boolean) => {
+    updateState({
+      bankAccounts: state.bankAccounts.map((acc, i) =>
+        i === index ? { ...acc, [field]: value } : acc
+      ),
+    })
+  }
+
+  const addBankAccount = () => {
+    updateState({ bankAccounts: [...state.bankAccounts, getDefaultBankAccount()] })
+  }
+
+  const removeBankAccount = (index: number) => {
+    if (state.bankAccounts.length <= 1) return
+    updateState({ bankAccounts: state.bankAccounts.filter((_, i) => i !== index) })
+  }
+
+  const handleSaveBankAccounts = async () => {
+    const validAccounts = state.bankAccounts.filter((a) => a.name.trim() && a.bank_name.trim())
+    if (validAccounts.length === 0) {
+      goNext()
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+    const saved: Array<{ id: string; name: string }> = [...state.savedBankAccounts]
+    try {
+      for (const acc of validAccounts) {
+        const result = await bankAccountsApi.create({
+          name: acc.name.trim(),
+          bank_name: acc.bank_name.trim(),
+          account_last_digits: acc.account_last_digits || undefined,
+          overdraft_limit: Number(acc.overdraft_limit) || 0,
+          is_primary: acc.is_primary,
+        })
+        saved.push({ id: result.id, name: result.name })
+      }
+      updateState({ savedBankAccounts: saved })
+      goNext()
+    } catch {
+      setError(t('common.error'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const renderBankAccounts = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(67, 24, 255, 0.08)',
+            border: '1px solid rgba(67, 24, 255, 0.15)',
+          }}
+        >
+          <Landmark className="h-7 w-7" style={{ color: 'var(--color-brand-500)' }} />
+        </div>
+        <h2
+          className="mb-2 text-2xl font-bold tracking-tight"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {t('onboarding.bankAccountsTitle')}
+        </h2>
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
+          {t('onboarding.bankAccountsSubtitle')}
+        </p>
+      </div>
+
+      {/* Accounts list */}
+      <div className="mx-auto max-w-lg space-y-4">
+        {state.bankAccounts.map((acc, idx) => (
+          <div
+            key={idx}
+            className="rounded-2xl border p-5 transition-all duration-300 animate-fade-in-up"
+            style={{
+              animationDelay: `${idx * 50}ms`,
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-primary)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <span
+                className="text-sm font-semibold"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                #{idx + 1}
+              </span>
+              {state.bankAccounts.length > 1 && (
+                <button
+                  onClick={() => removeBankAccount(idx)}
+                  className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {/* Account Name */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('bankAccounts.accountName')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={acc.name}
+                  onChange={(e) => updateBankAccount(idx, 'name', e.target.value)}
+                  className={cn(
+                    'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                  )}
+                  style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  placeholder={t('bankAccounts.accountNamePlaceholder')}
+                />
+              </div>
+
+              {/* Bank Name */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('bankAccounts.bankName')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={acc.bank_name}
+                  onChange={(e) => updateBankAccount(idx, 'bank_name', e.target.value)}
+                  className={cn(
+                    'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                  )}
+                  style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  placeholder={t('bankAccounts.bankNamePlaceholder')}
+                />
+              </div>
+
+              {/* Last Digits + Overdraft row */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('bankAccounts.accountLastDigits')}
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={acc.account_last_digits}
+                    onChange={(e) => updateBankAccount(idx, 'account_last_digits', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm text-center outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                    placeholder="1234"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('bankAccounts.overdraftLimit')}
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={acc.overdraft_limit}
+                    onChange={(e) => updateBankAccount(idx, 'overdraft_limit', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+
+              {/* Primary checkbox */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => updateBankAccount(idx, 'is_primary', !acc.is_primary)}
+                  className="shrink-0 transition-transform duration-200 hover:scale-110 active:scale-95"
+                >
+                  {acc.is_primary ? (
+                    <div
+                      className="flex h-6 w-6 items-center justify-center rounded-lg shadow-sm"
+                      style={{ backgroundColor: 'var(--color-brand-500)' }}
+                    >
+                      <Check className="h-3.5 w-3.5 text-white" />
+                    </div>
+                  ) : (
+                    <div
+                      className="h-6 w-6 rounded-lg border-2 transition-colors duration-200 hover:border-[var(--border-focus)]"
+                      style={{ borderColor: 'var(--border-primary)' }}
+                    />
+                  )}
+                </button>
+                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  {t('bankAccounts.primary')}
+                </span>
+              </label>
+            </div>
+          </div>
+        ))}
+
+        {/* Add another */}
+        <button
+          onClick={addBankAccount}
+          className={cn(
+            'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium',
+            'transition-all duration-200 hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]'
+          )}
+          style={{ borderColor: 'var(--border-primary)', color: 'var(--text-tertiary)' }}
+        >
+          <Plus className="h-4 w-4" />
+          {t('onboarding.addAnother')}
+        </button>
+      </div>
+
+      {/* Skip link */}
+      <div className="text-center">
+        <button
+          onClick={goNext}
+          className="text-sm font-medium transition-colors hover:underline underline-offset-4"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          {t('onboarding.skipStep')}
+        </button>
+      </div>
+    </div>
+  )
+
+  // ====================================================================
+  //  STEP 7 -- CREDIT CARDS
+  // ====================================================================
+  const updateCreditCard = (index: number, field: keyof CreditCardDraft, value: string) => {
+    updateState({
+      creditCards: state.creditCards.map((card, i) =>
+        i === index ? { ...card, [field]: value } : card
+      ),
+    })
+  }
+
+  const addCreditCard = () => {
+    updateState({ creditCards: [...state.creditCards, getDefaultCreditCard()] })
+  }
+
+  const removeCreditCard = (index: number) => {
+    if (state.creditCards.length <= 1) return
+    updateState({ creditCards: state.creditCards.filter((_, i) => i !== index) })
+  }
+
+  const handleSaveCreditCards = async () => {
+    const validCards = state.creditCards.filter((c) => c.name.trim() && c.last_four_digits.length === 4 && c.issuer.trim() && c.credit_limit)
+    if (validCards.length === 0) {
+      goNext()
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+    const saved: Array<{ id: string; name: string }> = [...state.savedCreditCards]
+    try {
+      for (const card of validCards) {
+        const result = await creditCardsApi.create({
+          name: card.name.trim(),
+          last_four_digits: card.last_four_digits,
+          card_network: card.card_network,
+          issuer: card.issuer.trim(),
+          credit_limit: Number(card.credit_limit),
+          billing_day: Number(card.billing_day) || 10,
+        })
+        saved.push({ id: result.id, name: result.name })
+      }
+      updateState({ savedCreditCards: saved })
+      goNext()
+    } catch {
+      setError(t('common.error'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const CARD_NETWORKS = [
+    { value: 'visa', label: 'Visa' },
+    { value: 'mastercard', label: 'Mastercard' },
+    { value: 'amex', label: 'American Express' },
+    { value: 'isracard', label: 'Isracard' },
+    { value: 'diners', label: 'Diners' },
+  ] as const
+
+  const renderCreditCards = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(217, 70, 239, 0.08)',
+            border: '1px solid rgba(217, 70, 239, 0.15)',
+          }}
+        >
+          <CreditCard className="h-7 w-7" style={{ color: 'var(--color-accent-magenta)' }} />
+        </div>
+        <h2
+          className="mb-2 text-2xl font-bold tracking-tight"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {t('onboarding.creditCardsTitle')}
+        </h2>
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
+          {t('onboarding.creditCardsSubtitle')}
+        </p>
+      </div>
+
+      {/* Cards list */}
+      <div className="mx-auto max-w-lg space-y-4">
+        {state.creditCards.map((card, idx) => (
+          <div
+            key={idx}
+            className="rounded-2xl border p-5 transition-all duration-300 animate-fade-in-up"
+            style={{
+              animationDelay: `${idx * 50}ms`,
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-primary)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                #{idx + 1}
+              </span>
+              {state.creditCards.length > 1 && (
+                <button
+                  onClick={() => removeCreditCard(idx)}
+                  className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {/* Card Name */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('creditCards.cardName')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={card.name}
+                  onChange={(e) => updateCreditCard(idx, 'name', e.target.value)}
+                  className={cn(
+                    'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                  )}
+                  style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  placeholder={t('creditCards.cardNamePlaceholder')}
+                />
+              </div>
+
+              {/* Last 4 + Network row */}
+              <div className="flex gap-3">
+                <div className="w-28">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('creditCards.lastFour')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={card.last_four_digits}
+                    onChange={(e) => updateCreditCard(idx, 'last_four_digits', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm text-center outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                    placeholder={t('creditCards.lastFourPlaceholder')}
+                    dir="ltr"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('creditCards.network')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <select
+                    value={card.card_network}
+                    onChange={(e) => updateCreditCard(idx, 'card_network', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  >
+                    {CARD_NETWORKS.map((n) => (
+                      <option key={n.value} value={n.value}>{n.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Issuer */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('creditCards.issuer')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={card.issuer}
+                  onChange={(e) => updateCreditCard(idx, 'issuer', e.target.value)}
+                  className={cn(
+                    'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                  )}
+                  style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  placeholder={t('creditCards.issuerPlaceholder')}
+                />
+              </div>
+
+              {/* Credit Limit + Billing Day row */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('creditCards.creditLimit')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={card.credit_limit}
+                    onChange={(e) => updateCreditCard(idx, 'credit_limit', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                    placeholder="10000"
+                  />
+                </div>
+                <div className="w-28">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('creditCards.billingDay')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={28}
+                    value={card.billing_day}
+                    onChange={(e) => updateCreditCard(idx, 'billing_day', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm text-center outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+
+              {/* Bank Account (from step 6) */}
+              {state.savedBankAccounts.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('bankAccounts.title')}
+                  </label>
+                  <select
+                    value={card.bank_account_id}
+                    onChange={(e) => updateCreditCard(idx, 'bank_account_id', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="">—</option>
+                    {state.savedBankAccounts.map((ba) => (
+                      <option key={ba.id} value={ba.id}>{ba.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Add another */}
+        <button
+          onClick={addCreditCard}
+          className={cn(
+            'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium',
+            'transition-all duration-200 hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]'
+          )}
+          style={{ borderColor: 'var(--border-primary)', color: 'var(--text-tertiary)' }}
+        >
+          <Plus className="h-4 w-4" />
+          {t('onboarding.addAnother')}
+        </button>
+      </div>
+
+      {/* Skip link */}
+      <div className="text-center">
+        <button
+          onClick={goNext}
+          className="text-sm font-medium transition-colors hover:underline underline-offset-4"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          {t('onboarding.skipStep')}
+        </button>
+      </div>
+    </div>
+  )
+
+  // ====================================================================
+  //  STEP 8 -- LOANS
+  // ====================================================================
+  const updateLoanDraft = (index: number, field: keyof LoanDraft, value: string) => {
+    updateState({
+      loanDrafts: state.loanDrafts.map((loan, i) =>
+        i === index ? { ...loan, [field]: value } : loan
+      ),
+    })
+  }
+
+  const addLoanDraft = () => {
+    updateState({ loanDrafts: [...state.loanDrafts, getDefaultLoan()] })
+  }
+
+  const removeLoanDraft = (index: number) => {
+    if (state.loanDrafts.length <= 1) return
+    updateState({ loanDrafts: state.loanDrafts.filter((_, i) => i !== index) })
+  }
+
+  const handleSaveLoans = async () => {
+    const validLoans = state.loanDrafts.filter((l) => l.name.trim() && l.original_amount && l.monthly_payment && l.total_payments)
+    if (validLoans.length === 0) {
+      goNext()
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+    try {
+      for (const loan of validLoans) {
+        const data: CreateLoanData = {
+          name: loan.name.trim(),
+          original_amount: Number(loan.original_amount),
+          monthly_payment: Number(loan.monthly_payment),
+          interest_rate: Number(loan.interest_rate) || 0,
+          total_payments: Number(loan.total_payments),
+          start_date: loan.start_date,
+          day_of_month: new Date(loan.start_date).getDate() || 1,
+        }
+        await loansApi.create(data)
+      }
+      goNext()
+    } catch {
+      setError(t('common.error'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const renderLoans = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(238, 93, 80, 0.08)',
+            border: '1px solid rgba(238, 93, 80, 0.15)',
+          }}
+        >
+          <HandCoins className="h-7 w-7" style={{ color: 'var(--color-expense)' }} />
+        </div>
+        <h2
+          className="mb-2 text-2xl font-bold tracking-tight"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {t('onboarding.loansTitle')}
+        </h2>
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
+          {t('onboarding.loansSubtitle')}
+        </p>
+      </div>
+
+      {/* Loans list */}
+      <div className="mx-auto max-w-lg space-y-4">
+        {state.loanDrafts.map((loan, idx) => (
+          <div
+            key={idx}
+            className="rounded-2xl border p-5 transition-all duration-300 animate-fade-in-up"
+            style={{
+              animationDelay: `${idx * 50}ms`,
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-primary)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                #{idx + 1}
+              </span>
+              {state.loanDrafts.length > 1 && (
+                <button
+                  onClick={() => removeLoanDraft(idx)}
+                  className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {/* Loan Name */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('fixed.name')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={loan.name}
+                  onChange={(e) => updateLoanDraft(idx, 'name', e.target.value)}
+                  className={cn(
+                    'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                  )}
+                  style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  placeholder={t('loans.title')}
+                />
+              </div>
+
+              {/* Original Amount + Monthly Payment */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('loans.originalAmount')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={loan.original_amount}
+                    onChange={(e) => updateLoanDraft(idx, 'original_amount', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('loans.monthlyPayment')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={loan.monthly_payment}
+                    onChange={(e) => updateLoanDraft(idx, 'monthly_payment', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+
+              {/* Interest Rate + Total Payments */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('loans.interestRate')}
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    value={loan.interest_rate}
+                    onChange={(e) => updateLoanDraft(idx, 'interest_rate', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                    placeholder="%"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('loans.totalPayments')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={loan.total_payments}
+                    onChange={(e) => updateLoanDraft(idx, 'total_payments', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+
+              {/* Payments Made + Start Date */}
+              <div className="flex gap-3">
+                <div className="w-28">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('loans.paymentsMade')}
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={loan.payments_made}
+                    onChange={(e) => updateLoanDraft(idx, 'payments_made', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm text-center outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('fixed.startDate')}
+                  </label>
+                  <DatePicker
+                    value={loan.start_date}
+                    onChange={(val) => updateLoanDraft(idx, 'start_date', val)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+
+              {/* Bank Account */}
+              {state.savedBankAccounts.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('bankAccounts.title')}
+                  </label>
+                  <select
+                    value={loan.bank_account_id}
+                    onChange={(e) => updateLoanDraft(idx, 'bank_account_id', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="">—</option>
+                    {state.savedBankAccounts.map((ba) => (
+                      <option key={ba.id} value={ba.id}>{ba.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Add another */}
+        <button
+          onClick={addLoanDraft}
+          className={cn(
+            'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium',
+            'transition-all duration-200 hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]'
+          )}
+          style={{ borderColor: 'var(--border-primary)', color: 'var(--text-tertiary)' }}
+        >
+          <Plus className="h-4 w-4" />
+          {t('onboarding.addAnother')}
+        </button>
+      </div>
+
+      {/* Skip link */}
+      <div className="text-center">
+        <button
+          onClick={goNext}
+          className="text-sm font-medium transition-colors hover:underline underline-offset-4"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          {t('onboarding.skipStep')}
+        </button>
+      </div>
+    </div>
+  )
+
+  // ====================================================================
+  //  STEP 9 -- SUBSCRIPTIONS
+  // ====================================================================
+  const updateSubscriptionDraft = (index: number, field: keyof SubscriptionDraft, value: string) => {
+    updateState({
+      subscriptionDrafts: state.subscriptionDrafts.map((sub, i) =>
+        i === index ? { ...sub, [field]: value } : sub
+      ),
+    })
+  }
+
+  const addSubscriptionDraft = () => {
+    updateState({ subscriptionDrafts: [...state.subscriptionDrafts, getDefaultSubscription()] })
+  }
+
+  const removeSubscriptionDraft = (index: number) => {
+    if (state.subscriptionDrafts.length <= 1) return
+    updateState({ subscriptionDrafts: state.subscriptionDrafts.filter((_, i) => i !== index) })
+  }
+
+  const handleSaveSubscriptions = async () => {
+    const validSubs = state.subscriptionDrafts.filter((s) => s.name.trim() && s.amount)
+    if (validSubs.length === 0) {
+      goNext()
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+    try {
+      for (const sub of validSubs) {
+        const data: CreateSubscriptionData = {
+          name: sub.name.trim(),
+          amount: Number(sub.amount),
+          billing_cycle: sub.billing_cycle,
+          next_renewal_date: sub.next_billing_date,
+          credit_card_id: sub.credit_card_id || undefined,
+        }
+        await subscriptionsApi.create(data)
+      }
+      goNext()
+    } catch {
+      setError(t('common.error'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const BILLING_CYCLES = [
+    { value: 'monthly', labelKey: 'cycle_monthly' },
+    { value: 'quarterly', labelKey: 'cycle_quarterly' },
+    { value: 'semi_annual', labelKey: 'cycle_semi_annual' },
+    { value: 'annual', labelKey: 'cycle_annual' },
+  ] as const
+
+  const renderSubscriptions = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="text-center">
+        <div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: 'rgba(0, 212, 255, 0.08)',
+            border: '1px solid rgba(0, 212, 255, 0.15)',
+          }}
+        >
+          <RefreshCw className="h-7 w-7" style={{ color: 'var(--color-accent-cyan)' }} />
+        </div>
+        <h2
+          className="mb-2 text-2xl font-bold tracking-tight"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {t('onboarding.subscriptionsTitle')}
+        </h2>
+        <p style={{ color: 'var(--text-secondary)' }} className="text-sm leading-relaxed">
+          {t('onboarding.subscriptionsSubtitle')}
+        </p>
+      </div>
+
+      {/* Subscriptions list */}
+      <div className="mx-auto max-w-lg space-y-4">
+        {state.subscriptionDrafts.map((sub, idx) => (
+          <div
+            key={idx}
+            className="rounded-2xl border p-5 transition-all duration-300 animate-fade-in-up"
+            style={{
+              animationDelay: `${idx * 50}ms`,
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-primary)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                #{idx + 1}
+              </span>
+              {state.subscriptionDrafts.length > 1 && (
+                <button
+                  onClick={() => removeSubscriptionDraft(idx)}
+                  className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-hover)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {/* Subscription Name */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('subscriptions.name')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={sub.name}
+                  onChange={(e) => updateSubscriptionDraft(idx, 'name', e.target.value)}
+                  className={cn(
+                    'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                  )}
+                  style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  placeholder={t('subscriptions.namePlaceholder')}
+                />
+              </div>
+
+              {/* Amount + Billing Cycle */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('transactions.amount')} <span style={{ color: 'var(--color-expense)' }}>*</span>
+                  </label>
+                  <div className="relative">
+                    <span
+                      className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-sm font-bold ltr-nums start-3"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      {currencySymbol}
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={sub.amount}
+                      onChange={(e) => updateSubscriptionDraft(idx, 'amount', e.target.value)}
+                      className={cn(
+                        'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                        'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                        'ps-9',
+                      )}
+                      style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('subscriptions.billingCycle')}
+                  </label>
+                  <select
+                    value={sub.billing_cycle}
+                    onChange={(e) => updateSubscriptionDraft(idx, 'billing_cycle', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  >
+                    {BILLING_CYCLES.map((c) => (
+                      <option key={c.value} value={c.value}>{t(`subscriptions.${c.labelKey}`)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Next Billing Date */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('subscriptions.nextRenewal')}
+                </label>
+                <DatePicker
+                  value={sub.next_billing_date}
+                  onChange={(val) => updateSubscriptionDraft(idx, 'next_billing_date', val)}
+                  className={cn(
+                    'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                    'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                  )}
+                  style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                />
+              </div>
+
+              {/* Credit Card (from step 7) */}
+              {state.savedCreditCards.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('creditCards.title')}
+                  </label>
+                  <select
+                    value={sub.credit_card_id}
+                    onChange={(e) => updateSubscriptionDraft(idx, 'credit_card_id', e.target.value)}
+                    className={cn(
+                      'w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all duration-200',
+                      'focus-visible:border-[var(--border-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]/20',
+                    )}
+                    style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="">—</option>
+                    {state.savedCreditCards.map((cc) => (
+                      <option key={cc.id} value={cc.id}>{cc.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Add another */}
+        <button
+          onClick={addSubscriptionDraft}
+          className={cn(
+            'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium',
+            'transition-all duration-200 hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]'
+          )}
+          style={{ borderColor: 'var(--border-primary)', color: 'var(--text-tertiary)' }}
+        >
+          <Plus className="h-4 w-4" />
+          {t('onboarding.addAnother')}
+        </button>
+      </div>
+
+      {/* Skip link */}
+      <div className="text-center">
+        <button
+          onClick={goNext}
+          className="text-sm font-medium transition-colors hover:underline underline-offset-4"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          {t('onboarding.skipStep')}
+        </button>
+      </div>
+    </div>
+  )
+
+  // ====================================================================
+  //  STEP 10 -- DONE
   // ====================================================================
   const renderDone = () => {
     const activeCategories = categories.filter((c) => !c.is_archived).length
@@ -1552,7 +2668,11 @@ export default function OnboardingPage() {
     renderCurrencyBalance, // 3
     renderCategories,      // 4
     renderFixed,           // 5
-    renderDone,            // 6
+    renderBankAccounts,    // 6
+    renderCreditCards,     // 7
+    renderLoans,           // 8
+    renderSubscriptions,   // 9
+    renderDone,            // 10
   ]
 
   // Handle "Next" button for steps that require saving
@@ -1563,6 +2683,14 @@ export default function OnboardingPage() {
       await handleSaveCurrencyBalance()
     } else if (currentStep === 5) {
       await handleSaveFixed()
+    } else if (currentStep === 6) {
+      await handleSaveBankAccounts()
+    } else if (currentStep === 7) {
+      await handleSaveCreditCards()
+    } else if (currentStep === 8) {
+      await handleSaveLoans()
+    } else if (currentStep === 9) {
+      await handleSaveSubscriptions()
     } else {
       goNext()
     }
