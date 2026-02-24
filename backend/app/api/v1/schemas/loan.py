@@ -38,6 +38,7 @@ class LoanCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     first_payment_made: bool = False
     bank_account_id: Optional[UUID] = None
+    # credit_card_id: not applicable for loans -- Loan model has no credit_card_id column (BUG-03 checked 2026-02-24)
 
     @field_validator('original_amount', 'monthly_payment')
     @classmethod

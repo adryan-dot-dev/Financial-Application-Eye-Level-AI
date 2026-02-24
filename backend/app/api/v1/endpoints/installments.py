@@ -22,6 +22,7 @@ from app.api.v1.schemas.installment import (
 )
 from app.core.exceptions import NotFoundException
 from app.db.models import Category, Installment, Transaction, User
+from app.db.models.bank_account import BankAccount
 from app.db.models.credit_card import CreditCard
 from app.db.session import get_db
 from app.services.audit_service import log_action
@@ -211,6 +212,23 @@ async def create_installment(
         cat = cat_result.scalar_one_or_none()
         if not cat:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+        if cat.type != data.type:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Category type '{cat.type}' does not match installment type '{data.type}'"
+            )
+
+    # Payment method consistency validation
+    if data.payment_method == "credit_card" and not data.credit_card_id:
+        raise HTTPException(
+            status_code=422,
+            detail="credit_card_id is required when payment_method is 'credit_card'"
+        )
+    if data.payment_method == "bank_transfer" and not data.bank_account_id:
+        raise HTTPException(
+            status_code=422,
+            detail="bank_account_id is required when payment_method is 'bank_transfer'"
+        )
 
     if data.credit_card_id:
         cc_result = await db.execute(
@@ -218,6 +236,13 @@ async def create_installment(
         )
         if not cc_result.scalar_one_or_none():
             raise HTTPException(status_code=422, detail="Credit card not found or does not belong to you")
+
+    if data.bank_account_id:
+        ba_result = await db.execute(
+            select(BankAccount).where(BankAccount.id == data.bank_account_id, ctx.ownership_filter(BankAccount))
+        )
+        if not ba_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Bank account not found or does not belong to you")
 
     data_dict = data.model_dump()
     first_payment_made = data_dict.pop("first_payment_made", False)
@@ -318,6 +343,27 @@ async def update_installment(
         cat = cat_result.scalar_one_or_none()
         if not cat:
             raise HTTPException(status_code=422, detail="Category not found or does not belong to you")
+        effective_type = update_data.get("type", inst.type)
+        if cat.type != effective_type:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Category type '{cat.type}' does not match installment type '{effective_type}'"
+            )
+
+    # Payment method consistency validation on update
+    effective_payment_method = update_data.get("payment_method", inst.payment_method)
+    effective_cc_id = update_data.get("credit_card_id", inst.credit_card_id)
+    effective_ba_id = update_data.get("bank_account_id", inst.bank_account_id)
+    if effective_payment_method == "credit_card" and not effective_cc_id:
+        raise HTTPException(
+            status_code=422,
+            detail="credit_card_id is required when payment_method is 'credit_card'"
+        )
+    if effective_payment_method == "bank_transfer" and not effective_ba_id:
+        raise HTTPException(
+            status_code=422,
+            detail="bank_account_id is required when payment_method is 'bank_transfer'"
+        )
 
     if update_data.get("credit_card_id"):
         cc_result = await db.execute(
@@ -325,6 +371,13 @@ async def update_installment(
         )
         if not cc_result.scalar_one_or_none():
             raise HTTPException(status_code=422, detail="Credit card not found or does not belong to you")
+
+    if update_data.get("bank_account_id"):
+        ba_result = await db.execute(
+            select(BankAccount).where(BankAccount.id == update_data["bank_account_id"], ctx.ownership_filter(BankAccount))
+        )
+        if not ba_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Bank account not found or does not belong to you")
 
     for key, value in update_data.items():
         setattr(inst, key, value)
