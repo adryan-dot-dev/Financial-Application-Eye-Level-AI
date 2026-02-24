@@ -819,7 +819,7 @@ class TestM9HealthCheck:
         resp = await client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "healthy"
+        assert data["status"] == "ok"
         assert "version" in data
 
 
