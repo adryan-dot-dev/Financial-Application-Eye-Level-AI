@@ -53,6 +53,12 @@ Recent decisions affecting current work:
 - NullPool on Render prevents serverless connection exhaustion (DEPLOY-04)
 - CSP omitted in dev, dynamic with connect-src on Render — tests updated (DEPLOY-03)
 - render.yaml uses generateValue for SECRET_KEY, sync:false for CORS_ORIGINS/VITE_API_URL (DEPLOY-08)
+- BUG-01 fix already in installments.py; added regression test test_reverse_payment_no_orphaned_transaction (5A-01)
+- BUG-02 DB constraints already in migration 57ac70dcfa4d (5A-01)
+- BUG-03 credit_card_id not applicable to Loan model; documented in schema (5A-01)
+- BUG-04 category type mismatch added to installments create+update endpoints (5A-01)
+- BUG-05 4 performance indexes added via migration phase5a_fixes (5A-01)
+- BUG-06 all list endpoints already use typed List[Model] -- confirmed (5A-01)
 
 ### Pending Todos
 
@@ -67,5 +73,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 5A-03-PLAN.md (Render deployment code changes - all 8 DEPLOY items done)
+Stopped at: Completed 5A-01-PLAN.md (backend data integrity bugs - BUG-01 through BUG-06 fixed/verified)
 Resume file: None
