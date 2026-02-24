@@ -6,7 +6,7 @@ Phase 5 takes a fully built financial application (Phases 0-4 complete, 155+ tes
 
 ## Phases
 
-- [ ] **Phase 5A: Pre-Deploy Fixes** - Fix all backend data bugs, frontend UI bugs, and add deployment-specific code changes so the codebase is production-ready
+- [x] **Phase 5A: Pre-Deploy Fixes** - Fix all backend data bugs, frontend UI bugs, and add deployment-specific code changes so the codebase is production-ready
 - [ ] **Phase 5B: Deployment + Go-Live** - Stand up Render infrastructure (GitHub, Web Service, Static Site, PostgreSQL), configure env vars, migrate, seed, and smoke test
 - [ ] **Phase 5C: Post-Deploy Hardening** - Add dashboard test coverage, stabilize test suite, fix edge case bugs (circular categories, exchange rate validation)
 
@@ -25,9 +25,9 @@ Phase 5 takes a fully built financial application (Phases 0-4 complete, 155+ tes
 **Plans**: 3 plans
 
 Plans:
-- [ ] 5A-01-PLAN.md — Backend bug fixes (BUG-01 through BUG-06) + Alembic migration for constraints and indexes
-- [ ] 5A-02-PLAN.md — Frontend UI fixes (FE-01, FE-02, FE-03) — CreditCardsPage translations + alerts overflow
-- [ ] 5A-03-PLAN.md — Deployment code changes (DEPLOY-01 through DEPLOY-08) — config.py, session.py, main.py, client.ts, .python-version, render.yaml
+- [x] 5A-01-PLAN.md — Backend bug fixes (BUG-01 through BUG-06) + Alembic migration for constraints and indexes
+- [x] 5A-02-PLAN.md — Frontend UI fixes (FE-01, FE-02, FE-03) — CreditCardsPage translations + alerts overflow
+- [x] 5A-03-PLAN.md — Deployment code changes (DEPLOY-01 through DEPLOY-08) — config.py, session.py, main.py, client.ts, .python-version, render.yaml
 
 ### Phase 5B: Deployment + Go-Live
 **Goal**: The application is live and accessible at Render URLs with working auth, CORS, database, and seed data
@@ -67,6 +67,6 @@ Phases execute in order: 5A -> 5B -> 5C
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 5A. Pre-Deploy Fixes | 0/3 | Not started | - |
+| 5A. Pre-Deploy Fixes | 3/3 | Complete | 2026-02-24 |
 | 5B. Deployment + Go-Live | 0/2 | Not started | - |
 | 5C. Post-Deploy Hardening | 0/2 | Not started | - |

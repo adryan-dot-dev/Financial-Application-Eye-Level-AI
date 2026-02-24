@@ -10,29 +10,29 @@
 
 ### Bug Fixes — Backend Data Integrity
 
-- [ ] **BUG-01**: Fix orphaned transactions on installment reverse-payment — delete associated Transaction before decrementing payments_completed
-- [ ] **BUG-02**: Fix balance race condition — verify unique DB constraint `uq_balance_current` is in place, add Python-level duplicate detection
-- [ ] **BUG-03**: Fix missing schema fields — add credit_card_id, bank_account_id, currency, first_payment_made to relevant Create/Update schemas
-- [ ] **BUG-04**: Fix category type mismatch validation — enforce income category → income transaction only (error 422 if mismatch)
-- [ ] **BUG-05**: Add 4 missing DB indexes — Alembic migration for credit_cards, subscriptions, transactions, bank_balances
-- [ ] **BUG-06**: Fix untyped response_model=list on 4 endpoints — change to List[CorrectResponseType]
+- [x] **BUG-01**: Fix orphaned transactions on installment reverse-payment — delete associated Transaction before decrementing payments_completed
+- [x] **BUG-02**: Fix balance race condition — verify unique DB constraint `uq_balance_current` is in place, add Python-level duplicate detection
+- [x] **BUG-03**: Fix missing schema fields — add credit_card_id, bank_account_id, currency, first_payment_made to relevant Create/Update schemas
+- [x] **BUG-04**: Fix category type mismatch validation — enforce income category → income transaction only (error 422 if mismatch)
+- [x] **BUG-05**: Add 4 missing DB indexes — Alembic migration for credit_cards, subscriptions, transactions, bank_balances
+- [x] **BUG-06**: Fix untyped response_model=list on 4 endpoints — change to List[CorrectResponseType]
 
 ### Bug Fixes — Frontend UI
 
-- [ ] **FE-01**: Add 9 missing translation keys in CreditCardsPage to he.json + en.json
-- [ ] **FE-02**: Fix wrong translation key — t('creditCards.add') → t('creditCards.addCard') (3 occurrences)
-- [ ] **FE-03**: Fix alerts snooze dropdown — overflow-hidden → overflow-visible
+- [x] **FE-01**: Add 9 missing translation keys in CreditCardsPage to he.json + en.json
+- [x] **FE-02**: Fix wrong translation key — t('creditCards.add') → t('creditCards.addCard') (3 occurrences)
+- [x] **FE-03**: Fix alerts snooze dropdown — overflow-hidden → overflow-visible
 
 ### Deployment Code Changes (Render-specific)
 
-- [ ] **DEPLOY-01**: Add DATABASE_URL field_validator in config.py — transforms postgresql:// → postgresql+asyncpg://
-- [ ] **DEPLOY-02**: Pin SECRET_KEY as env var — document generation command, never auto-generate in production
-- [ ] **DEPLOY-03**: Fix CSP header — remove or make environment-aware (CSP on API service blocks cross-origin frontend calls)
-- [ ] **DEPLOY-04**: Switch connection pool to NullPool on Render — add RENDER env var detection in session.py
-- [ ] **DEPLOY-05**: Fix frontend API URL — update client.ts to use VITE_API_URL env var with fallback to /api/v1
-- [ ] **DEPLOY-06**: Add deep health check endpoint — verify DB connectivity, return 503 if down
-- [ ] **DEPLOY-07**: Add PYTHON_VERSION=3.9.21 and .python-version file
-- [ ] **DEPLOY-08**: Create render.yaml — define 3 services (Web Service, Static Site, PostgreSQL) with preDeployCommand
+- [x] **DEPLOY-01**: Add DATABASE_URL field_validator in config.py — transforms postgresql:// → postgresql+asyncpg://
+- [x] **DEPLOY-02**: Pin SECRET_KEY as env var — document generation command, never auto-generate in production
+- [x] **DEPLOY-03**: Fix CSP header — remove or make environment-aware (CSP on API service blocks cross-origin frontend calls)
+- [x] **DEPLOY-04**: Switch connection pool to NullPool on Render — add RENDER env var detection in session.py
+- [x] **DEPLOY-05**: Fix frontend API URL — update client.ts to use VITE_API_URL env var with fallback to /api/v1
+- [x] **DEPLOY-06**: Add deep health check endpoint — verify DB connectivity, return 503 if down
+- [x] **DEPLOY-07**: Add PYTHON_VERSION=3.9.21 and .python-version file
+- [x] **DEPLOY-08**: Create render.yaml — define 3 services (Web Service, Static Site, PostgreSQL) with preDeployCommand
 
 ### Infrastructure + Go-Live
 
@@ -86,23 +86,23 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| BUG-01 | Phase 5A | Pending |
-| BUG-02 | Phase 5A | Pending |
-| BUG-03 | Phase 5A | Pending |
-| BUG-04 | Phase 5A | Pending |
-| BUG-05 | Phase 5A | Pending |
-| BUG-06 | Phase 5A | Pending |
-| FE-01 | Phase 5A | Pending |
-| FE-02 | Phase 5A | Pending |
-| FE-03 | Phase 5A | Pending |
-| DEPLOY-01 | Phase 5A | Pending |
-| DEPLOY-02 | Phase 5A | Pending |
-| DEPLOY-03 | Phase 5A | Pending |
-| DEPLOY-04 | Phase 5A | Pending |
-| DEPLOY-05 | Phase 5A | Pending |
-| DEPLOY-06 | Phase 5A | Pending |
-| DEPLOY-07 | Phase 5A | Pending |
-| DEPLOY-08 | Phase 5A | Pending |
+| BUG-01 | Phase 5A | Complete |
+| BUG-02 | Phase 5A | Complete |
+| BUG-03 | Phase 5A | Complete |
+| BUG-04 | Phase 5A | Complete |
+| BUG-05 | Phase 5A | Complete |
+| BUG-06 | Phase 5A | Complete |
+| FE-01 | Phase 5A | Complete |
+| FE-02 | Phase 5A | Complete |
+| FE-03 | Phase 5A | Complete |
+| DEPLOY-01 | Phase 5A | Complete |
+| DEPLOY-02 | Phase 5A | Complete |
+| DEPLOY-03 | Phase 5A | Complete |
+| DEPLOY-04 | Phase 5A | Complete |
+| DEPLOY-05 | Phase 5A | Complete |
+| DEPLOY-06 | Phase 5A | Complete |
+| DEPLOY-07 | Phase 5A | Complete |
+| DEPLOY-08 | Phase 5A | Complete |
 | INFRA-01 | Phase 5B | Pending |
 | INFRA-02 | Phase 5B | Pending |
 | INFRA-03 | Phase 5B | Pending |
@@ -120,4 +120,4 @@
 ---
 
 *Requirements defined: 2026-02-24, Phase 5 initialization*
-*Traceability updated: 2026-02-24, Roadmap created*
+*Traceability updated: 2026-02-24, 5A-03 completed - all Phase 5A requirements done*

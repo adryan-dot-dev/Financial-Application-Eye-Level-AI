@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 5A of 5C (Pre-Deploy Fixes)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-24 — Completed 5A-02 (FE i18n audit + TypeScript build fixes)
+Plan: 3 of 3 in current phase
+Status: Complete
+Last activity: 2026-02-24 — Completed 5A-03 (Render deployment code changes)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
@@ -27,13 +27,13 @@ Progress: [██░░░░░░░░] 20%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 5A | 2/3 | 18min | 9min |
+| 5A | 3/3 | 38min | 13min |
 | 5B | 0/2 | - | - |
 | 5C | 0/2 | - | - |
 
 **Recent Trend:**
-- Last 5 plans: 5A-02 (18min)
-- Trend: Efficient (pre-existing fixes = short execution)
+- Last 5 plans: 5A-02 (18min), 5A-03 (20min)
+- Trend: Efficient (~10-20min per plan)
 
 *Updated after each plan completion*
 
@@ -50,6 +50,9 @@ Recent decisions affecting current work:
 - Python 3.9.21 pinned on Render — app requires 3.9 compat shims
 - FE-01/FE-02/FE-03 all pre-fixed in prior commits (540a983) — audit-first pattern confirmed correct approach
 - TypeScript build had 2 pre-existing syntax/unused-var errors (AlertsPage, DashboardPage) — auto-fixed per Rule 1
+- NullPool on Render prevents serverless connection exhaustion (DEPLOY-04)
+- CSP omitted in dev, dynamic with connect-src on Render — tests updated (DEPLOY-03)
+- render.yaml uses generateValue for SECRET_KEY, sync:false for CORS_ORIGINS/VITE_API_URL (DEPLOY-08)
 
 ### Pending Todos
 
@@ -64,5 +67,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 5A-02-PLAN.md (FE i18n audit + TypeScript build fixes)
+Stopped at: Completed 5A-03-PLAN.md (Render deployment code changes - all 8 DEPLOY items done)
 Resume file: None
