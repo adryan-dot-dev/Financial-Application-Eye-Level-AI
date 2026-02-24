@@ -159,7 +159,7 @@ function AlertsSkeleton() {
       {[1, 2, 3, 4, 5].map((i) => (
         <div
           key={i}
-          className={cn('animate-fade-in-up card overflow-hidden p-0', `stagger-${Math.min(i + 1, 8)}`)}
+          className={cn('animate-fade-in-up card p-0', `stagger-${Math.min(i + 1, 8)}`)}
         >
           <div className="flex items-start gap-4 p-5">
             <div className="skeleton h-10 w-10 rounded-xl" />
@@ -448,7 +448,8 @@ function AlertCard({
       role="article"
       aria-label={`${t(`alerts.${alert.severity}`)} ${t('alerts.alertLabel')}: ${cleanTitle}${isUnread ? ` (${t('alerts.unread')})` : ''}`}
       className={cn(
-        'row-enter hover-lift group overflow-visible rounded-2xl border transition-all duration-200',
+        'row-enter hover-lift group rounded-2xl border transition-all duration-200',
+        isSnoozeOpen ? 'overflow-visible' : 'overflow-hidden',
         isUnread ? 'card-hover' : '',
       )}
       style={{
@@ -459,6 +460,11 @@ function AlertCard({
         background: isUnread ? sev.gradient : 'var(--bg-card)',
         opacity: alert.is_read ? 0.8 : 1,
         boxShadow: isUnread ? 'var(--shadow-sm)' : 'var(--shadow-xs)',
+        // Elevate card above siblings when its snooze dropdown is open.
+        // row-enter animation applies transform:translateY(0) as fill-forward,
+        // which creates a stacking context — later cards would paint over this
+        // card's absolute-positioned dropdown. z-index:10 lifts the whole card.
+        zIndex: isSnoozeOpen ? 10 : undefined,
       } as React.CSSProperties}
     >
       <div className="flex items-start gap-3.5 p-5">
