@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import secrets
 from typing import Any, List
 
@@ -36,10 +37,24 @@ class Settings(BaseSettings):
     # Debug
     DEBUG: bool = False
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def fix_database_url(cls, v: str) -> str:
+        """Transform postgresql:// → postgresql+asyncpg:// for Render compatibility."""
+        if isinstance(v, str) and v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
     @field_validator("SECRET_KEY", mode="before")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
         if not v or v == "change-me-in-production":
+            if os.environ.get("RENDER"):
+                raise ValueError(
+                    "SECRET_KEY must be explicitly set in production. "
+                    "Generate with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                )
+            # Local dev: auto-generate (acceptable)
             return secrets.token_urlsafe(64)
         return v
 
