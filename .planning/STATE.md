@@ -75,9 +75,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Fix alerts snooze dropdown overflow-hidden blocking | 2026-02-24 | f15c46c | [1-fix-alerts-snooze-dropdown-overflow-hidd](./quick/1-fix-alerts-snooze-dropdown-overflow-hidd/) |
+| 2 | Fix ForecastPage error retry + Dashboard forecast chart error state | 2026-02-24 | 627773f | [1-fix-forecastpage-error-and-dashboard-cha](./quick/1-fix-forecastpage-error-and-dashboard-cha/) |
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed quick task 1: Fix alerts snooze dropdown overflow-hidden blocking
+Stopped at: Completed quick task 2: Fix ForecastPage error retry + Dashboard forecast chart error state
 Resume file: None
