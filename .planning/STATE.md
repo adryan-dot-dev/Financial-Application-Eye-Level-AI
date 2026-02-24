@@ -70,8 +70,14 @@ None yet.
 - ADMIN_DEFAULT_PASSWORD must be agreed on and set manually in Render Dashboard before seeding
 - localStorage JWT storage is accepted risk for launch (short 15-min access token TTL mitigates)
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Fix alerts snooze dropdown overflow-hidden blocking | 2026-02-24 | f15c46c | [1-fix-alerts-snooze-dropdown-overflow-hidd](./quick/1-fix-alerts-snooze-dropdown-overflow-hidd/) |
+
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 5A-01-PLAN.md (backend data integrity bugs - BUG-01 through BUG-06 fixed/verified)
+Stopped at: Completed quick task 1: Fix alerts snooze dropdown overflow-hidden blocking
 Resume file: None
