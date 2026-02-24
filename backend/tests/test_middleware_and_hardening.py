@@ -136,11 +136,12 @@ async def test_pagination_upper_bound(client: AsyncClient, auth_headers: dict):
 
 @pytest.mark.asyncio
 async def test_health_check(client: AsyncClient):
-    """Health check should return 200 with status."""
+    """Health check should return 200 with db:true when DB is connected."""
     r = await client.get("/health")
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] == "healthy"
+    assert body["status"] == "ok"
+    assert body["db"] is True
     assert "version" in body
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from typing import Any, Callable, List, Tuple
@@ -8,6 +9,7 @@ from typing import Any, Callable, List, Tuple
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text as _sa_text
 from sqlalchemy.exc import DataError, IntegrityError
 
 from slowapi import _rate_limit_exceeded_handler
@@ -23,6 +25,8 @@ from app.core.request_logger import RequestLoggingMiddleware
 setup_logging(settings.DEBUG)
 
 logger = logging.getLogger(__name__)
+
+_IS_RENDER = bool(os.environ.get("RENDER"))
 
 
 @asynccontextmanager
@@ -46,18 +50,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── Rate limiting ────────────────────────────────────────────────────
+# -- Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# ── Security headers middleware (pure ASGI — no BaseHTTPMiddleware) ──
+# -- Security headers middleware (pure ASGI)
 _SECURITY_HEADERS: List[Tuple[bytes, bytes]] = [
     (b"x-content-type-options", b"nosniff"),
     (b"x-frame-options", b"DENY"),
     (b"x-xss-protection", b"1; mode=block"),
     (b"strict-transport-security", b"max-age=31536000; includeSubDomains; preload"),
-    (b"content-security-policy", b"default-src 'self'"),
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
     (b"x-api-version", b"v1"),
@@ -79,6 +82,19 @@ class SecurityHeadersMiddleware:
             if message["type"] == "http.response.start":
                 headers: List[Tuple[bytes, bytes]] = list(message.get("headers", []))
                 headers.extend(_SECURITY_HEADERS)
+                # Add CSP only on Render (environment-aware)
+                if _IS_RENDER:
+                    allowed_origins = (
+                        " ".join(settings.CORS_ORIGINS)
+                        if isinstance(settings.CORS_ORIGINS, list)
+                        else settings.CORS_ORIGINS
+                    )
+                    csp = (
+                        f"default-src 'none'; connect-src 'self' {allowed_origins}; "
+                        "script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                        "img-src 'self' data:; font-src 'self'"
+                    )
+                    headers.append((b"content-security-policy", csp.encode()))
                 message["headers"] = headers
             await send(message)
 
@@ -147,4 +163,20 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "version": "0.1.0"}
+    """Deep health check: verifies DB connectivity for Render health monitoring."""
+    from app.db.session import async_session
+    db_healthy = False
+    try:
+        async with async_session() as session:
+            await session.execute(_sa_text("SELECT 1"))
+            db_healthy = True
+    except Exception:
+        pass
+
+    payload = {
+        "status": "ok" if db_healthy else "degraded",
+        "db": db_healthy,
+        "version": "1.0.0",
+    }
+    status_code = 200 if db_healthy else 503
+    return JSONResponse(content=payload, status_code=status_code)

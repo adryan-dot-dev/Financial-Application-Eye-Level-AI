@@ -256,7 +256,8 @@ async def test_security_headers_present(client: AsyncClient):
     assert r.headers.get("X-Frame-Options") == "DENY"
     assert r.headers.get("X-XSS-Protection") == "1; mode=block"
     assert "max-age=" in r.headers.get("Strict-Transport-Security", "")
-    assert r.headers.get("Content-Security-Policy") == "default-src 'self'"
+    # CSP is only injected on Render (RENDER env var set); absent in dev/test
+    assert r.headers.get("Content-Security-Policy") is None
     assert r.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
     assert "camera=()" in r.headers.get("Permissions-Policy", "")
     assert r.headers.get("X-API-Version") == "v1"
