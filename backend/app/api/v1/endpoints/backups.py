@@ -18,6 +18,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.core.rate_limit import limiter
 from app.services import backup_service
+from app.services.audit_service import log_action
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,16 @@ async def trigger_backup(
 ):
     """Trigger a manual database backup (admin only)."""
     backup = await backup_service.create_backup(db, created_by=admin.id)
+    await log_action(
+        db,
+        user_id=admin.id,
+        action="backup_create",
+        entity_type="backup",
+        entity_id=str(backup.id),
+        request=request,
+        user_email=admin.email,
+    )
+    await db.commit()
     return backup
 
 
@@ -86,20 +97,32 @@ async def get_backup(
 @router.delete("/{backup_id}", status_code=204)
 async def delete_backup(
     backup_id: UUID,
-    _admin: User = Depends(get_current_admin),
+    request: Request,
+    admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a backup file and its record (admin only)."""
     deleted = await backup_service.delete_backup(db, backup_id)
     if not deleted:
         raise NotFoundException("Backup")
+    await log_action(
+        db,
+        user_id=admin.id,
+        action="backup_delete",
+        entity_type="backup",
+        entity_id=str(backup_id),
+        request=request,
+        user_email=admin.email,
+    )
+    await db.commit()
     return None
 
 
 @router.post("/{backup_id}/verify", response_model=BackupResponse)
 async def verify_backup(
     backup_id: UUID,
-    _admin: User = Depends(get_current_admin),
+    request: Request,
+    admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Verify a backup's integrity by recalculating checksum (admin only)."""
@@ -107,4 +130,14 @@ async def verify_backup(
         backup = await backup_service.verify_backup(db, backup_id)
     except ValueError as exc:
         raise NotFoundException("Backup") from exc
+    await log_action(
+        db,
+        user_id=admin.id,
+        action="backup_verify",
+        entity_type="backup",
+        entity_id=str(backup_id),
+        request=request,
+        user_email=admin.email,
+    )
+    await db.commit()
     return backup

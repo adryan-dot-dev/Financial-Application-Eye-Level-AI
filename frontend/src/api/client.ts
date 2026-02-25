@@ -112,8 +112,11 @@ apiClient.interceptors.response.use(
           refresh_token: refreshToken,
         })
 
-        const { access_token } = response.data
+        const { access_token, refresh_token: new_refresh_token } = response.data
         localStorage.setItem('access_token', access_token)
+        if (new_refresh_token) {
+          localStorage.setItem('refresh_token', new_refresh_token)
+        }
         originalRequest.headers.Authorization = `Bearer ${access_token}`
         return apiClient(originalRequest)
       } catch {
@@ -122,6 +125,14 @@ apiClient.interceptors.response.use(
         window.location.href = '/login'
         return Promise.reject(error)
       }
+    }
+
+    // 403 Forbidden — token is valid but user lacks permission; redirect to login
+    if (error.response?.status === 403 && !isAuthEndpoint) {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.href = '/login'
+      return Promise.reject(error)
     }
 
     return Promise.reject(error)

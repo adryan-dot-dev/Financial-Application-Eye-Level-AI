@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_admin, get_current_user, get_data_context, DataContext
 from app.core.rate_limit import limiter
+from app.services.audit_service import log_action
 from app.db.models import (
     BankBalance,
     Category,
@@ -60,6 +61,7 @@ def _decimal_default(obj: object) -> object:
 
 @router.get("/transactions")
 async def export_transactions(
+    request: Request,
     format: str = Query("csv", pattern="^(csv|json)$"),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
@@ -85,6 +87,24 @@ async def export_transactions(
 
     result = await db.execute(query)
     transactions = result.scalars().all()
+
+    filters = []
+    if start_date:
+        filters.append(f"from={start_date}")
+    if end_date:
+        filters.append(f"to={end_date}")
+    if type:
+        filters.append(f"type={type}")
+    await log_action(
+        db,
+        user_id=current_user.id,
+        action="export",
+        entity_type="transaction",
+        details=f"format={format} count={len(transactions)}" + (f" {' '.join(filters)}" if filters else ""),
+        request=request,
+        user_email=current_user.email,
+    )
+    await db.commit()
 
     if format == "json":
         data = [
@@ -295,6 +315,17 @@ async def export_all_data(
     content = json.dumps(backup, ensure_ascii=False, indent=2, default=_decimal_default)
     filename = f"cashflow_backup_{date.today().isoformat()}.json"
 
+    await log_action(
+        db,
+        user_id=current_user.id,
+        action="export_all",
+        entity_type="user_data",
+        details=f"full data export: {len(transactions)} transactions, {len(categories)} categories, {len(loans)} loans",
+        request=request,
+        user_email=current_user.email,
+    )
+    await db.commit()
+
     return StreamingResponse(
         iter([content]),
         media_type="application/json",
@@ -308,7 +339,8 @@ async def export_all_data(
 
 @router.get("/users")
 async def export_users(
-    _admin: User = Depends(get_current_admin),
+    request: Request,
+    admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Export user list as CSV (admin only)."""
@@ -331,6 +363,17 @@ async def export_users(
             u.created_at.isoformat() if u.created_at else "",
             u.last_login_at.isoformat() if u.last_login_at else "",
         ])
+
+    await log_action(
+        db,
+        user_id=admin.id,
+        action="export_users",
+        entity_type="user",
+        details=f"exported {len(users)} users as CSV",
+        request=request,
+        user_email=admin.email,
+    )
+    await db.commit()
 
     return StreamingResponse(
         iter([output.getvalue()]),

@@ -165,10 +165,13 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 @router.put("/me", response_model=UserResponse)
 async def update_me(
+    request: Request,
     data: UserUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    changed_fields = []
+
     if data.username is not None:
         result = await db.execute(
             select(User).where(User.username == data.username, User.id != current_user.id)
@@ -176,6 +179,7 @@ async def update_me(
         if result.scalar_one_or_none():
             raise AlreadyExistsException("Username")
         current_user.username = data.username
+        changed_fields.append("username")
 
     if data.email is not None:
         result = await db.execute(
@@ -184,13 +188,26 @@ async def update_me(
         if result.scalar_one_or_none():
             raise AlreadyExistsException("Email")
         current_user.email = data.email
+        changed_fields.append("email")
 
     if data.full_name is not None:
         current_user.full_name = data.full_name
+        changed_fields.append("full_name")
 
     if data.phone_number is not None:
         current_user.phone_number = data.phone_number
+        changed_fields.append("phone_number")
 
+    await log_action(
+        db,
+        user_id=current_user.id,
+        action="update_profile",
+        entity_type="user",
+        entity_id=str(current_user.id),
+        details=f"fields changed: {', '.join(changed_fields)}" if changed_fields else None,
+        request=request,
+        user_email=current_user.email,
+    )
     await db.commit()
     await db.refresh(current_user)
     return current_user

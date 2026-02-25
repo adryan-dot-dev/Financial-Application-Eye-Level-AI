@@ -49,5 +49,14 @@ async def log_action(
         )
         db.add(entry)
         # Don't commit — let the caller's commit include this row
+        logger.info(
+            "AUDIT | %s | %s %s%s | ip=%s%s",
+            user_email or str(user_id) or "anonymous",
+            action.upper(),
+            entity_type,
+            f" #{entity_id}" if entity_id else "",
+            ip_address or "-",
+            f" | {details}" if details else "",
+        )
     except Exception:
         logger.exception("Failed to write audit log entry")

@@ -42,6 +42,7 @@ import { forecastApi } from '@/api/forecast'
 import type { WeeklyForecastWeek } from '@/api/forecast'
 import { cn } from '@/lib/utils'
 import { useCurrency } from '@/hooks/useCurrency'
+import { useChartColors } from '@/hooks/useChartColors'
 import { queryKeys } from '@/lib/queryKeys'
 import { useScrollReveal } from '@/hooks/useScrollReveal'
 import { useCountUp } from '@/hooks/useCountUp'
@@ -931,6 +932,7 @@ function MonthlyChart({
 }) {
   const { t } = useTranslation()
   const [showBalance, setShowBalance] = useState(true)
+  const chartColors = useChartColors()
 
   if (data.length === 0) return null
 
@@ -1092,7 +1094,7 @@ function MonthlyChart({
                 strokeWidth={2.5}
                 fill="url(#forecastIncomeGrad)"
                 dot={false}
-                activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-income)', style: { filter: 'drop-shadow(0 0 6px rgba(5, 205, 153, 0.4))' } }}
+                activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-income)', style: { filter: `drop-shadow(0 0 6px ${chartColors.incomeGlow})` } }}
                 isAnimationActive={true}
                 animationDuration={800}
                 animationEasing="ease-out"
@@ -1104,7 +1106,7 @@ function MonthlyChart({
                 strokeWidth={2.5}
                 fill="url(#forecastExpenseGrad)"
                 dot={false}
-                activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-expense)', style: { filter: 'drop-shadow(0 0 6px rgba(238, 93, 80, 0.4))' } }}
+                activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-expense)', style: { filter: `drop-shadow(0 0 6px ${chartColors.expenseGlow})` } }}
                 isAnimationActive={true}
                 animationDuration={800}
                 animationEasing="ease-out"
@@ -1117,7 +1119,7 @@ function MonthlyChart({
                   strokeWidth={2.5}
                   strokeDasharray="0"
                   dot={{ r: 4, fill: 'var(--color-brand-500)', strokeWidth: 2.5, stroke: 'var(--bg-card)' }}
-                  activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: 'drop-shadow(0 0 6px rgba(108, 99, 255, 0.4))' } }}
+                  activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: `drop-shadow(0 0 6px ${chartColors.balanceGlow})` } }}
                   isAnimationActive={true}
                   animationDuration={800}
                   animationEasing="ease-out"
@@ -1190,7 +1192,7 @@ function MonthlyChart({
                   stroke="var(--color-brand-500)"
                   strokeWidth={2.5}
                   dot={{ r: 4, fill: 'var(--color-brand-500)', strokeWidth: 2.5, stroke: 'var(--bg-card)' }}
-                  activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: 'drop-shadow(0 0 6px rgba(108, 99, 255, 0.4))' } }}
+                  activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: `drop-shadow(0 0 6px ${chartColors.balanceGlow})` } }}
                   isAnimationActive={true}
                   animationDuration={800}
                   animationEasing="ease-out"
@@ -1219,6 +1221,7 @@ function MonthlyChart({
 
 function WeeklyChart({ data }: { data: WeeklyChartDataPoint[] }) {
   const { t } = useTranslation()
+  const chartColors = useChartColors()
 
   if (data.length < 2) return null
 
@@ -1298,7 +1301,7 @@ function WeeklyChart({ data }: { data: WeeklyChartDataPoint[] }) {
               strokeWidth={2.5}
               fill="url(#weeklyIncomeGrad)"
               dot={false}
-              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-income)', style: { filter: 'drop-shadow(0 0 6px rgba(5, 205, 153, 0.4))' } }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-income)', style: { filter: `drop-shadow(0 0 6px ${chartColors.incomeGlow})` } }}
               isAnimationActive={true}
               animationDuration={800}
               animationEasing="ease-out"
@@ -1310,7 +1313,7 @@ function WeeklyChart({ data }: { data: WeeklyChartDataPoint[] }) {
               strokeWidth={2.5}
               fill="url(#weeklyExpenseGrad)"
               dot={false}
-              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-expense)', style: { filter: 'drop-shadow(0 0 6px rgba(238, 93, 80, 0.4))' } }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-expense)', style: { filter: `drop-shadow(0 0 6px ${chartColors.expenseGlow})` } }}
               isAnimationActive={true}
               animationDuration={800}
               animationEasing="ease-out"
@@ -1321,7 +1324,7 @@ function WeeklyChart({ data }: { data: WeeklyChartDataPoint[] }) {
               stroke="var(--color-brand-500)"
               strokeWidth={2.5}
               dot={{ r: 4, fill: 'var(--color-brand-500)', strokeWidth: 2.5, stroke: 'var(--bg-card)' }}
-              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: 'drop-shadow(0 0 6px rgba(108, 99, 255, 0.4))' } }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: `drop-shadow(0 0 6px ${chartColors.balanceGlow})` } }}
               isAnimationActive={true}
               animationDuration={800}
               animationEasing="ease-out"

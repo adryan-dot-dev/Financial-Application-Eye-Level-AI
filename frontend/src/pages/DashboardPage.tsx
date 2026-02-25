@@ -66,6 +66,7 @@ import { queryKeys } from '@/lib/queryKeys'
 import { useToast } from '@/contexts/ToastContext'
 import PeriodSelector from '@/components/ui/PeriodSelector'
 import { usePeriodSelector } from '@/hooks/usePeriodSelector'
+import { useChartColors } from '@/hooks/useChartColors'
 import type { ForecastMonth, Alert } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -610,6 +611,7 @@ function ForecastChart({
 }) {
   const { t } = useTranslation()
   const { formatAmount } = useCurrency()
+  const chartColors = useChartColors()
 
   return (
     <div className="card card-hover animate-fade-in-up section-delay-2 overflow-hidden">
@@ -729,7 +731,7 @@ function ForecastChart({
               fill="url(#incomeGradient)"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-income)', style: { filter: 'drop-shadow(0 0 6px rgba(5, 205, 153, 0.4))' } }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-income)', style: { filter: `drop-shadow(0 0 6px ${chartColors.incomeGlow})` } }}
               isAnimationActive={true}
               animationDuration={800}
               animationEasing="ease-out"
@@ -741,7 +743,7 @@ function ForecastChart({
               fill="url(#expenseGradient)"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-danger)', style: { filter: 'drop-shadow(0 0 6px rgba(238, 93, 80, 0.4))' } }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-danger)', style: { filter: `drop-shadow(0 0 6px ${chartColors.expenseGlow})` } }}
               isAnimationActive={true}
               animationDuration={800}
               animationEasing="ease-out"
@@ -753,7 +755,7 @@ function ForecastChart({
               fill="url(#balanceGradient)"
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: 'drop-shadow(0 0 6px rgba(108, 99, 255, 0.4))' } }}
+              activeDot={{ r: 7, stroke: 'white', strokeWidth: 3, fill: 'var(--color-brand-500)', style: { filter: `drop-shadow(0 0 6px ${chartColors.balanceGlow})` } }}
               strokeDasharray="6 3"
               isAnimationActive={true}
               animationDuration={800}

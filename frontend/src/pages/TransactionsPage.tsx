@@ -240,6 +240,7 @@ export default function TransactionsPage() {
     data: txData,
     isLoading: txLoading,
     isError: txError,
+    refetch: refetchTransactions,
   } = useQuery({
     queryKey: queryKeys.transactions.list(buildParams() as Record<string, unknown>),
     queryFn: () => transactionsApi.list(buildParams()),
@@ -933,6 +934,13 @@ export default function TransactionsPage() {
             <p className="text-sm font-medium" style={{ color: 'var(--color-expense)' }}>
               {t('common.error')}
             </p>
+            <button
+              onClick={() => refetchTransactions()}
+              className="mt-4 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+              style={{ backgroundColor: 'var(--bg-danger)', color: 'var(--color-expense)' }}
+            >
+              {t('common.retry', 'נסה שוב')}
+            </button>
           </div>
         ) : transactions.length === 0 ? (
           /* ---- Empty state – SVG illustration ---- */

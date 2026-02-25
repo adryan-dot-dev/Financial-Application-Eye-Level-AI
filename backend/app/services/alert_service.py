@@ -31,7 +31,7 @@ async def _alert_exists_today(
     Prevents creating duplicate alerts for the same entity/type/day, even
     if earlier alerts were dismissed or read.
     """
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
     conditions = [
         Alert.user_id == user_id,
